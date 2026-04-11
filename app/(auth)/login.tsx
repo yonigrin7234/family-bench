@@ -164,7 +164,7 @@ export default function LoginScreen() {
 
       {/* Legal disclaimer */}
       <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
-        <Text style={{ fontFamily: 'System', fontSize: 11, color: '#9A9893', textAlign: 'center', lineHeight: 16 }}>
+        <Text style={{ fontFamily: 'System', fontSize: 12, color: '#78766F', textAlign: 'center', lineHeight: 16 }}>
           Family Bench is not a law firm and does not provide legal advice. Consult a licensed attorney for legal strategy.
         </Text>
       </View>

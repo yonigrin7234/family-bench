@@ -5,6 +5,7 @@ import { X, Check, ChevronDown } from 'lucide-react-native';
 import { useState, useMemo } from 'react';
 import { Camera, Image as ImageIcon } from 'lucide-react-native';
 import { Badge } from '@/components/ui/Badge';
+import { hapticSuccess, hapticSelection } from '@/lib/utils/haptics';
 import { useEntriesStore } from '@/stores/entries';
 import { useCamera } from '@/lib/hooks/useCamera';
 import { entryTypes } from '@/schemas/entry';
@@ -133,6 +134,7 @@ export default function NewEntryScreen() {
       metadata.reason_given = reasonGiven;
     }
 
+    hapticSuccess();
     addEntry({
       id: crypto.randomUUID(),
       user_id: '',

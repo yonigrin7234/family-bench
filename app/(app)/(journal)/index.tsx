@@ -8,6 +8,7 @@ import { QuickEntryBar } from '@/components/entries/QuickEntryBar';
 import { CaptureSheet } from '@/components/entries/CaptureSheet';
 import { EntryFilters } from '@/components/entries/EntryFilters';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { hapticLight } from '@/lib/utils/haptics';
 import { useFilteredEntries, useEntriesStore } from '@/stores/entries';
 import type { Entry } from '@/stores/entries';
 
@@ -59,7 +60,7 @@ export default function JournalScreen() {
           Journal
         </Text>
         <Pressable
-          onPress={() => setCaptureVisible(true)}
+          onPress={() => { hapticLight(); setCaptureVisible(true); }}
           style={{
             width: 44,
             height: 44,
@@ -74,6 +75,7 @@ export default function JournalScreen() {
             elevation: 2,
           }}
           accessibilityLabel="New entry"
+          accessibilityRole="button"
         >
           <Plus size={20} strokeWidth={1.75} color="#2563EB" />
         </Pressable>
@@ -84,7 +86,6 @@ export default function JournalScreen() {
         renderItem={renderEntry}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{
-          paddingHorizontal: 0,
           paddingBottom: 120,
           flexGrow: entries.length === 0 ? 1 : undefined,
         }}
@@ -107,6 +108,7 @@ export default function JournalScreen() {
         maxToRenderPerBatch={10}
         windowSize={5}
         initialNumToRender={15}
+        getItemLayout={(_, index) => ({ length: 140, offset: 140 * index, index })}
       />
 
       <QuickEntryBar

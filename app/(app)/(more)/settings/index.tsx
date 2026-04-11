@@ -11,6 +11,8 @@ function SettingsRow({ icon: Icon, label, value, onPress }: {
     <Pressable
       onPress={onPress}
       style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 16 }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       className="active:opacity-70"
     >
       <Icon size={20} strokeWidth={1.75} color="#6B6A68" />

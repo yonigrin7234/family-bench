@@ -14,7 +14,7 @@ export function Badge({ type, label }: BadgeProps) {
 
   return (
     <View className={`${colors.bg} rounded-[6px] px-2 py-0.5`}>
-      <Text className={`${colors.text} font-ui text-[11px] font-medium`}>
+      <Text className={`${colors.text} font-ui text-[12px] font-medium`}>
         {displayLabel}
       </Text>
     </View>

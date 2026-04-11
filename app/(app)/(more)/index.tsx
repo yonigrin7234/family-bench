@@ -10,6 +10,8 @@ function MenuItem({ icon: Icon, label, onPress }: { icon: typeof Settings; label
       style={{
         flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 16,
       }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       className="active:opacity-70"
     >
       <Icon size={20} strokeWidth={1.75} color="#6B6A68" />

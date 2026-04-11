@@ -3,6 +3,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Pencil, Trash2, AlertTriangle, MapPin, Users, Clock } from 'lucide-react-native';
 import { Badge } from '@/components/ui/Badge';
+import { hapticWarning } from '@/lib/utils/haptics';
 import { useEntriesStore } from '@/stores/entries';
 import { entryTypeLabels } from '@/constants/theme';
 
@@ -99,7 +100,7 @@ export default function EntryDetailScreen() {
         {entry.voice_transcript && (
           <View style={{ gap: 12 }}>
             <View style={{ backgroundColor: '#F5F5F0', borderRadius: 12, padding: 12 }}>
-              <Text style={{ fontFamily: 'System', fontSize: 11, fontWeight: '500', color: '#9A9893', marginBottom: 4 }}>
+              <Text style={{ fontFamily: 'System', fontSize: 12, fontWeight: '500', color: '#78766F', marginBottom: 4 }}>
                 What you said
               </Text>
               <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893', lineHeight: 20 }}>
@@ -110,7 +111,7 @@ export default function EntryDetailScreen() {
               backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12,
               borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
             }}>
-              <Text style={{ fontFamily: 'System', fontSize: 11, fontWeight: '500', color: '#2563EB', marginBottom: 4 }}>
+              <Text style={{ fontFamily: 'System', fontSize: 12, fontWeight: '500', color: '#2563EB', marginBottom: 4 }}>
                 Structured as evidence
               </Text>
               <Text style={{ fontFamily: 'System', fontSize: 15, color: '#1A1A18', lineHeight: 22 }}>
@@ -164,8 +165,10 @@ export default function EntryDetailScreen() {
         {/* Delete */}
         <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginTop: 16 }} />
         <Pressable
-          onPress={() => { softDeleteEntry(entry.id); router.back(); }}
+          onPress={() => { hapticWarning(); softDeleteEntry(entry.id); router.back(); }}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+          accessibilityRole="button"
+          accessibilityLabel="Delete entry"
           className="active:opacity-70"
         >
           <Trash2 size={18} strokeWidth={1.75} color="#DC2626" />

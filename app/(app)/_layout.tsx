@@ -20,7 +20,7 @@ export default function AppLayout() {
           position: Platform.OS === 'ios' ? 'absolute' : 'relative',
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '500',
           marginTop: -2,
         },
