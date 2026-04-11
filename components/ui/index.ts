@@ -8,3 +8,4 @@ export { Toggle } from './Toggle';
 export { Separator } from './Separator';
 export { Skeleton } from './Skeleton';
 export { Toast } from './Toast';
+export { Select } from './Select';

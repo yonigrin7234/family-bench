@@ -3,11 +3,14 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Check, ChevronDown } from 'lucide-react-native';
 import { useState, useMemo } from 'react';
+import { Camera, Image as ImageIcon } from 'lucide-react-native';
 import { Badge } from '@/components/ui/Badge';
 import { useEntriesStore } from '@/stores/entries';
+import { useCamera } from '@/lib/hooks/useCamera';
 import { entryTypes } from '@/schemas/entry';
 import { entryTypeLabels } from '@/constants/theme';
 import type { EntryType } from '@/schemas/entry';
+import type { CapturedPhoto } from '@/lib/hooks/useCamera';
 
 // Chip selector shared component
 function ChipSelector({ options, selected, onSelect }: {
@@ -77,6 +80,8 @@ export default function NewEntryScreen() {
   const params = useLocalSearchParams<{ type?: string }>();
   const addEntry = useEntriesStore((s) => s.addEntry);
 
+  const { takePhoto, pickFromGallery, loading: cameraLoading } = useCamera();
+  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [selectedType, setSelectedType] = useState<EntryType>((params.type as EntryType) ?? 'journal');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [body, setBody] = useState('');
@@ -263,6 +268,137 @@ export default function NewEntryScreen() {
             <StyledInput placeholder="What reason was provided?" value={reasonGiven} onChangeText={setReasonGiven} />
           </FormField>
         )}
+
+        {/* Medical */}
+        {selectedType === 'medical' && (
+          <>
+            <FormField label="Provider name">
+              <StyledInput placeholder="Dr. Smith" value={body} onChangeText={setBody} />
+            </FormField>
+            <FormField label="Visit type">
+              <ChipSelector
+                options={['routine', 'urgent', 'emergency', 'dental', 'therapy'].map(v => ({ key: v, label: v }))}
+                selected={transferMethod}
+                onSelect={setTransferMethod}
+              />
+            </FormField>
+          </>
+        )}
+
+        {/* Incident */}
+        {selectedType === 'incident' && (
+          <>
+            <FormField label="Severity">
+              <ChipSelector
+                options={[
+                  { key: 'low', label: 'Low' }, { key: 'medium', label: 'Medium' },
+                  { key: 'high', label: 'High' }, { key: 'emergency', label: 'Emergency' },
+                ]}
+                selected={childMood}
+                onSelect={setChildMood}
+              />
+            </FormField>
+            <FormField label="Category">
+              <ChipSelector
+                options={['late', 'denied_visit', 'safety', 'verbal', 'substance', 'other'].map(c => ({ key: c, label: c.replace('_', ' ') }))}
+                selected={expenseCategory}
+                onSelect={setExpenseCategory}
+              />
+            </FormField>
+          </>
+        )}
+
+        {/* Communication */}
+        {selectedType === 'communication' && (
+          <>
+            <FormField label="Platform">
+              <ChipSelector
+                options={['ofw', 'text', 'email', 'whatsapp', 'phone'].map(p => ({ key: p, label: p.toUpperCase() }))}
+                selected={transferMethod}
+                onSelect={setTransferMethod}
+              />
+            </FormField>
+            <FormField label="Direction">
+              <ChipSelector
+                options={[{ key: 'sent', label: 'Sent' }, { key: 'received', label: 'Received' }]}
+                selected={expenseCategory}
+                onSelect={setExpenseCategory}
+              />
+            </FormField>
+          </>
+        )}
+
+        {/* Compliance */}
+        {selectedType === 'compliance' && (
+          <FormField label="Compliance notes">
+            <StyledInput placeholder="Was the court order provision followed?" value={reasonGiven} onChangeText={setReasonGiven} multiline />
+          </FormField>
+        )}
+
+        {/* Witness */}
+        {selectedType === 'witness' && (
+          <>
+            <FormField label="Witness name">
+              <StyledInput placeholder="Who witnessed this?" value={reasonGiven} onChangeText={setReasonGiven} />
+            </FormField>
+            <FormField label="What they observed">
+              <StyledInput placeholder="Describe what the witness saw" value={statementContext} onChangeText={setStatementContext} multiline />
+            </FormField>
+          </>
+        )}
+
+        {/* Photo capture */}
+        <View style={{ gap: 12 }}>
+          <Text style={{ fontFamily: 'System', fontSize: 13, color: '#6B6A68' }}>Attachments</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={async () => {
+                const photo = await takePhoto();
+                if (photo) setPhotos([...photos, photo]);
+              }}
+              disabled={cameraLoading}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 8,
+                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                backgroundColor: '#F0F0EA',
+              }}
+            >
+              <Camera size={16} strokeWidth={1.75} color="#6B6A68" />
+              <Text style={{ fontFamily: 'System', fontSize: 13, color: '#6B6A68' }}>Camera</Text>
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                const photo = await pickFromGallery();
+                if (photo) setPhotos([...photos, photo]);
+              }}
+              disabled={cameraLoading}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 8,
+                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                backgroundColor: '#F0F0EA',
+              }}
+            >
+              <ImageIcon size={16} strokeWidth={1.75} color="#6B6A68" />
+              <Text style={{ fontFamily: 'System', fontSize: 13, color: '#6B6A68' }}>Gallery</Text>
+            </Pressable>
+          </View>
+          {photos.length > 0 && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {photos.map((p, i) => (
+                <View key={i} style={{
+                  width: 64, height: 64, borderRadius: 8, backgroundColor: '#F0F0EA',
+                  alignItems: 'center', justifyContent: 'center',
+                  borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                }}>
+                  <ImageIcon size={24} strokeWidth={1.5} color="#9A9893" />
+                  <Text style={{ fontFamily: 'System', fontSize: 9, color: '#9A9893', marginTop: 2 }}>
+                    {p.fileName.slice(0, 8)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
 
         {/* Divider */}
         <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />

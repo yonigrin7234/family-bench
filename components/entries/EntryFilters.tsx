@@ -52,7 +52,54 @@ export function EntryFilters() {
         ) : null}
       </View>
 
-      {/* Filter chips — no border, bg fill only */}
+      {/* Date range chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {[
+            { key: 'all_time', label: 'All time' },
+            { key: '7d', label: 'Last 7 days' },
+            { key: '30d', label: 'Last 30 days' },
+            { key: '90d', label: 'Last 90 days' },
+          ].map((range) => {
+            const isActive = filters.dateRange
+              ? range.key !== 'all_time'
+              : range.key === 'all_time';
+            // Simple active check by matching the range
+            const currentRange = !filters.dateRange ? 'all_time' :
+              filters.dateRange.start === new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0] ? '7d' :
+              filters.dateRange.start === new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0] ? '30d' : '90d';
+
+            return (
+              <Pressable
+                key={range.key}
+                onPress={() => {
+                  if (range.key === 'all_time') {
+                    setFilters({ dateRange: undefined });
+                  } else {
+                    const days = range.key === '7d' ? 7 : range.key === '30d' ? 30 : 90;
+                    const start = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+                    const end = new Date().toISOString().split('T')[0];
+                    setFilters({ dateRange: { start, end } });
+                  }
+                }}
+                style={{
+                  backgroundColor: currentRange === range.key ? '#1A1A18' : '#F0F0EA',
+                  borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
+                }}
+              >
+                <Text style={{
+                  fontFamily: 'System', fontSize: 13, fontWeight: '500',
+                  color: currentRange === range.key ? '#FFFFFF' : '#6B6A68',
+                }}>
+                  {range.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* Type filter chips — no border, bg fill only */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {/* All chip */}
