@@ -1,222 +1,74 @@
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Check, ChevronDown } from 'lucide-react-native';
 import { useState, useMemo } from 'react';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Input } from '@/components/ui/Input';
-import { TextArea } from '@/components/ui/TextArea';
-import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { Badge } from '@/components/ui/Badge';
-import { Separator } from '@/components/ui/Separator';
 import { useEntriesStore } from '@/stores/entries';
-import { baseEntrySchema, entryTypes } from '@/schemas/entry';
+import { entryTypes } from '@/schemas/entry';
 import { entryTypeLabels } from '@/constants/theme';
 import type { EntryType } from '@/schemas/entry';
 
-// Per-type metadata fields
-function ExchangeFields({ control }: { control: any }) {
+// Chip selector shared component
+function ChipSelector({ options, selected, onSelect }: {
+  options: { key: string; label: string }[];
+  selected?: string;
+  onSelect: (key: string) => void;
+}) {
   return (
-    <View className="gap-3">
-      <Controller
-        control={control}
-        name="metadata.scheduled_time"
-        render={({ field: { onChange, value } }) => (
-          <Input label="Scheduled time" value={value} onChangeText={onChange} placeholder="3:00 PM" />
-        )}
-      />
-      <Controller
-        control={control}
-        name="metadata.actual_time"
-        render={({ field: { onChange, value } }) => (
-          <Input label="Actual time" value={value} onChangeText={onChange} placeholder="3:23 PM" />
-        )}
-      />
-      <Controller
-        control={control}
-        name="metadata.transfer_method"
-        render={({ field: { onChange, value } }) => (
-          <View className="gap-1.5">
-            <Text className="font-ui text-[13px] text-text-muted">Transfer method</Text>
-            <View className="flex-row gap-2">
-              {(['in_person', 'school', 'third_party'] as const).map((method) => (
-                <Pressable
-                  key={method}
-                  onPress={() => onChange(method)}
-                  className={`px-3 py-2 rounded-button border ${
-                    value === method ? 'border-accent bg-accent-lighter' : 'border-border bg-surface'
-                  }`}
-                >
-                  <Text className={`font-ui text-[13px] ${value === method ? 'text-accent' : 'text-text-muted'}`}>
-                    {method === 'in_person' ? 'In person' : method === 'school' ? 'School' : 'Third party'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-      />
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {options.map((opt) => (
+        <Pressable
+          key={opt.key}
+          onPress={() => onSelect(opt.key)}
+          style={{
+            paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+            backgroundColor: selected === opt.key ? '#1A1A18' : '#F0F0EA',
+          }}
+        >
+          <Text style={{
+            fontFamily: 'System', fontSize: 13, fontWeight: '500',
+            color: selected === opt.key ? '#FFFFFF' : '#6B6A68',
+          }}>
+            {opt.label}
+          </Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
 
-function ExpenseFields({ control }: { control: any }) {
+// Form field wrapper
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <View className="gap-3">
-      <Controller
-        control={control}
-        name="metadata.amount"
-        render={({ field: { onChange, value } }) => (
-          <Input
-            label="Amount"
-            value={value?.toString() ?? ''}
-            onChangeText={(t) => onChange(parseFloat(t) || 0)}
-            keyboardType="decimal-pad"
-            placeholder="0.00"
-          />
-        )}
-      />
-      <Controller
-        control={control}
-        name="metadata.category"
-        render={({ field: { onChange, value } }) => (
-          <View className="gap-1.5">
-            <Text className="font-ui text-[13px] text-text-muted">Category</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {['medical', 'education', 'extracurricular', 'clothing', 'childcare', 'other'].map((cat) => (
-                <Pressable
-                  key={cat}
-                  onPress={() => onChange(cat)}
-                  className={`px-3 py-2 rounded-button border ${
-                    value === cat ? 'border-accent bg-accent-lighter' : 'border-border bg-surface'
-                  }`}
-                >
-                  <Text className={`font-ui text-[13px] ${value === cat ? 'text-accent' : 'text-text-muted'}`}>
-                    {cat}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-      />
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontFamily: 'System', fontSize: 13, color: '#6B6A68' }}>{label}</Text>
+      {children}
     </View>
   );
 }
 
-function DeniedVisitFields({ control }: { control: any }) {
+// Styled text input
+function StyledInput({ placeholder, value, onChangeText, ...props }: {
+  placeholder: string; value: string; onChangeText: (t: string) => void;
+  multiline?: boolean; keyboardType?: string;
+}) {
   return (
-    <View className="gap-3">
-      <Controller
-        control={control}
-        name="metadata.reason_given"
-        render={({ field: { onChange, value } }) => (
-          <Input label="Reason given (if any)" value={value} onChangeText={onChange} placeholder="What reason was provided?" />
-        )}
-      />
-      <Controller
-        control={control}
-        name="metadata.actions_taken"
-        render={({ field: { onChange, value } }) => (
-          <TextArea
-            label="Actions taken"
-            value={value?.join('\n') ?? ''}
-            onChangeText={(t) => onChange(t.split('\n').filter(Boolean))}
-            placeholder="What did you do in response?"
-          />
-        )}
-      />
-    </View>
-  );
-}
-
-function ChildStatementFields({ control }: { control: any }) {
-  return (
-    <View className="gap-3">
-      <Controller
-        control={control}
-        name="metadata.verbatim_quote"
-        render={({ field: { onChange, value } }) => (
-          <TextArea
-            label="Exact words (verbatim)"
-            value={value}
-            onChangeText={onChange}
-            placeholder="What exactly did the child say?"
-          />
-        )}
-      />
-      <Controller
-        control={control}
-        name="metadata.context"
-        render={({ field: { onChange, value } }) => (
-          <Input label="Context" value={value} onChangeText={onChange} placeholder="What was happening when they said this?" />
-        )}
-      />
-    </View>
-  );
-}
-
-// Mood selector chips
-function MoodSelector({ value, onChange }: { value?: string; onChange: (v: string) => void }) {
-  const moods = [
-    { key: 'great', label: 'Great' },
-    { key: 'good', label: 'Good' },
-    { key: 'okay', label: 'Okay' },
-    { key: 'upset', label: 'Upset' },
-    { key: 'distressed', label: 'Distressed' },
-  ];
-
-  return (
-    <View className="gap-1.5">
-      <Text className="font-ui text-[13px] text-text-muted">Child's mood</Text>
-      <View className="flex-row gap-2">
-        {moods.map((mood) => (
-          <Pressable
-            key={mood.key}
-            onPress={() => onChange(mood.key)}
-            className={`px-3 py-2 rounded-button border ${
-              value === mood.key ? 'border-accent bg-accent-lighter' : 'border-border bg-surface'
-            }`}
-          >
-            <Text className={`font-ui text-[13px] ${value === mood.key ? 'text-accent' : 'text-text-muted'}`}>
-              {mood.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-// Custody period selector
-function CustodyPeriodSelector({ value, onChange }: { value?: string; onChange: (v: string) => void }) {
-  const periods = [
-    { key: 'my_time', label: 'My time' },
-    { key: 'their_time', label: 'Their time' },
-    { key: 'transition', label: 'Transition' },
-  ];
-
-  return (
-    <View className="gap-1.5">
-      <Text className="font-ui text-[13px] text-text-muted">Custody period</Text>
-      <View className="flex-row gap-2">
-        {periods.map((p) => (
-          <Pressable
-            key={p.key}
-            onPress={() => onChange(p.key)}
-            className={`px-3 py-2 rounded-button border ${
-              value === p.key ? 'border-accent bg-accent-lighter' : 'border-border bg-surface'
-            }`}
-          >
-            <Text className={`font-ui text-[13px] ${value === p.key ? 'text-accent' : 'text-text-muted'}`}>
-              {p.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
+    <TextInput
+      placeholder={placeholder}
+      placeholderTextColor="#9A9893"
+      value={value}
+      onChangeText={onChangeText}
+      style={{
+        backgroundColor: '#FFFFFF', borderRadius: 12,
+        borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+        paddingHorizontal: 16, paddingVertical: 12,
+        fontFamily: 'System', fontSize: 15, color: '#1A1A18',
+        minHeight: props.multiline ? 120 : 48,
+        textAlignVertical: props.multiline ? 'top' : 'center',
+      }}
+      multiline={props.multiline}
+    />
   );
 }
 
@@ -224,93 +76,112 @@ export default function NewEntryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ type?: string }>();
   const addEntry = useEntriesStore((s) => s.addEntry);
-  const [selectedType, setSelectedType] = useState<EntryType>(
-    (params.type as EntryType) ?? 'journal'
-  );
+
+  const [selectedType, setSelectedType] = useState<EntryType>((params.type as EntryType) ?? 'journal');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
+  const [body, setBody] = useState('');
+  const [custodyPeriod, setCustodyPeriod] = useState('');
+  const [childMood, setChildMood] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const [isFlagged, setIsFlagged] = useState(false);
 
-  const { control, handleSubmit, formState: { errors } } = useForm({
-    resolver: zodResolver(baseEntrySchema),
-    defaultValues: {
-      entry_type: selectedType,
-      event_date: new Date().toISOString().split('T')[0],
-      event_time: new Date().toTimeString().slice(0, 5),
-      is_flagged: false,
-      body: '',
-    },
-  });
+  // Exchange fields
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [actualTime, setActualTime] = useState('');
+  const [transferMethod, setTransferMethod] = useState('');
 
-  const onSubmit = handleSubmit((data) => {
-    const entry = {
-      id: crypto.randomUUID(),
-      user_id: '', // TODO: from auth
-      entry_type: selectedType,
-      event_date: data.event_date,
-      event_time: data.event_time,
-      custody_period: data.custody_period,
-      title: data.title,
-      body: data.body,
-      child_mood: data.child_mood,
-      is_flagged: data.is_flagged ?? false,
-      flag_severity: data.flag_severity,
-      flag_category: data.flag_category,
-      location_name: data.location_name,
-      people_present: data.people_present,
-      metadata: (data as any).metadata ?? {},
-      is_edited: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    addEntry(entry);
-    router.back();
-  });
+  // Expense fields
+  const [amount, setAmount] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('');
 
-  // Type-specific fields
-  const typeFields = useMemo(() => {
-    switch (selectedType) {
-      case 'pickup_dropoff': return <ExchangeFields control={control} />;
-      case 'expense': return <ExpenseFields control={control} />;
-      case 'visit_denied': return <DeniedVisitFields control={control} />;
-      case 'child_statement': return <ChildStatementFields control={control} />;
-      default: return null;
+  // Child statement fields
+  const [verbatimQuote, setVerbatimQuote] = useState('');
+  const [statementContext, setStatementContext] = useState('');
+
+  // Denied visit fields
+  const [reasonGiven, setReasonGiven] = useState('');
+
+  const onSave = () => {
+    const now = new Date();
+    const metadata: Record<string, unknown> = {};
+
+    if (selectedType === 'pickup_dropoff') {
+      metadata.scheduled_time = scheduledTime;
+      metadata.actual_time = actualTime;
+      metadata.transfer_method = transferMethod;
+      if (scheduledTime && actualTime) {
+        // Simple late calculation (minutes)
+        const [sh, sm] = scheduledTime.split(':').map(Number);
+        const [ah, am] = actualTime.split(':').map(Number);
+        metadata.late_minutes = Math.max(0, (ah * 60 + am) - (sh * 60 + sm));
+      }
     }
-  }, [selectedType, control]);
+    if (selectedType === 'expense') {
+      metadata.amount = parseFloat(amount) || 0;
+      metadata.category = expenseCategory;
+    }
+    if (selectedType === 'child_statement') {
+      metadata.verbatim_quote = verbatimQuote;
+      metadata.context = statementContext;
+    }
+    if (selectedType === 'visit_denied') {
+      metadata.reason_given = reasonGiven;
+    }
+
+    addEntry({
+      id: crypto.randomUUID(),
+      user_id: '',
+      entry_type: selectedType,
+      event_date: now.toISOString().split('T')[0],
+      event_time: now.toTimeString().slice(0, 5),
+      custody_period: custodyPeriod || undefined,
+      body,
+      child_mood: childMood || undefined,
+      is_flagged: isFlagged,
+      flag_category: isFlagged ? 'other' : undefined,
+      flag_severity: isFlagged ? 'medium' : undefined,
+      location_name: locationName || undefined,
+      metadata,
+      is_edited: false,
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    });
+    router.back();
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-page dark:bg-dark-page" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F0' }} edges={['top']}>
       {/* Header */}
-      <View className="h-11 flex-row items-center justify-between px-4">
-        <IconButton icon={X} variant="surface" onPress={() => router.back()} />
-        <Text className="font-ui text-[16px] font-medium text-text-primary dark:text-dark-text">
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <Pressable
+          onPress={() => router.back()}
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1 }}
+        >
+          <X size={20} strokeWidth={1.75} color="#1A1A18" />
+        </Pressable>
+        <Text style={{ fontFamily: 'Georgia', fontSize: 18, fontWeight: '600', color: '#1A1A18' }}>
           New entry
         </Text>
-        <IconButton icon={Check} variant="accent" onPress={onSubmit} />
+        <Pressable
+          onPress={onSave}
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' }}
+          className="active:scale-[0.98]"
+        >
+          <Check size={20} strokeWidth={2} color="#FFFFFF" />
+        </Pressable>
       </View>
 
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         {/* Entry type selector */}
-        <Pressable
-          onPress={() => setShowTypeSelector(!showTypeSelector)}
-          className="flex-row items-center gap-2"
-        >
+        <Pressable onPress={() => setShowTypeSelector(!showTypeSelector)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Badge type={selectedType as any} />
-          <ChevronDown size={16} strokeWidth={1.75} className="text-text-muted" />
+          <ChevronDown size={16} strokeWidth={1.75} color="#9A9893" />
         </Pressable>
 
         {showTypeSelector && (
-          <View className="flex-row flex-wrap gap-2 mb-2">
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
             {entryTypes.map((type) => (
-              <Pressable
-                key={type}
-                onPress={() => {
-                  setSelectedType(type);
-                  setShowTypeSelector(false);
-                }}
-              >
+              <Pressable key={type} onPress={() => { setSelectedType(type); setShowTypeSelector(false); }}>
                 <Badge type={type} />
               </Pressable>
             ))}
@@ -318,68 +189,135 @@ export default function NewEntryScreen() {
         )}
 
         {/* Custody period */}
-        <Controller
-          control={control}
-          name="custody_period"
-          render={({ field: { onChange, value } }) => (
-            <CustodyPeriodSelector value={value} onChange={onChange} />
-          )}
-        />
+        <FormField label="Custody period">
+          <ChipSelector
+            options={[
+              { key: 'my_time', label: 'My time' },
+              { key: 'their_time', label: 'Their time' },
+              { key: 'transition', label: 'Transition' },
+            ]}
+            selected={custodyPeriod}
+            onSelect={setCustodyPeriod}
+          />
+        </FormField>
 
         {/* Main body */}
-        <Controller
-          control={control}
-          name="body"
-          render={({ field: { onChange, value } }) => (
-            <TextArea
-              label="What happened?"
-              value={value}
-              onChangeText={onChange}
-              placeholder="Describe what happened..."
-            />
-          )}
-        />
+        <FormField label="What happened?">
+          <StyledInput placeholder="Describe what happened..." value={body} onChangeText={setBody} multiline />
+        </FormField>
 
-        {/* Type-specific fields */}
-        {typeFields}
+        {/* Exchange fields */}
+        {selectedType === 'pickup_dropoff' && (
+          <>
+            <FormField label="Scheduled time">
+              <StyledInput placeholder="3:00 PM" value={scheduledTime} onChangeText={setScheduledTime} />
+            </FormField>
+            <FormField label="Actual time">
+              <StyledInput placeholder="3:23 PM" value={actualTime} onChangeText={setActualTime} />
+            </FormField>
+            <FormField label="Transfer method">
+              <ChipSelector
+                options={[
+                  { key: 'in_person', label: 'In person' },
+                  { key: 'school', label: 'School' },
+                  { key: 'third_party', label: 'Third party' },
+                ]}
+                selected={transferMethod}
+                onSelect={setTransferMethod}
+              />
+            </FormField>
+          </>
+        )}
 
-        <Separator />
+        {/* Expense fields */}
+        {selectedType === 'expense' && (
+          <>
+            <FormField label="Amount">
+              <StyledInput placeholder="0.00" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
+            </FormField>
+            <FormField label="Category">
+              <ChipSelector
+                options={['medical', 'education', 'extracurricular', 'clothing', 'childcare', 'other'].map(c => ({ key: c, label: c }))}
+                selected={expenseCategory}
+                onSelect={setExpenseCategory}
+              />
+            </FormField>
+          </>
+        )}
 
-        {/* Child mood (for journal entries) */}
+        {/* Child statement fields */}
+        {selectedType === 'child_statement' && (
+          <>
+            <FormField label="Exact words (verbatim)">
+              <StyledInput placeholder="What exactly did the child say?" value={verbatimQuote} onChangeText={setVerbatimQuote} multiline />
+            </FormField>
+            <FormField label="Context">
+              <StyledInput placeholder="What was happening when they said this?" value={statementContext} onChangeText={setStatementContext} />
+            </FormField>
+          </>
+        )}
+
+        {/* Denied visit */}
+        {selectedType === 'visit_denied' && (
+          <FormField label="Reason given (if any)">
+            <StyledInput placeholder="What reason was provided?" value={reasonGiven} onChangeText={setReasonGiven} />
+          </FormField>
+        )}
+
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+
+        {/* Child mood */}
         {(selectedType === 'journal' || selectedType === 'pickup_dropoff') && (
-          <Controller
-            control={control}
-            name="child_mood"
-            render={({ field: { onChange, value } }) => (
-              <MoodSelector value={value} onChange={onChange} />
-            )}
-          />
+          <FormField label="Child's mood">
+            <ChipSelector
+              options={[
+                { key: 'great', label: 'Great' },
+                { key: 'good', label: 'Good' },
+                { key: 'okay', label: 'Okay' },
+                { key: 'upset', label: 'Upset' },
+                { key: 'distressed', label: 'Distressed' },
+              ]}
+              selected={childMood}
+              onSelect={setChildMood}
+            />
+          </FormField>
         )}
 
         {/* Location */}
-        <Controller
-          control={control}
-          name="location_name"
-          render={({ field: { onChange, value } }) => (
-            <Input label="Location" value={value} onChangeText={onChange} placeholder="Where did this happen?" />
-          )}
-        />
+        <FormField label="Location">
+          <StyledInput placeholder="Where did this happen?" value={locationName} onChangeText={setLocationName} />
+        </FormField>
 
-        {/* Flag */}
-        <Pressable
-          onPress={() => {
-            // Toggle flag via form
-          }}
-          className="flex-row items-center gap-3 py-2"
-        >
-          <View className={`w-5 h-5 rounded border ${false ? 'bg-danger border-danger' : 'border-border'}`} />
-          <Text className="font-ui text-[15px] text-text-primary dark:text-dark-text">
+        {/* Flag toggle */}
+        <Pressable onPress={() => setIsFlagged(!isFlagged)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
+          <View style={{
+            width: 22, height: 22, borderRadius: 6,
+            borderWidth: 1.5,
+            borderColor: isFlagged ? '#DC2626' : 'rgba(0,0,0,0.15)',
+            backgroundColor: isFlagged ? '#DC2626' : 'transparent',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            {isFlagged && <Check size={14} strokeWidth={2.5} color="#FFFFFF" />}
+          </View>
+          <Text style={{ fontFamily: 'System', fontSize: 15, color: '#1A1A18' }}>
             Flag as incident
           </Text>
         </Pressable>
 
-        {/* Save */}
-        <Button variant="accent" label="Save entry" onPress={onSubmit} fullWidth />
+        {/* Save button */}
+        <Pressable
+          onPress={onSave}
+          style={{
+            backgroundColor: '#1A1A18', height: 52, borderRadius: 12,
+            alignItems: 'center', justifyContent: 'center', marginTop: 8,
+          }}
+          className="active:scale-[0.98]"
+        >
+          <Text style={{ fontFamily: 'System', fontSize: 15, fontWeight: '500', color: '#FFFFFF' }}>
+            Save entry
+          </Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
