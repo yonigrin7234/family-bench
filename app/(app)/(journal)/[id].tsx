@@ -1,22 +1,14 @@
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Pencil, Trash2, AlertTriangle, MapPin, Users, Clock } from 'lucide-react-native';
-import { IconButton } from '@/components/ui/IconButton';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Separator } from '@/components/ui/Separator';
 import { useEntriesStore } from '@/stores/entries';
 import { entryTypeLabels } from '@/constants/theme';
 
 function formatDateTime(date: string, time?: string): string {
   const d = new Date(date);
-  const dateStr = d.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const dateStr = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   if (!time) return dateStr;
   const [hours, minutes] = time.split(':');
   const h = parseInt(hours, 10);
@@ -33,8 +25,8 @@ export default function EntryDetailScreen() {
 
   if (!entry) {
     return (
-      <SafeAreaView className="flex-1 bg-page dark:bg-dark-page items-center justify-center">
-        <Text className="font-ui text-[15px] text-text-muted">Entry not found</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F0', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: 'System', fontSize: 15, color: '#6B6A68' }}>Entry not found</Text>
       </SafeAreaView>
     );
   }
@@ -42,31 +34,41 @@ export default function EntryDetailScreen() {
   const lateMinutes = entry.metadata?.late_minutes as number | undefined;
 
   return (
-    <SafeAreaView className="flex-1 bg-page dark:bg-dark-page" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F0' }} edges={['top']}>
       {/* Header */}
-      <View className="h-11 flex-row items-center justify-between px-4">
-        <IconButton icon={ArrowLeft} variant="surface" onPress={() => router.back()} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <Pressable
+          onPress={() => router.back()}
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1 }}
+        >
+          <ArrowLeft size={20} strokeWidth={1.75} color="#1A1A18" />
+        </Pressable>
         <Badge type={entry.entry_type as any} />
-        <IconButton icon={Pencil} variant="surface" onPress={() => {/* TODO: edit */}} />
+        <Pressable
+          onPress={() => {}}
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1 }}
+        >
+          <Pencil size={20} strokeWidth={1.75} color="#1A1A18" />
+        </Pressable>
       </View>
 
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
-      >
-        {/* Date + time */}
-        <Text className="font-display text-[22px] font-semibold text-text-primary dark:text-dark-text">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}>
+        {/* Title + date */}
+        <Text style={{ fontFamily: 'Georgia', fontSize: 22, fontWeight: '600', color: '#1A1A18' }}>
           {entryTypeLabels[entry.entry_type] ?? entry.entry_type}
         </Text>
-        <Text className="font-ui text-[13px] text-text-muted dark:text-dark-text-muted">
+        <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893' }}>
           {formatDateTime(entry.event_date, entry.event_time)}
         </Text>
 
-        {/* Late minutes callout */}
+        {/* Late callout */}
         {lateMinutes != null && lateMinutes > 0 && (
-          <View className="bg-danger-light rounded-card p-3 flex-row items-center gap-2">
+          <View style={{
+            backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12,
+            flexDirection: 'row', alignItems: 'center', gap: 8,
+          }}>
             <AlertTriangle size={18} strokeWidth={1.75} color="#DC2626" />
-            <Text className="font-ui text-[14px] font-medium text-danger">
+            <Text style={{ fontFamily: 'System', fontSize: 14, fontWeight: '500', color: '#DC2626' }}>
               {lateMinutes} minutes late
             </Text>
           </View>
@@ -74,81 +76,85 @@ export default function EntryDetailScreen() {
 
         {/* Custody period */}
         {entry.custody_period && (
-          <View className="flex-row items-center gap-2">
-            <Clock size={16} strokeWidth={1.75} className="text-text-muted" />
-            <Text className="font-ui text-[13px] text-text-muted">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Clock size={16} strokeWidth={1.75} color="#9A9893" />
+            <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893' }}>
               {entry.custody_period === 'my_time' ? 'My custody time' :
                entry.custody_period === 'their_time' ? "Other parent's time" : 'Transition'}
             </Text>
           </View>
         )}
 
-        <Separator />
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
 
         {/* Body */}
         {entry.body && (
-          <Text className="font-ui text-[15px] text-text-primary dark:text-dark-text leading-relaxed">
+          <Text style={{ fontFamily: 'System', fontSize: 15, color: '#1A1A18', lineHeight: 22 }}>
             {entry.body}
           </Text>
         )}
 
-        {/* Voice transcript — side-by-side reveal */}
+        {/* Voice side-by-side reveal */}
         {entry.voice_transcript && (
-          <View className="gap-3">
-            <View className="bg-page dark:bg-dark-page rounded-card p-3">
-              <Text className="font-ui text-[11px] font-medium text-text-muted mb-1">
+          <View style={{ gap: 12 }}>
+            <View style={{ backgroundColor: '#F5F5F0', borderRadius: 12, padding: 12 }}>
+              <Text style={{ fontFamily: 'System', fontSize: 11, fontWeight: '500', color: '#9A9893', marginBottom: 4 }}>
                 What you said
               </Text>
-              <Text className="font-ui text-[13px] text-text-muted leading-relaxed">
+              <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893', lineHeight: 20 }}>
                 {entry.voice_transcript}
               </Text>
             </View>
-            <View className="bg-surface dark:bg-dark-surface border border-border rounded-card p-3">
-              <Text className="font-ui text-[11px] font-medium text-accent mb-1">
+            <View style={{
+              backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12,
+              borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+            }}>
+              <Text style={{ fontFamily: 'System', fontSize: 11, fontWeight: '500', color: '#2563EB', marginBottom: 4 }}>
                 Structured as evidence
               </Text>
-              <Text className="font-ui text-[15px] text-text-primary dark:text-dark-text leading-relaxed">
+              <Text style={{ fontFamily: 'System', fontSize: 15, color: '#1A1A18', lineHeight: 22 }}>
                 {entry.body}
               </Text>
             </View>
           </View>
         )}
 
-        <Separator />
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
 
         {/* Metadata */}
-        <View className="gap-3">
+        <View style={{ gap: 12 }}>
           {entry.location_name && (
-            <View className="flex-row items-center gap-2">
-              <MapPin size={16} strokeWidth={1.75} className="text-text-muted" />
-              <Text className="font-ui text-[14px] text-text-muted">{entry.location_name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <MapPin size={16} strokeWidth={1.75} color="#9A9893" />
+              <Text style={{ fontFamily: 'System', fontSize: 14, color: '#6B6A68' }}>{entry.location_name}</Text>
             </View>
           )}
           {entry.people_present && entry.people_present.length > 0 && (
-            <View className="flex-row items-center gap-2">
-              <Users size={16} strokeWidth={1.75} className="text-text-muted" />
-              <Text className="font-ui text-[14px] text-text-muted">
-                {entry.people_present.join(', ')}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Users size={16} strokeWidth={1.75} color="#9A9893" />
+              <Text style={{ fontFamily: 'System', fontSize: 14, color: '#6B6A68' }}>{entry.people_present.join(', ')}</Text>
             </View>
           )}
           {entry.child_mood && (
-            <View className="flex-row items-center gap-2">
-              <Text className="font-ui text-[13px] text-text-muted">Child's mood:</Text>
-              <Text className="font-ui text-[14px] text-text-primary dark:text-dark-text">
-                {entry.child_mood}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893' }}>Mood:</Text>
+              <Text style={{ fontFamily: 'System', fontSize: 14, color: '#1A1A18' }}>{entry.child_mood}</Text>
             </View>
           )}
         </View>
 
-        {/* Flagged indicator */}
+        {/* Flagged */}
         {entry.is_flagged && (
           <>
-            <Separator />
-            <View className="bg-danger-light rounded-card p-3 flex-row items-center gap-2">
+            <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+            <View style={{
+              backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12,
+              flexDirection: 'row', alignItems: 'center', gap: 8,
+            }}>
               <AlertTriangle size={16} strokeWidth={1.75} color="#DC2626" />
-              <Text className="font-ui text-[14px] text-danger font-medium">
+              <Text style={{ fontFamily: 'System', fontSize: 14, fontWeight: '500', color: '#DC2626' }}>
                 Flagged: {entry.flag_category} ({entry.flag_severity})
               </Text>
             </View>
@@ -156,16 +162,17 @@ export default function EntryDetailScreen() {
         )}
 
         {/* Delete */}
-        <Separator />
-        <Button
-          variant="destructive"
-          label="Delete entry"
-          icon={Trash2}
-          onPress={() => {
-            softDeleteEntry(entry.id);
-            router.back();
-          }}
-        />
+        <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginTop: 16 }} />
+        <Pressable
+          onPress={() => { softDeleteEntry(entry.id); router.back(); }}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}
+          className="active:opacity-70"
+        >
+          <Trash2 size={18} strokeWidth={1.75} color="#DC2626" />
+          <Text style={{ fontFamily: 'System', fontSize: 15, color: '#DC2626', marginLeft: 8 }}>
+            Delete entry
+          </Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,33 +1,24 @@
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, User, FileText, Calendar, Bell, Shield, ChevronRight, LogOut } from 'lucide-react-native';
-import { IconButton } from '@/components/ui/IconButton';
-import { Separator } from '@/components/ui/Separator';
-import { Button } from '@/components/ui/Button';
+import { Settings, FileText, Calendar, Bell, Shield, User, ChevronRight, LogOut, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase/client';
 
-interface SettingsRowProps {
-  icon: typeof User;
-  label: string;
-  value?: string;
-  onPress?: () => void;
-}
-
-function SettingsRow({ icon: Icon, label, value, onPress }: SettingsRowProps) {
+function SettingsRow({ icon: Icon, label, value, onPress }: {
+  icon: typeof Settings; label: string; value?: string; onPress?: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center py-4 px-4 active:opacity-70"
+      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 16 }}
+      className="active:opacity-70"
     >
-      <Icon size={20} strokeWidth={1.75} className="text-text-muted" />
-      <Text className="font-ui text-[15px] text-text-primary dark:text-dark-text flex-1 ml-3">
+      <Icon size={20} strokeWidth={1.75} color="#6B6A68" />
+      <Text style={{ fontFamily: 'System', fontSize: 15, color: '#1A1A18', flex: 1, marginLeft: 12 }}>
         {label}
       </Text>
-      {value && (
-        <Text className="font-ui text-[14px] text-text-muted mr-2">{value}</Text>
-      )}
-      <ChevronRight size={16} strokeWidth={1.75} className="text-text-muted" />
+      {value && <Text style={{ fontFamily: 'System', fontSize: 14, color: '#9A9893', marginRight: 8 }}>{value}</Text>}
+      <ChevronRight size={16} strokeWidth={1.75} color="#9A9893" />
     </Pressable>
   );
 }
@@ -35,42 +26,54 @@ function SettingsRow({ icon: Icon, label, value, onPress }: SettingsRowProps) {
 export default function SettingsScreen() {
   const router = useRouter();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace('/(auth)/login');
-  };
-
   return (
-    <SafeAreaView className="flex-1 bg-page dark:bg-dark-page" edges={['top']}>
-      <View className="h-11 flex-row items-center px-4">
-        <IconButton icon={ArrowLeft} variant="transparent" onPress={() => router.back()} />
-        <Text className="font-ui text-[16px] font-medium text-text-primary dark:text-dark-text ml-2">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F0' }} edges={['top']}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <Pressable onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1 }}>
+          <ArrowLeft size={20} strokeWidth={1.75} color="#1A1A18" />
+        </Pressable>
+        <Text style={{ fontFamily: 'Georgia', fontSize: 22, fontWeight: '600', color: '#1A1A18', marginLeft: 12 }}>
           Settings
         </Text>
       </View>
 
-      <ScrollView className="flex-1">
-        <SettingsRow icon={User} label="Profile" onPress={() => {}} />
-        <Separator />
-        <SettingsRow icon={FileText} label="Case details" onPress={() => {}} />
-        <Separator />
-        <SettingsRow icon={FileText} label="Court orders" onPress={() => router.push('/(app)/(more)/settings/orders' as any)} />
-        <Separator />
-        <SettingsRow icon={Calendar} label="Key dates & deadlines" onPress={() => router.push('/(app)/(more)/settings/dates' as any)} />
-        <Separator />
-        <SettingsRow icon={Bell} label="Notifications" />
-        <Separator />
-        <SettingsRow icon={Shield} label="Security & privacy" />
-        <Separator />
-
-        <View className="px-4 pt-8">
-          <Button
-            variant="destructive"
-            label="Sign out"
-            icon={LogOut}
-            onPress={handleLogout}
-          />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <View style={{
+          backgroundColor: '#FFFFFF', borderRadius: 12,
+          borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+          shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+        }}>
+          <SettingsRow icon={User} label="Profile" />
+          <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginHorizontal: 16 }} />
+          <SettingsRow icon={FileText} label="Case details" />
+          <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginHorizontal: 16 }} />
+          <SettingsRow icon={FileText} label="Court orders" onPress={() => router.push('/(app)/(more)/settings/orders' as any)} />
+          <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginHorizontal: 16 }} />
+          <SettingsRow icon={Calendar} label="Key dates" onPress={() => router.push('/(app)/(more)/settings/dates' as any)} />
         </View>
+
+        <View style={{
+          backgroundColor: '#FFFFFF', borderRadius: 12,
+          borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+          shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+        }}>
+          <SettingsRow icon={Bell} label="Notifications" />
+          <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginHorizontal: 16 }} />
+          <SettingsRow icon={Shield} label="Security & privacy" />
+        </View>
+
+        {/* Sign out */}
+        <Pressable
+          onPress={async () => { await supabase.auth.signOut(); router.replace('/(auth)/login'); }}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, marginTop: 24 }}
+          className="active:opacity-70"
+        >
+          <LogOut size={18} strokeWidth={1.75} color="#DC2626" />
+          <Text style={{ fontFamily: 'System', fontSize: 15, color: '#DC2626', marginLeft: 8 }}>
+            Sign out
+          </Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

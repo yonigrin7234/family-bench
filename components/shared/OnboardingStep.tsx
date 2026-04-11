@@ -1,8 +1,6 @@
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '@/components/ui/Button';
 import { ArrowLeft } from 'lucide-react-native';
-import { IconButton } from '@/components/ui/IconButton';
 import type { ReactNode } from 'react';
 
 interface OnboardingStepProps {
@@ -18,59 +16,66 @@ interface OnboardingStepProps {
 }
 
 export function OnboardingStep({
-  step,
-  totalSteps,
-  title,
-  description,
-  children,
-  onNext,
-  onBack,
-  nextLabel = 'Continue',
-  loading,
+  step, totalSteps, title, description, children,
+  onNext, onBack, nextLabel = 'Continue', loading,
 }: OnboardingStepProps) {
   return (
-    <SafeAreaView className="flex-1 bg-page dark:bg-dark-page" edges={['top']}>
-      {/* Progress + back */}
-      <View className="flex-row items-center px-4 py-2">
-        <View className="w-11">
-          {onBack && <IconButton icon={ArrowLeft} variant="transparent" onPress={onBack} />}
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F0' }} edges={['top']}>
+      {/* Progress bar + back */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <View style={{ width: 44 }}>
+          {onBack && (
+            <Pressable
+              onPress={onBack}
+              style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1 }}
+            >
+              <ArrowLeft size={20} strokeWidth={1.75} color="#1A1A18" />
+            </Pressable>
+          )}
         </View>
-        <View className="flex-1 flex-row gap-1 px-4">
+        <View style={{ flex: 1, flexDirection: 'row', gap: 4, paddingHorizontal: 16 }}>
           {Array.from({ length: totalSteps }).map((_, i) => (
             <View
               key={i}
-              className={`flex-1 h-1 rounded-full ${
-                i < step ? 'bg-accent' : i === step ? 'bg-accent' : 'bg-border'
-              }`}
+              style={{
+                flex: 1, height: 3, borderRadius: 2,
+                backgroundColor: i <= step ? '#2563EB' : 'rgba(0,0,0,0.08)',
+              }}
             />
           ))}
         </View>
-        <View className="w-11" />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="font-display text-[28px] font-semibold text-text-primary dark:text-dark-text mb-2">
+        <Text style={{ fontFamily: 'Georgia', fontSize: 28, fontWeight: '600', color: '#1A1A18', marginBottom: 8 }}>
           {title}
         </Text>
-        <Text className="font-ui text-[15px] text-text-muted dark:text-dark-text-muted mb-8 leading-relaxed">
+        <Text style={{ fontFamily: 'System', fontSize: 15, color: '#6B6A68', lineHeight: 22, marginBottom: 32 }}>
           {description}
         </Text>
-
-        <View className="gap-4">{children}</View>
+        <View style={{ gap: 16 }}>{children}</View>
       </ScrollView>
 
-      <View className="px-6 pb-6">
-        <Button
-          variant="accent"
-          label={nextLabel}
+      <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
+        <Pressable
           onPress={onNext}
-          loading={loading}
-          fullWidth
-        />
+          disabled={loading}
+          style={{
+            backgroundColor: '#2563EB', height: 52, borderRadius: 12,
+            alignItems: 'center', justifyContent: 'center',
+            opacity: loading ? 0.5 : 1,
+          }}
+          className="active:scale-[0.98]"
+        >
+          <Text style={{ fontFamily: 'System', fontSize: 15, fontWeight: '500', color: '#FFFFFF' }}>
+            {nextLabel}
+          </Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );

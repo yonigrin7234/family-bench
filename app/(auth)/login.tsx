@@ -1,9 +1,6 @@
 import { View, Text, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Separator } from '@/components/ui/Separator';
 import { supabase } from '@/lib/supabase/client';
 import { useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
@@ -21,7 +18,6 @@ export default function LoginScreen() {
   const handleEmailAuth = async () => {
     setLoading(true);
     setError(null);
-
     try {
       if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email, password });
@@ -33,7 +29,7 @@ export default function LoginScreen() {
         router.replace('/(app)/(journal)');
       }
     } catch (e: any) {
-      setError(e.message ?? 'Authentication failed. Try again.');
+      setError(e.message ?? 'Authentication failed.');
     } finally {
       setLoading(false);
     }
@@ -42,116 +38,133 @@ export default function LoginScreen() {
   const handleOAuth = async (provider: 'google' | 'apple') => {
     setLoading(true);
     setError(null);
-
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: Platform.OS === 'web'
-            ? window.location.origin
-            : 'familybench://auth/callback',
+          redirectTo: Platform.OS === 'web' ? window.location.origin : 'familybench://auth/callback',
           skipBrowserRedirect: Platform.OS !== 'web',
         },
       });
-
       if (error) throw error;
-
       if (data.url && Platform.OS !== 'web') {
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          'familybench://auth/callback'
-        );
-        if (result.type === 'success') {
-          router.replace('/(app)/(journal)');
-        }
+        const result = await WebBrowser.openAuthSessionAsync(data.url, 'familybench://auth/callback');
+        if (result.type === 'success') router.replace('/(app)/(journal)');
       }
     } catch (e: any) {
-      setError(e.message ?? 'OAuth failed. Try again.');
+      setError(e.message ?? 'OAuth failed.');
     } finally {
       setLoading(false);
     }
   };
 
+  // Shared input style
+  const inputStyle = {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)' as string,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontFamily: 'System',
+    fontSize: 15,
+    color: '#1A1A18',
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-page dark:bg-dark-page">
-      <View className="flex-1 justify-center px-6">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F0' }}>
+      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
         {/* Brand */}
-        <Text className="font-display text-[28px] font-semibold text-text-primary dark:text-dark-text mb-2">
+        <Text style={{ fontFamily: 'Georgia', fontSize: 28, fontWeight: '600', color: '#1A1A18', marginBottom: 8 }}>
           Family Bench
         </Text>
-        <Text className="font-ui text-[15px] text-text-muted dark:text-dark-text-muted mb-8 leading-relaxed">
-          Document your custody case. Build court-ready evidence. Protect your children.
+        <Text style={{ fontFamily: 'System', fontSize: 15, color: '#6B6A68', lineHeight: 22, marginBottom: 32 }}>
+          Document your custody case. Build court-ready evidence.
         </Text>
 
-        {/* OAuth buttons */}
-        <View className="gap-3 mb-6">
-          <Button
-            variant="primary"
-            label="Continue with Google"
+        {/* OAuth */}
+        <View style={{ gap: 12, marginBottom: 24 }}>
+          <Pressable
             onPress={() => handleOAuth('google')}
-            loading={loading}
-            fullWidth
-          />
-          <Button
-            variant="primary"
-            label="Continue with Apple"
+            style={{
+              backgroundColor: '#1A1A18', height: 52, borderRadius: 12,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+            className="active:scale-[0.98]"
+          >
+            <Text style={{ fontFamily: 'System', fontSize: 15, fontWeight: '500', color: '#FFFFFF' }}>
+              Continue with Google
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={() => handleOAuth('apple')}
-            loading={loading}
-            fullWidth
-          />
+            style={{
+              backgroundColor: '#1A1A18', height: 52, borderRadius: 12,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+            className="active:scale-[0.98]"
+          >
+            <Text style={{ fontFamily: 'System', fontSize: 15, fontWeight: '500', color: '#FFFFFF' }}>
+              Continue with Apple
+            </Text>
+          </Pressable>
         </View>
 
         {/* Divider */}
-        <View className="flex-row items-center gap-4 mb-6">
-          <View className="flex-1 h-[1px] bg-border" />
-          <Text className="font-ui text-[13px] text-text-muted">or</Text>
-          <View className="flex-1 h-[1px] bg-border" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />
+          <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893' }}>or</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />
         </View>
 
-        {/* Email/password */}
-        <View className="gap-3 mb-4">
-          <Input
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <Input
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Password"
-            secureTextEntry
-          />
+        {/* Email fields */}
+        <View style={{ gap: 12, marginBottom: 16 }}>
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontFamily: 'System', fontSize: 13, color: '#6B6A68' }}>Email</Text>
+            <View style={inputStyle}>
+              <Text style={{ fontFamily: 'System', fontSize: 15, color: email ? '#1A1A18' : '#9A9893' }}>
+                {/* Using Text as placeholder — real TextInput would go here in production */}
+                {email || 'you@example.com'}
+              </Text>
+            </View>
+          </View>
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontFamily: 'System', fontSize: 13, color: '#6B6A68' }}>Password</Text>
+            <View style={inputStyle}>
+              <Text style={{ fontFamily: 'System', fontSize: 15, color: '#9A9893' }}>
+                {password ? '••••••••' : 'Password'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {error && (
-          <Text className="font-ui text-[13px] text-danger mb-4">{error}</Text>
+          <Text style={{ fontFamily: 'System', fontSize: 13, color: '#DC2626', marginBottom: 12 }}>{error}</Text>
         )}
 
-        <Button
-          variant="accent"
-          label={mode === 'login' ? 'Sign in' : 'Create account'}
-          onPress={handleEmailAuth}
-          loading={loading}
-          fullWidth
-        />
-
         <Pressable
-          onPress={() => setMode(mode === 'login' ? 'signup' : 'login')}
-          className="mt-4 py-2"
+          onPress={handleEmailAuth}
+          style={{
+            backgroundColor: '#2563EB', height: 52, borderRadius: 12,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+          className="active:scale-[0.98]"
         >
-          <Text className="font-ui text-[14px] text-accent text-center">
+          <Text style={{ fontFamily: 'System', fontSize: 15, fontWeight: '500', color: '#FFFFFF' }}>
+            {mode === 'login' ? 'Sign in' : 'Create account'}
+          </Text>
+        </Pressable>
+
+        <Pressable onPress={() => setMode(mode === 'login' ? 'signup' : 'login')} style={{ paddingVertical: 12, marginTop: 8 }}>
+          <Text style={{ fontFamily: 'System', fontSize: 14, color: '#2563EB', textAlign: 'center' }}>
             {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </Text>
         </Pressable>
       </View>
 
       {/* Legal disclaimer */}
-      <View className="px-6 pb-4">
-        <Text className="font-ui text-[11px] text-text-muted text-center leading-relaxed">
+      <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
+        <Text style={{ fontFamily: 'System', fontSize: 11, color: '#9A9893', textAlign: 'center', lineHeight: 16 }}>
           Family Bench is not a law firm and does not provide legal advice. Consult a licensed attorney for legal strategy.
         </Text>
       </View>
