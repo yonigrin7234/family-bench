@@ -52,8 +52,7 @@ export function CaptureSheet({
   onTextNote,
 }: CaptureSheetProps) {
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ['40%'], []);
-
+  const snapPoints = useMemo(() => ['42%'], []);
   const actions = { onVoiceEntry, onExchangeLog, onPhoto, onTextNote };
 
   const handleSheetChanges = useCallback(
@@ -78,31 +77,40 @@ export function CaptureSheet({
         borderTopRightRadius: 16,
       }}
       handleIndicatorStyle={{
-        backgroundColor: 'rgba(0,0,0,0.08)',
+        backgroundColor: '#E5E5E0',
         width: 40,
         height: 4,
+        marginTop: 8,
+        marginBottom: 20,
       }}
     >
-      <BottomSheetView className="p-5">
-        {captureOptions.map((option) => {
+      <BottomSheetView style={{ paddingHorizontal: 20, paddingBottom: 32 }}>
+        {captureOptions.map((option, index) => {
           const Icon = option.icon;
+          const isLast = index === captureOptions.length - 1;
           return (
             <Pressable
               key={option.key}
-              className="flex-row items-center gap-4 py-3 active:opacity-70"
               onPress={() => {
                 actions[option.action]();
                 onDismiss();
               }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                paddingVertical: 16,
+                borderBottomWidth: isLast ? 0 : 1,
+                borderBottomColor: 'rgba(0,0,0,0.06)',
+              }}
               accessibilityRole="button"
               accessibilityLabel={option.label}
             >
-              <Icon size={20} strokeWidth={1.75} className="text-text-muted" />
-              <View className="flex-1">
-                <Text className="font-ui text-[15px] text-text-primary">
+              <Icon size={20} strokeWidth={1.75} color="#6B6A68" style={{ marginRight: 16, marginTop: 2 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'System', fontSize: 15, fontWeight: '500', color: '#1A1A18' }}>
                   {option.label}
                 </Text>
-                <Text className="font-ui text-[13px] text-text-muted">
+                <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893', marginTop: 4 }}>
                   {option.description}
                 </Text>
               </View>

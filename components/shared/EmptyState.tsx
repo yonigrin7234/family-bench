@@ -1,40 +1,62 @@
 import { View, Text } from 'react-native';
-import { Button } from '@/components/ui/Button';
-import type { LucideIcon } from 'lucide-react-native';
+import { Pressable } from 'react-native';
 
-// Empty states use serif heading + muted body text.
+// Empty states: serif heading, muted body, near-black button.
 // NO illustrations (anti-pattern #5). NO emoji (anti-pattern #6).
+// Centered vertically. Text centered, max-width 260.
 
 interface EmptyStateProps {
   title: string;
   description: string;
   actionLabel?: string;
-  actionIcon?: LucideIcon;
   onAction?: () => void;
 }
 
-export function EmptyState({
-  title,
-  description,
-  actionLabel,
-  actionIcon,
-  onAction,
-}: EmptyStateProps) {
+export function EmptyState({ title, description, actionLabel, onAction }: EmptyStateProps) {
   return (
-    <View className="flex-1 items-center justify-center px-8 py-16">
-      <Text className="font-display text-[22px] font-semibold text-text-primary dark:text-dark-text text-left w-full mb-2">
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+      <Text
+        style={{
+          fontFamily: 'Georgia',
+          fontSize: 18,
+          fontWeight: '600',
+          color: '#1A1A18',
+          textAlign: 'center',
+          marginBottom: 8,
+        }}
+      >
         {title}
       </Text>
-      <Text className="font-ui text-[15px] text-text-muted dark:text-dark-text-muted text-left w-full leading-relaxed mb-6">
+      <Text
+        style={{
+          fontFamily: 'System',
+          fontSize: 15,
+          color: '#6B6A68',
+          textAlign: 'center',
+          maxWidth: 260,
+          lineHeight: 22,
+          marginBottom: 24,
+        }}
+      >
         {description}
       </Text>
       {actionLabel && onAction && (
-        <Button
-          variant="accent"
-          label={actionLabel}
-          icon={actionIcon}
+        <Pressable
           onPress={onAction}
-        />
+          style={{
+            backgroundColor: '#1A1A18',
+            height: 52,
+            borderRadius: 12,
+            paddingHorizontal: 32,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          className="active:scale-[0.98]"
+        >
+          <Text style={{ fontFamily: 'System', fontSize: 15, fontWeight: '500', color: '#FFFFFF' }}>
+            {actionLabel}
+          </Text>
+        </Pressable>
       )}
     </View>
   );

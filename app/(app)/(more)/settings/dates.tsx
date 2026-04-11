@@ -119,7 +119,7 @@ export default function KeyDatesScreen() {
           title="No dates set"
           description="Add your next hearing date, filing deadlines, and mediation sessions. We'll remind you as they approach."
           actionLabel="Add a date"
-          actionIcon={Plus}
+
           onAction={() => setAdding(true)}
         />
       ) : (

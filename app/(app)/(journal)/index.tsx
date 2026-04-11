@@ -1,4 +1,4 @@
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus } from 'lucide-react-native';
@@ -6,22 +6,19 @@ import { useState, useCallback } from 'react';
 import { EntryCard } from '@/components/entries/EntryCard';
 import { QuickEntryBar } from '@/components/entries/QuickEntryBar';
 import { CaptureSheet } from '@/components/entries/CaptureSheet';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { EntryFilters } from '@/components/entries/EntryFilters';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { useFilteredEntries, useEntriesStore } from '@/stores/entries';
 import type { Entry } from '@/stores/entries';
 
 export default function JournalScreen() {
   const router = useRouter();
   const entries = useFilteredEntries();
-  const loading = useEntriesStore((s) => s.loading);
   const [captureVisible, setCaptureVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // TODO: PowerSync refresh
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
@@ -29,7 +26,7 @@ export default function JournalScreen() {
     ({ item }: { item: Entry }) => (
       <EntryCard
         id={item.id}
-        entryType={item.entry_type as keyof typeof import('@/constants/theme').entryBadgeColors}
+        entryType={item.entry_type as any}
         title={item.title}
         body={item.body}
         eventDate={item.event_date}
@@ -39,7 +36,6 @@ export default function JournalScreen() {
         flagSeverity={item.flag_severity}
         hasAttachments={item.has_attachments}
         hasAudio={item.has_audio}
-        peoplePresent={item.people_present}
         metadata={item.metadata}
         onPress={() => router.push(`/(app)/(journal)/${item.id}`)}
       />
@@ -48,50 +44,74 @@ export default function JournalScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-page dark:bg-dark-page" edges={['top']}>
-      <PageHeader
-        title="Journal"
-        rightIcon={Plus}
-        onRightPress={() => setCaptureVisible(true)}
-      />
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F0' }} edges={['top']}>
+      {/* Header: "Journal" left (Georgia serif), + button right */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+        }}
+      >
+        <Text style={{ fontFamily: 'Georgia', fontSize: 22, fontWeight: '600', color: '#1A1A18' }}>
+          Journal
+        </Text>
+        <Pressable
+          onPress={() => setCaptureVisible(true)}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: '#FFFFFF',
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 3,
+            elevation: 2,
+          }}
+          accessibilityLabel="New entry"
+        >
+          <Plus size={20} strokeWidth={1.75} color="#2563EB" />
+        </Pressable>
+      </View>
 
       <FlatList
         data={entries}
         renderItem={renderEntry}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
-        ListHeaderComponent={<EntryFilters />}
+        contentContainerStyle={{
+          paddingHorizontal: 0,
+          paddingBottom: 120,
+          flexGrow: entries.length === 0 ? 1 : undefined,
+        }}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListHeaderComponent={
+          <View style={{ paddingHorizontal: 16, marginTop: 4, marginBottom: 12 }}>
+            <EntryFilters />
+          </View>
         }
         ListEmptyComponent={
           <EmptyState
             title="No entries yet"
-            description="Start by recording what happened today. Tap the microphone to speak or the + button to write."
+            description="Start recording what happened today."
             actionLabel="Add first entry"
-            actionIcon={Plus}
             onAction={() => setCaptureVisible(true)}
           />
         }
-        // Virtualization for 1000+ entries
         removeClippedSubviews
         maxToRenderPerBatch={10}
         windowSize={5}
         initialNumToRender={15}
-        getItemLayout={(_, index) => ({
-          length: 140, // approximate card height
-          offset: 140 * index,
-          index,
-        })}
       />
 
       <QuickEntryBar
         onPress={() => router.push('/(app)/(journal)/new')}
-        onMicPress={() => {
-          // TODO: Voice capture
-          router.push('/(app)/(journal)/new');
-        }}
+        onMicPress={() => router.push('/(app)/(journal)/new?type=journal')}
       />
 
       <CaptureSheet

@@ -1,5 +1,5 @@
 import { View, Text, Pressable } from 'react-native';
-import { MoreHorizontal, MapPin, Users, AlertTriangle, Paperclip, Mic } from 'lucide-react-native';
+import { MoreHorizontal, MapPin, Paperclip, AlertTriangle, Mic } from 'lucide-react-native';
 import { Badge } from '@/components/ui/Badge';
 import type { entryBadgeColors } from '@/constants/theme';
 
@@ -27,7 +27,6 @@ function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -52,7 +51,6 @@ export function EntryCard({
   isFlagged,
   hasAttachments,
   hasAudio,
-  peoplePresent,
   metadata,
   onPress,
   onMorePress,
@@ -61,41 +59,45 @@ export function EntryCard({
 
   return (
     <Pressable
-      className={`
-        bg-surface dark:bg-dark-surface
-        border border-border dark:border-dark-surface-hover
-        rounded-card p-4 mb-2
-        ${isFlagged ? 'border-l-[3px] border-l-danger' : ''}
-        active:scale-[0.99]
-      `}
       onPress={onPress}
+      className="active:scale-[0.99]"
+      style={{
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        marginHorizontal: 16,
+        marginBottom: 8,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.08)',
+        borderLeftWidth: isFlagged ? 3 : 1,
+        borderLeftColor: isFlagged ? '#DC2626' : 'rgba(0,0,0,0.08)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 1,
+      }}
       accessibilityRole="button"
-      accessibilityLabel={`${entryType} entry from ${formatDate(eventDate)}`}
     >
-      {/* Header: badge + timestamp + overflow */}
-      <View className="flex-row items-center justify-between mb-2">
-        <View className="flex-row items-center gap-2">
+      {/* Top row: badge + timestamp + overflow */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Badge type={entryType} />
-          <Text className="font-ui text-[13px] text-text-muted dark:text-dark-text-muted">
+          <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893' }}>
             {formatDate(eventDate)}
             {eventTime ? ` ${formatTime(eventTime)}` : ''}
           </Text>
         </View>
-        <Pressable
-          onPress={onMorePress}
-          className="w-8 h-8 items-center justify-center"
-          hitSlop={8}
-          accessibilityLabel="More options"
-        >
-          <MoreHorizontal size={20} strokeWidth={1.75} className="text-text-muted dark:text-dark-text-muted" />
+        <Pressable onPress={onMorePress} hitSlop={8} style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+          <MoreHorizontal size={20} strokeWidth={1.75} color="#9A9893" />
         </Pressable>
       </View>
 
-      {/* Late minutes callout for exchanges */}
+      {/* Late minutes callout */}
       {lateMinutes != null && lateMinutes > 0 && (
-        <View className="flex-row items-center gap-1.5 mb-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
           <AlertTriangle size={14} strokeWidth={1.75} color="#DC2626" />
-          <Text className="font-ui text-[13px] font-medium text-danger">
+          <Text style={{ fontFamily: 'System', fontSize: 13, fontWeight: '500', color: '#DC2626' }}>
             {lateMinutes} minutes late
           </Text>
         </View>
@@ -104,43 +106,32 @@ export function EntryCard({
       {/* Body text */}
       {(title || body) && (
         <Text
-          className="font-ui text-[15px] text-text-primary dark:text-dark-text leading-relaxed mb-2"
           numberOfLines={3}
+          style={{
+            fontFamily: 'System',
+            fontSize: 15,
+            color: '#1A1A18',
+            lineHeight: 22,
+            marginTop: 8,
+          }}
         >
           {title ?? body}
         </Text>
       )}
 
-      {/* Metadata row */}
-      <View className="flex-row items-center flex-wrap gap-4">
+      {/* Bottom metadata row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12 }}>
         {locationName && (
-          <View className="flex-row items-center gap-1">
-            <MapPin size={14} strokeWidth={1.75} className="text-text-muted dark:text-dark-text-muted" />
-            <Text className="font-ui text-[13px] text-text-muted dark:text-dark-text-muted">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <MapPin size={14} strokeWidth={1.75} color="#9A9893" />
+            <Text style={{ fontFamily: 'System', fontSize: 13, color: '#9A9893' }}>
               {locationName}
             </Text>
           </View>
         )}
-        {peoplePresent && peoplePresent.length > 0 && (
-          <View className="flex-row items-center gap-1">
-            <Users size={14} strokeWidth={1.75} className="text-text-muted dark:text-dark-text-muted" />
-            <Text className="font-ui text-[13px] text-text-muted dark:text-dark-text-muted">
-              {peoplePresent.length}
-            </Text>
-          </View>
-        )}
-        {hasAttachments && (
-          <Paperclip size={14} strokeWidth={1.75} className="text-text-muted dark:text-dark-text-muted" />
-        )}
-        {hasAudio && (
-          <Mic size={14} strokeWidth={1.75} className="text-text-muted dark:text-dark-text-muted" />
-        )}
-        {isFlagged && (
-          <View className="flex-row items-center gap-1">
-            <AlertTriangle size={14} strokeWidth={1.75} className="text-danger" />
-            <Text className="font-ui text-[13px] text-danger">flagged</Text>
-          </View>
-        )}
+        {hasAttachments && <Paperclip size={14} strokeWidth={1.75} color="#9A9893" />}
+        {hasAudio && <Mic size={14} strokeWidth={1.75} color="#9A9893" />}
+        {isFlagged && <AlertTriangle size={14} strokeWidth={1.75} color="#DC2626" />}
       </View>
     </Pressable>
   );

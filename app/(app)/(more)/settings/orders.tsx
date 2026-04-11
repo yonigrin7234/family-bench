@@ -112,7 +112,7 @@ export default function CourtOrdersScreen() {
           title="No court orders yet"
           description="Add your custody order provisions so the app can track compliance automatically."
           actionLabel="Add court order"
-          actionIcon={Plus}
+
           onAction={() => setAdding(true)}
         />
       ) : (
