@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Voice examples</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.block { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.cell { padding: 16px 18px; border-radius: 12px; }
+.good { background: #FFFFFF; border: 0.5px solid var(--fb-rule); }
+.bad  { background: var(--fb-paper-deep); }
+.kicker { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; margin-bottom: 10px; }
+.kicker.y { color: var(--fb-forest); }
+.kicker.n { color: var(--fb-ox); }
+.ex { font-size: 13.5px; line-height: 1.55; margin-bottom: 8px; color: var(--fb-ink); }
+.ex:last-child { margin-bottom: 0; }
+.em { font-family: var(--fb-serif); font-style: italic; color: var(--fb-ink-soft); }
+</style>
+</head>
+<body>
+<div class="block">
+  <div class="cell good">
+    <div class="kicker y">✓ approved voice</div>
+    <div class="ex"><span class="em">"Tell me what's happening. I'll show you the two or three paths the law actually gives you."</span></div>
+    <div class="ex">"Your pattern is consistent but not yet willful-by-a-reasonable-doubt."</div>
+    <div class="ex"><span class="em">"This is legal information, not advice."</span></div>
+    <div class="ex"><span class="em">"You don't need to be polished. Just say what happened."</span></div>
+  </div>
+  <div class="cell bad">
+    <div class="kicker n">✗ rejected voice</div>
+    <div class="ex" style="color:var(--fb-ink-mute); text-decoration:line-through;">"We've got your back!"</div>
+    <div class="ex" style="color:var(--fb-ink-mute); text-decoration:line-through;">"Simply file your RFO in three easy steps."</div>
+    <div class="ex" style="color:var(--fb-ink-mute); text-decoration:line-through;">"Pro tip: make sure to document everything."</div>
+    <div class="ex" style="color:var(--fb-ink-mute); text-decoration:line-through;">"Your case is strong 💪"</div>
+  </div>
+</div>
+</body>
+</html>

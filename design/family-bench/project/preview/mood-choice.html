@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Mood + big choice</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.kicker { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 10px; }
+
+/* Mood */
+.mood-panel { background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 14px; padding: 20px; }
+.mood-q { font-family: var(--fb-serif); font-style: italic; font-size: 17px; color: var(--fb-ink-soft); margin-bottom: 14px; letter-spacing: -0.005em; line-height: 1.4; }
+.mood-row { display: flex; gap: 8px; }
+.mood { flex:1; padding: 14px 10px; border-radius: 12px; background: var(--fb-paper-deep); border: 0.5px solid transparent; text-align: center; cursor: pointer; }
+.mood.on { background: var(--fb-ox-wash); border-color: var(--fb-ox); }
+.mood-num { font-family: var(--fb-serif); font-size: 22px; color: var(--fb-ink); letter-spacing: -0.02em; }
+.mood-lbl { font-size: 10px; color: var(--fb-ink-mute); margin-top: 4px; letter-spacing: 0.05em; text-transform: uppercase; }
+
+/* Big choice */
+.choices { display: flex; flex-direction: column; gap: 10px; background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 14px; padding: 20px; }
+.choice { padding: 14px 16px; border-radius: 12px; border: 0.5px solid var(--fb-rule); display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.choice.on { border-color: var(--fb-ink); background: var(--fb-paper-deep); }
+.radio { width: 18px; height: 18px; border-radius: 9px; border: 1.5px solid var(--fb-ink-mute); flex-shrink: 0; margin-top: 2px; position: relative; }
+.on .radio { border-color: var(--fb-ink); }
+.on .radio::after { content: ''; position: absolute; inset: 3px; border-radius: 9px; background: var(--fb-ink); }
+.c-title { font-size: 13.5px; font-weight: 600; color: var(--fb-ink); letter-spacing: -0.005em; }
+.c-body { font-size: 12px; color: var(--fb-ink-mute); margin-top: 2px; line-height: 1.4; }
+.tag { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fb-forest); font-weight: 600; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div>
+    <div class="kicker">Mood check · journaling</div>
+    <div class="mood-panel">
+      <div class="mood-q">How are you holding up, actually?</div>
+      <div class="mood-row">
+        <div class="mood"><div class="mood-num">1</div><div class="mood-lbl">Rough</div></div>
+        <div class="mood"><div class="mood-num">2</div><div class="mood-lbl">Tired</div></div>
+        <div class="mood on"><div class="mood-num">3</div><div class="mood-lbl">OK</div></div>
+        <div class="mood"><div class="mood-num">4</div><div class="mood-lbl">Steady</div></div>
+        <div class="mood"><div class="mood-num">5</div><div class="mood-lbl">Good</div></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="kicker">Big choice · diagnostic options</div>
+    <div class="choices">
+      <div class="choice on">
+        <div class="radio"></div>
+        <div>
+          <div class="c-title">Request for Order · Modification</div>
+          <div class="c-body">Change the custody schedule based on pattern of non-compliance.</div>
+          <div class="tag">Recommended</div>
+        </div>
+      </div>
+      <div class="choice">
+        <div class="radio"></div>
+        <div>
+          <div class="c-title">Contempt · § 1218</div>
+          <div class="c-body">Willful violation. Higher bar; your log doesn't yet prove willfulness.</div>
+        </div>
+      </div>
+      <div class="choice">
+        <div class="radio"></div>
+        <div>
+          <div class="c-title">Meet & confer first</div>
+          <div class="c-body">Send a demand letter. Judges notice when you tried before filing.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

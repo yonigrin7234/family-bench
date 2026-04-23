@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Cards</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.kicker { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 4px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.card { background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 14px; padding: 16px 18px; }
+.card-deep { background: var(--fb-paper-deep); border-radius: 14px; padding: 16px 18px; }
+.card-alert { background: var(--fb-ox-wash); border: 0.5px solid rgba(180,64,40,0.25); border-radius: 14px; padding: 16px 18px; }
+.title { font-family: var(--fb-sans); font-weight: 600; font-size: 16px; letter-spacing: -0.015em; margin: 6px 0 4px; }
+.body  { font-size: 12.5px; color: var(--fb-ink-soft); line-height: 1.5; }
+.sep { height: 0.5px; background: var(--fb-rule-soft); margin: 10px 0; }
+.meta { font-family: var(--fb-mono); font-size: 11px; color: var(--fb-ink-mute); }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="card">
+    <div class="kicker">Base · #FFFFFF on paper</div>
+    <div class="title">Default card</div>
+    <div class="body">The workhorse. Hairline 0.5px border, radius 14, no shadow.</div>
+    <div class="sep"></div>
+    <div class="meta">1 of 3 · May 8</div>
+  </div>
+  <div class="card-deep">
+    <div class="kicker" style="color:var(--fb-ink-mute)">Recessed · paper-deep</div>
+    <div class="title">Deep card</div>
+    <div class="body">For nested context, help callouts, rails. No border.</div>
+    <div class="sep"></div>
+    <div class="meta">Used for step rail + why-this-matters</div>
+  </div>
+  <div class="card-alert">
+    <div class="kicker">Oxblood wash · attention</div>
+    <div class="title">Alert card</div>
+    <div class="body">Deadline, rule change, safety warning. Used sparingly — max one per screen.</div>
+    <div class="sep" style="background:rgba(180,64,40,0.15);"></div>
+    <div class="meta" style="color:var(--fb-ox-deep)">Hearing · May 5 · 14 days</div>
+  </div>
+</div>
+</body>
+</html>

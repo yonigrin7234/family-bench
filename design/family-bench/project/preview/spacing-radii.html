@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Spacing + radii</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.block { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.kicker { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 12px; }
+.sp-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.sp-bar { height: 8px; background: var(--fb-ink); border-radius: 2px; }
+.sp-label { font-family: var(--fb-mono); font-size: 11px; color: var(--fb-ink-mute); width: 60px; text-align: right; }
+.r-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.r-card { background: #FFFFFF; border: 0.5px solid var(--fb-rule); height: 64px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; font-family: var(--fb-mono); font-size: 10.5px; color: var(--fb-ink-mute); }
+</style>
+</head>
+<body>
+<div class="block">
+  <div>
+    <div class="kicker">Spacing · 4pt</div>
+    <div class="sp-row"><div class="sp-label">4 · --fb-1</div><div class="sp-bar" style="width:4px;"></div></div>
+    <div class="sp-row"><div class="sp-label">8 · --fb-2</div><div class="sp-bar" style="width:8px;"></div></div>
+    <div class="sp-row"><div class="sp-label">12 · --fb-3</div><div class="sp-bar" style="width:12px;"></div></div>
+    <div class="sp-row"><div class="sp-label">16 · --fb-4</div><div class="sp-bar" style="width:16px;"></div></div>
+    <div class="sp-row"><div class="sp-label">20 · --fb-5</div><div class="sp-bar" style="width:20px;"></div></div>
+    <div class="sp-row"><div class="sp-label">24 · --fb-6</div><div class="sp-bar" style="width:24px;"></div></div>
+    <div class="sp-row"><div class="sp-label">32 · --fb-8</div><div class="sp-bar" style="width:32px;"></div></div>
+    <div class="sp-row"><div class="sp-label">40 · --fb-10</div><div class="sp-bar" style="width:40px;"></div></div>
+  </div>
+  <div>
+    <div class="kicker">Radii</div>
+    <div class="r-grid">
+      <div class="r-card" style="border-radius:8px;">8 · sm</div>
+      <div class="r-card" style="border-radius:12px;">12 · md</div>
+      <div class="r-card" style="border-radius:14px;">14 · lg</div>
+      <div class="r-card" style="border-radius:18px;">18 · xl</div>
+      <div class="r-card" style="border-radius:999px;">pill</div>
+    </div>
+    <div style="margin-top:20px;">
+      <div class="kicker" style="color:var(--fb-ink-mute);">Elevation · almost none</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+        <div style="height:60px; background:#FFFFFF; border-radius:12px; box-shadow: 0 1px 2px rgba(20,24,31,0.04); display:flex; align-items:center; justify-content:center; font-family:var(--fb-mono); font-size:10.5px; color:var(--fb-ink-mute);">shadow-1</div>
+        <div style="height:60px; background:#FFFFFF; border-radius:12px; box-shadow: 0 4px 14px rgba(20,24,31,0.06), 0 1px 2px rgba(20,24,31,0.04); display:flex; align-items:center; justify-content:center; font-family:var(--fb-mono); font-size:10.5px; color:var(--fb-ink-mute);">shadow-2</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
