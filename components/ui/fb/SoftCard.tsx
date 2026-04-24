@@ -48,6 +48,7 @@ export function SoftCard({
                 style={{
                   fontSize: 15,
                   fontWeight: '600',
+                  fontFamily: 'Inter_600SemiBold',
                   color: '#14181F',
                   letterSpacing: -0.3,
                 }}

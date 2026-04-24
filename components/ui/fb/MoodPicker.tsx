@@ -62,7 +62,12 @@ export function MoodPicker({
             <View style={{ flex: 1 }}>
               <Text
                 className="font-sans"
-                style={{ fontSize: 13, fontWeight: '600', color: '#14181F' }}
+                style={{
+                  fontSize: 13,
+                  fontWeight: '600',
+                  fontFamily: 'Inter_600SemiBold',
+                  color: '#14181F',
+                }}
               >
                 {m.label}
               </Text>

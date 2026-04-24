@@ -68,6 +68,7 @@ export function StepRail({
                     style={{
                       fontSize: 11,
                       fontWeight: '600',
+                      fontFamily: 'Inter_600SemiBold',
                       color: active ? '#F7F6F3' : 'rgba(20,24,31,0.58)',
                     }}
                   >
@@ -81,6 +82,7 @@ export function StepRail({
                   style={{
                     fontSize: 13.5,
                     fontWeight: active ? '600' : '500',
+                    fontFamily: active ? 'Inter_600SemiBold' : 'Inter_500Medium',
                     color: done
                       ? '#2B323D'
                       : active
@@ -117,7 +119,12 @@ export function StepRail({
                 >
                   <Text
                     className="font-sans"
-                    style={{ fontSize: 10, fontWeight: '600', color: '#B44028' }}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '600',
+                      fontFamily: 'Inter_600SemiBold',
+                      color: '#B44028',
+                    }}
                   >
                     {s.badge}
                   </Text>

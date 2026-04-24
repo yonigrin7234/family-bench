@@ -31,6 +31,7 @@ export function FBStatusBar({
         style={{
           fontSize: 15,
           fontWeight: '600',
+          fontFamily: 'Inter_600SemiBold',
           color: c,
           letterSpacing: -0.15,
         }}

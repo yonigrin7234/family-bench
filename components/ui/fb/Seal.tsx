@@ -29,6 +29,7 @@ export function Seal({
           color: '#F7F6F3',
           fontSize,
           fontWeight: '600',
+          fontFamily: 'Inter_600SemiBold',
           letterSpacing: fontSize * -0.04,
         }}
       >

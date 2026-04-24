@@ -57,6 +57,7 @@ export function BigChoice({
           style={{
             fontSize: 14.5,
             fontWeight: '600',
+            fontFamily: 'Inter_600SemiBold',
             color: '#14181F',
             letterSpacing: -0.29,
           }}
@@ -87,7 +88,12 @@ export function BigChoice({
         >
           <Text
             className="font-sans"
-            style={{ fontSize: 10, fontWeight: '600', color: '#B44028' }}
+            style={{
+              fontSize: 10,
+              fontWeight: '600',
+              fontFamily: 'Inter_600SemiBold',
+              color: '#B44028',
+            }}
           >
             {badge}
           </Text>

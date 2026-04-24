@@ -46,8 +46,9 @@ export function HelpTip({
             className="font-sans"
             style={{
               fontSize: 9,
-              color: 'rgba(20,24,31,0.58)',
               fontWeight: '600',
+              fontFamily: 'Inter_600SemiBold',
+              color: 'rgba(20,24,31,0.58)',
             }}
           >
             ?

@@ -46,6 +46,7 @@ export function Segment<V extends string = string>({
               style={{
                 fontSize: 12.5,
                 fontWeight: active ? '600' : '500',
+                fontFamily: active ? 'Inter_600SemiBold' : 'Inter_500Medium',
                 color: active ? '#14181F' : 'rgba(20,24,31,0.58)',
               }}
             >

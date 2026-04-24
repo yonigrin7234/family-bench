@@ -22,13 +22,23 @@ export function ProgressBar({
         >
           <Text
             className="font-sans"
-            style={{ fontSize: 12, color: 'rgba(20,24,31,0.58)', fontWeight: '500' }}
+            style={{
+              fontSize: 12,
+              fontWeight: '500',
+              fontFamily: 'Inter_500Medium',
+              color: 'rgba(20,24,31,0.58)',
+            }}
           >
             {label}
           </Text>
           <Text
             className="font-mono"
-            style={{ fontSize: 12, color: '#14181F', fontWeight: '600' }}
+            style={{
+              fontSize: 12,
+              fontWeight: '600',
+              fontFamily: 'JetBrainsMono_600SemiBold',
+              color: '#14181F',
+            }}
           >
             {clamped}%
           </Text>

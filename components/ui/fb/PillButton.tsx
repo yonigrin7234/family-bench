@@ -73,6 +73,7 @@ export function PillButton({
         style={{
           fontSize: s.fs,
           fontWeight: '500',
+          fontFamily: 'Inter_500Medium',
           color: t.fg,
           letterSpacing: s.fs * -0.01,
         }}

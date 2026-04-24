@@ -44,6 +44,7 @@ export function InfoCallout({
           style={{
             fontSize: 10.5,
             fontWeight: '600',
+            fontFamily: 'Inter_600SemiBold',
             color: t.fg,
             letterSpacing: 0.84,
             textTransform: 'uppercase',

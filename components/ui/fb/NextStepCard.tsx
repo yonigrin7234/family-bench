@@ -40,8 +40,9 @@ export function NextStepCard({
         className="font-sans"
         style={{
           fontSize: 10.5,
-          color: fg,
           fontWeight: '600',
+          fontFamily: 'Inter_600SemiBold',
+          color: fg,
           letterSpacing: 1.05,
           textTransform: 'uppercase',
         }}
@@ -52,8 +53,9 @@ export function NextStepCard({
         className="font-sans"
         style={{
           fontSize: 22,
-          color: '#14181F',
           fontWeight: '600',
+          fontFamily: 'Inter_600SemiBold',
+          color: '#14181F',
           marginTop: 6,
           letterSpacing: -0.44,
           lineHeight: 26.4,

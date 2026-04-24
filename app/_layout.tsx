@@ -30,7 +30,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 export { ErrorBoundary } from 'expo-router';
 
 export const unstable_settings = {
-  initialRouteName: '_gallery',
+  initialRouteName: 'gallery',
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -71,7 +71,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="_gallery" />
+          <Stack.Screen name="gallery" />
         </Stack>
       </ThemeProvider>
     </GestureHandlerRootView>

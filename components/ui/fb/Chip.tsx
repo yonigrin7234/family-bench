@@ -45,7 +45,12 @@ export function Chip({
       {typeof children === 'string' || typeof children === 'number' ? (
         <Text
           className="font-sans"
-          style={{ fontSize: 11, fontWeight: '500', color: t.fg }}
+          style={{
+            fontSize: 11,
+            fontWeight: '500',
+            fontFamily: 'Inter_500Medium',
+            color: t.fg,
+          }}
         >
           {children}
         </Text>
