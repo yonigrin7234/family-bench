@@ -42,9 +42,5 @@ export default function RootLayout() {
     return <View style={{ flex: 1, backgroundColor: '#F7F6F3' }} />;
   }
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="gallery" />
-    </Stack>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
