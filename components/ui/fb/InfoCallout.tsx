@@ -53,16 +53,12 @@ export function InfoCallout({
           {title}
         </Text>
       </View>
-      {typeof children === 'string' ? (
-        <Text
-          className="font-sans"
-          style={{ fontSize: 13, color: '#2B323D', lineHeight: 20.15 }}
-        >
-          {children}
-        </Text>
-      ) : (
-        children
-      )}
+      <Text
+        className="font-sans"
+        style={{ fontSize: 13, color: '#2B323D', lineHeight: 20.15 }}
+      >
+        {children}
+      </Text>
     </View>
   );
 }

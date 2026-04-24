@@ -42,21 +42,17 @@ export function Chip({
         style,
       ]}
     >
-      {typeof children === 'string' || typeof children === 'number' ? (
-        <Text
-          className="font-sans"
-          style={{
-            fontSize: 11,
-            fontWeight: '500',
-            fontFamily: 'Inter_500Medium',
-            color: t.fg,
-          }}
-        >
-          {children}
-        </Text>
-      ) : (
-        children
-      )}
+      <Text
+        className="font-sans"
+        style={{
+          fontSize: 11,
+          fontWeight: '500',
+          fontFamily: 'Inter_500Medium',
+          color: t.fg,
+        }}
+      >
+        {children}
+      </Text>
     </View>
   );
 }
