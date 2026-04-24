@@ -1,16 +1,11 @@
-// TEMP: gallery-only layout. Will be replaced when (app) and (auth)
-// routes are built from the design bundle.
+// Gallery-only layout. Will be replaced when (app) / (auth) routes
+// are rebuilt from the design bundle. global.css is required for
+// NativeWind class compilation.
 
 import '../global.css';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View } from 'react-native';
 import {
+  useFonts,
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
@@ -25,55 +20,31 @@ import {
   JetBrainsMono_500Medium,
   JetBrainsMono_600SemiBold,
 } from '@expo-google-fonts/jetbrains-mono';
-import { useColorScheme } from '@/components/useColorScheme';
-
-export { ErrorBoundary } from 'expo-router';
-
-export const unstable_settings = {
-  initialRouteName: 'gallery',
-};
-
-SplashScreen.preventAutoHideAsync();
+import { View } from 'react-native';
 
 export default function RootLayout() {
-  // Register fonts under the exact family names referenced by
-  // tailwind.config.js (`Inter`, `Instrument Serif`, `JetBrains Mono`)
-  // so NativeWind's font-sans/-serif/-mono classes resolve to real
-  // typefaces. Extra weight-specific keys are also registered for
-  // consumers that want to pick a weight via explicit fontFamily.
-  const [loaded, error] = useFonts({
-    'Inter': Inter_400Regular,
-    'Inter_400Regular': Inter_400Regular,
-    'Inter_500Medium': Inter_500Medium,
-    'Inter_600SemiBold': Inter_600SemiBold,
-    'Inter_700Bold': Inter_700Bold,
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter: Inter_400Regular,
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
     'Instrument Serif': InstrumentSerif_400Regular,
-    'InstrumentSerif_400Regular': InstrumentSerif_400Regular,
-    'InstrumentSerif_400Regular_Italic': InstrumentSerif_400Regular_Italic,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_500Medium,
+    JetBrainsMono_600SemiBold,
     'JetBrains Mono': JetBrainsMono_400Regular,
-    'JetBrainsMono_400Regular': JetBrainsMono_400Regular,
-    'JetBrainsMono_500Medium': JetBrainsMono_500Medium,
-    'JetBrainsMono_600SemiBold': JetBrainsMono_600SemiBold,
   });
-  const colorScheme = useColorScheme();
 
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
-
-  useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
-  }, [loaded]);
-
-  if (!loaded) return <View style={{ flex: 1, backgroundColor: '#F7F6F3' }} />;
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: '#F7F6F3' }} />;
+  }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="gallery" />
-        </Stack>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="gallery" />
+    </Stack>
   );
 }
