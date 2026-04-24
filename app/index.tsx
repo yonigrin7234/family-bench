@@ -58,6 +58,43 @@ function Gap({ h = 8 }: { h?: number }) {
   return <View style={{ height: h }} />;
 }
 
+const rowStyle = {
+  flexDirection: 'row' as const,
+  flexWrap: 'wrap' as const,
+  gap: 8,
+  marginVertical: 8,
+};
+
+const sentenceRow = {
+  flexDirection: 'row' as const,
+  flexWrap: 'wrap' as const,
+  alignItems: 'center' as const,
+};
+
+const bodyStyle = {
+  fontSize: 15,
+  fontFamily: 'Inter_400Regular',
+  color: '#14181F',
+  lineHeight: 22,
+};
+
+function RowLabel({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        fontSize: 11,
+        fontFamily: 'Inter_500Medium',
+        color: 'rgba(20,24,31,0.58)',
+        letterSpacing: 0.06,
+        textTransform: 'uppercase',
+        marginTop: 4,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
 export default function Gallery() {
   const [segment, setSegment] = useState<'scheduled' | 'actual' | 'delta'>('actual');
   const [big, setBig] = useState<'modification' | 'contempt' | 'mediation'>('contempt');
@@ -143,28 +180,39 @@ export default function Gallery() {
         {/* PillButton */}
         <Kicker>PillButton</Kicker>
         <SoftCard>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <PillButton tone="primary" size="sm">primary sm</PillButton>
-            <PillButton tone="primary" size="md">primary md</PillButton>
-            <PillButton tone="primary" size="lg">primary lg</PillButton>
+          <RowLabel>Primary — sm / md / lg</RowLabel>
+          <View style={rowStyle}>
+            <PillButton tone="primary" size="sm">Primary sm</PillButton>
+            <PillButton tone="primary" size="md">Primary md</PillButton>
+            <PillButton tone="primary" size="lg">Primary lg</PillButton>
           </View>
-          <Gap h={8} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <PillButton tone="soft">soft</PillButton>
-            <PillButton tone="ghost">ghost</PillButton>
-            <PillButton tone="accent">accent</PillButton>
-            <PillButton tone="accentSoft">accentSoft</PillButton>
+
+          <Rule />
+
+          <RowLabel>All tones — md</RowLabel>
+          <View style={rowStyle}>
+            <PillButton tone="primary">Primary</PillButton>
+            <PillButton tone="soft">Soft</PillButton>
+            <PillButton tone="ghost">Ghost</PillButton>
+            <PillButton tone="accent">Accent</PillButton>
+            <PillButton tone="accentSoft">Accent soft</PillButton>
           </View>
-          <Gap h={8} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+
+          <Rule />
+
+          <RowLabel>With icons</RowLabel>
+          <View style={rowStyle}>
             <PillButton tone="primary" icon="mic">Left icon</PillButton>
-            <PillButton tone="ghost" iconRight="caret">Right icon</PillButton>
-            <PillButton tone="accent" icon="plus" iconRight="chevR">Both</PillButton>
+            <PillButton tone="primary" iconRight="chevR">Right icon</PillButton>
+            <PillButton tone="primary" icon="mic" iconRight="chevR">Both</PillButton>
           </View>
-          <Gap h={8} />
-          <PillButton tone="primary" full>
-            Full width
-          </PillButton>
+
+          <Rule />
+
+          <RowLabel>Full width</RowLabel>
+          <View style={{ marginTop: 8 }}>
+            <PillButton tone="primary" full>Reserve full width</PillButton>
+          </View>
         </SoftCard>
 
         <Rule style={{ marginTop: 14 }} />
@@ -241,15 +289,27 @@ export default function Gallery() {
         {/* HelpTip */}
         <Kicker>HelpTip</Kicker>
         <SoftCard>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-            <Text className="font-sans" style={{ color: '#2B323D' }}>A </Text>
-            <HelpTip term="custody evaluation">explainer</HelpTip>
-            <Text className="font-sans" style={{ color: '#2B323D' }}>
-              {' '}happens before the hearing.
-            </Text>
+          <View style={sentenceRow}>
+            <Text style={bodyStyle}>A </Text>
+            <HelpTip term="custody evaluation" />
+            <Text style={bodyStyle}> typically happens before the hearing.</Text>
           </View>
-          <Gap h={10} />
-          <HelpTip term="contempt" inline />
+
+          <Gap h={12} />
+
+          <View style={sentenceRow}>
+            <Text style={bodyStyle}>Your filing must include a </Text>
+            <HelpTip term="declaration" />
+            <Text style={bodyStyle}> signed under penalty of perjury.</Text>
+          </View>
+
+          <Gap h={12} />
+
+          <View style={sentenceRow}>
+            <Text style={bodyStyle}>We'll auto-calculate the </Text>
+            <HelpTip term="service deadline" />
+            <Text style={bodyStyle}> based on your hearing date.</Text>
+          </View>
         </SoftCard>
 
         <Rule style={{ marginTop: 14 }} />
