@@ -34,6 +34,13 @@ yarn-error.*
 .env.local
 .env*.local
 
+# local agent tooling
+.claude/skills/
+.claude/worktrees/
+
+# Supabase CLI local state
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 
