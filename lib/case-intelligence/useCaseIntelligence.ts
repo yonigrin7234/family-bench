@@ -1,10 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as Crypto from 'expo-crypto';
 import { create } from 'zustand';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase/client';
 import type { Database, Tables, TablesInsert } from '@/lib/supabase/database.types';
 import { hashString } from '@/lib/utils/hash';
 import { getEntryTypeOption, type EntryTypeValue } from './entryTypes';
+import {
+  DEFAULT_REPORT_PREVIEW_STATE,
+  createLocalRecordMeta,
+  getLocalPersistenceAdapter,
+  localRecordKey,
+  readPersistedCaseIntelligence,
+  withEntryLocalMeta,
+  writePersistedCaseIntelligence,
+} from './persistence';
 import { getEntryMetadata } from './review';
 import { createFallbackCaseIntelligence } from './seed';
 import {
@@ -20,6 +29,9 @@ import type {
   CaseIntelligenceSource,
   Entry,
   HomeCaseIntelligence,
+  LocalPersistenceDiagnostics,
+  LocalRecordMeta,
+  ReportPreviewState,
 } from './types';
 
 type TableName = keyof Database['public']['Tables'];
@@ -131,15 +143,39 @@ export type EntryReviewPatch = {
 type CaseIntelligenceState = {
   snapshot: CaseIntelligenceSnapshot;
   source: CaseIntelligenceSource;
+  reportPreviewState: ReportPreviewState;
+  localRecords: Record<string, LocalRecordMeta>;
+  persistence: LocalPersistenceDiagnostics;
   loading: boolean;
   hasLoaded: boolean;
+  hasHydrated: boolean;
+  hasPersistedSnapshot: boolean;
   error: string | null;
   load: () => Promise<void>;
   createEntry: (input: CaptureEntryInput) => Promise<SaveEntryResult>;
+  setReportPreviewState: (patch: Partial<ReportPreviewState>) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
 };
 
 const isSupabaseWriteEnabled = process.env.EXPO_PUBLIC_ENABLE_SUPABASE_WRITES === 'true';
+
+function getSyncMode(): LocalPersistenceDiagnostics['syncMode'] {
+  if (isSupabaseWriteEnabled) return 'remote_write_enabled';
+  return isSupabaseConfigured ? 'local_first' : 'disabled_demo';
+}
+
+function createPersistenceDiagnostics(
+  overrides: Partial<LocalPersistenceDiagnostics> = {},
+): LocalPersistenceDiagnostics {
+  return {
+    active: true,
+    adapter: getLocalPersistenceAdapter(),
+    hydrationCompleted: false,
+    syncMode: getSyncMode(),
+    error: null,
+    ...overrides,
+  };
+}
 
 function normalizeTime(value?: string | null) {
   const trimmed = value?.trim();
@@ -181,7 +217,7 @@ async function buildEntry(
     .join('\n');
 
   return {
-    id: Crypto.randomUUID(),
+    id: `local-entry-${Crypto.randomUUID()}`,
     user_id: userId,
     case_id: activeCase.id,
     child_id: primaryChild?.id ?? null,
@@ -261,6 +297,7 @@ function updateEntryInSnapshot(
   snapshot: CaseIntelligenceSnapshot,
   entryId: string,
   patch: EntryReviewPatch,
+  localMeta?: LocalRecordMeta,
 ): CaseIntelligenceSnapshot {
   const now = new Date().toISOString();
 
@@ -278,7 +315,7 @@ function updateEntryInSnapshot(
           ? null
           : currentMetadata.reviewed_at ?? null;
 
-      return {
+      const updatedEntry: Entry = {
         ...entry,
         body,
         is_edited: hasBodyPatch ? true : entry.is_edited,
@@ -291,57 +328,197 @@ function updateEntryInSnapshot(
           review_visibility: patch.reviewVisibility ?? currentMetadata.review_visibility,
         },
       };
+
+      return localMeta ? withEntryLocalMeta(updatedEntry, localMeta) : updatedEntry;
     }),
   };
 }
 
-function mergeCapturedEntries(
+function hasLocalEntryState(entry: Entry, localRecords: Record<string, LocalRecordMeta>) {
+  const metadata = getEntryMetadata(entry);
+  const localRecord = localRecords[localRecordKey('entries', entry.id)];
+
+  return Boolean(
+    localRecord ||
+      entry.capture_method === 'manual_local' ||
+      metadata.sync_status === 'pending' ||
+      metadata.sync_status === 'error',
+  );
+}
+
+function mergeLocalFirstSnapshot(
   loadedSnapshot: CaseIntelligenceSnapshot,
-  currentSnapshot: CaseIntelligenceSnapshot,
+  localSnapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
 ): CaseIntelligenceSnapshot {
-  const capturedEntries = currentSnapshot.entries.filter((entry) =>
-    ['manual_local', 'manual_supabase'].includes(entry.capture_method ?? ''),
+  const loadedEntryIds = new Set(loadedSnapshot.entries.map((entry) => entry.id));
+  const localEntryById = new Map(localSnapshot.entries.map((entry) => [entry.id, entry]));
+  const localOnlyEntries = localSnapshot.entries.filter(
+    (entry) => !loadedEntryIds.has(entry.id) && hasLocalEntryState(entry, localRecords),
   );
 
-  if (!capturedEntries.length) return loadedSnapshot;
+  const entries = [
+    ...localOnlyEntries,
+    ...loadedSnapshot.entries.map((entry) => {
+      const localEntry = localEntryById.get(entry.id);
+      return localEntry && hasLocalEntryState(localEntry, localRecords) ? localEntry : entry;
+    }),
+  ];
 
   return {
     ...loadedSnapshot,
-    entries: [
-      ...capturedEntries,
-      ...loadedSnapshot.entries.filter(
-        (entry) => !capturedEntries.some((captured) => captured.id === entry.id),
-      ),
-    ],
+    entries,
   };
+}
+
+function persistStateSnapshot(
+  snapshot: CaseIntelligenceSnapshot,
+  reportPreviewState: ReportPreviewState,
+  localRecords: Record<string, LocalRecordMeta>,
+  set: (patch: Partial<CaseIntelligenceState>) => void,
+  get: () => CaseIntelligenceState,
+) {
+  void writePersistedCaseIntelligence({
+    snapshot,
+    reportPreviewState,
+    localRecords,
+  })
+    .then(({ adapter, savedAt }) => {
+      set({
+        persistence: {
+          ...get().persistence,
+          adapter,
+          hydrationCompleted: true,
+          lastPersistedAt: savedAt,
+          error: null,
+        },
+      });
+    })
+    .catch((err) => {
+      set({
+        persistence: {
+          ...get().persistence,
+          hydrationCompleted: true,
+          error: err instanceof Error ? err.message : 'Unable to persist local case data.',
+        },
+      });
+    });
 }
 
 const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
   snapshot: createFallbackCaseIntelligence(),
   source: 'fallback',
+  reportPreviewState: DEFAULT_REPORT_PREVIEW_STATE,
+  localRecords: {},
+  persistence: createPersistenceDiagnostics(),
   loading: false,
   hasLoaded: false,
+  hasHydrated: false,
+  hasPersistedSnapshot: false,
   error: null,
   load: async () => {
+    if (get().loading) return;
+
     set({ loading: true, error: null });
+    let hydratedSnapshot = get().snapshot;
+    let hydratedSource: CaseIntelligenceSource = get().source;
+    let hydratedReportPreviewState = get().reportPreviewState;
+    let hydratedLocalRecords = get().localRecords;
+    let hasPersistedSnapshot = false;
+
+    try {
+      const localResult = await readPersistedCaseIntelligence();
+      const hydratedAt = new Date().toISOString();
+
+      if (localResult.document) {
+        hydratedSnapshot = localResult.document.snapshot;
+        hydratedSource = 'local';
+        hydratedReportPreviewState = localResult.document.reportPreviewState;
+        hydratedLocalRecords = localResult.document.localRecords;
+        hasPersistedSnapshot = true;
+
+        set({
+          snapshot: hydratedSnapshot,
+          source: hydratedSource,
+          reportPreviewState: hydratedReportPreviewState,
+          localRecords: hydratedLocalRecords,
+          hasHydrated: true,
+          hasPersistedSnapshot: true,
+          persistence: createPersistenceDiagnostics({
+            adapter: localResult.adapter,
+            hydrationCompleted: true,
+            lastHydratedAt: hydratedAt,
+            lastPersistedAt: localResult.document.savedAt,
+            error: null,
+          }),
+        });
+      } else {
+        set({
+          hasHydrated: true,
+          hasPersistedSnapshot: false,
+          persistence: createPersistenceDiagnostics({
+            adapter: localResult.adapter,
+            hydrationCompleted: true,
+            lastHydratedAt: hydratedAt,
+            error: null,
+          }),
+        });
+      }
+    } catch (err) {
+      set({
+        hasHydrated: true,
+        hasPersistedSnapshot: false,
+        persistence: createPersistenceDiagnostics({
+          hydrationCompleted: true,
+          lastHydratedAt: new Date().toISOString(),
+          error: err instanceof Error ? err.message : 'Unable to hydrate local case data.',
+        }),
+      });
+    }
+
     try {
       const result = await loadCaseIntelligenceFromSupabase();
       const currentSnapshot = get().snapshot;
+      const currentLocalRecords = get().localRecords;
+      const shouldPreferPersistedLocal =
+        result.source === 'fallback' && (hasPersistedSnapshot || get().hasPersistedSnapshot);
+      const hasPendingLocalRecords = Object.values(currentLocalRecords).some(
+        (record) => record.sync_status !== 'synced',
+      );
+      const nextSnapshot = shouldPreferPersistedLocal
+        ? currentSnapshot
+        : mergeLocalFirstSnapshot(result.snapshot, currentSnapshot, currentLocalRecords);
+      const nextSource: CaseIntelligenceSource = shouldPreferPersistedLocal
+        ? 'local'
+        : hasPendingLocalRecords
+          ? 'local'
+          : result.source;
+
       set({
-        snapshot: mergeCapturedEntries(result.snapshot, currentSnapshot),
-        source: result.source,
+        snapshot: nextSnapshot,
+        source: nextSource,
         loading: false,
         hasLoaded: true,
         error: null,
       });
+      persistStateSnapshot(nextSnapshot, get().reportPreviewState, get().localRecords, set, get);
     } catch (err) {
+      const persistedState = get();
+      const nextSnapshot = persistedState.hasPersistedSnapshot
+        ? persistedState.snapshot
+        : createFallbackCaseIntelligence();
+      const nextSource: CaseIntelligenceSource = persistedState.hasPersistedSnapshot
+        ? 'local'
+        : 'fallback';
+
       set({
-        snapshot: createFallbackCaseIntelligence(),
-        source: 'fallback',
+        snapshot: nextSnapshot,
+        source: nextSource,
         loading: false,
         hasLoaded: true,
         error: err instanceof Error ? err.message : 'Unable to load case intelligence.',
       });
+      persistStateSnapshot(nextSnapshot, get().reportPreviewState, get().localRecords, set, get);
     }
   },
   createEntry: async (input) => {
@@ -349,28 +526,109 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
     const activeCase = getActiveCase(current.snapshot);
     const userId = activeCase?.user_id || '';
     const entry = await buildEntry(input, current.snapshot, userId);
-    const remoteResult = await trySaveEntryToSupabase(entry);
-    const savedEntry = remoteResult.ok
-      ? remoteResult.entry
-      : {
-          ...entry,
-          capture_method: 'manual_local',
-        };
+    const recordKey = localRecordKey('entries', entry.id);
+    const localRecord = createLocalRecordMeta({
+      table: 'entries',
+      id: entry.id,
+    });
+    const localEntry = withEntryLocalMeta(
+      {
+        ...entry,
+        capture_method: 'manual_local',
+      },
+      localRecord,
+    );
 
     set((state) => ({
-      snapshot: appendEntry(state.snapshot, savedEntry),
+      snapshot: appendEntry(state.snapshot, localEntry),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [recordKey]: localRecord,
+      },
     }));
+    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+
+    const remoteResult = await trySaveEntryToSupabase(localEntry);
+    if (remoteResult.ok) {
+      const syncedRecord = createLocalRecordMeta({
+        table: 'entries',
+        id: remoteResult.entry.id,
+        status: 'synced',
+        previous: get().localRecords[recordKey],
+      });
+      const syncedEntry = withEntryLocalMeta(
+        {
+          ...remoteResult.entry,
+          capture_method: 'manual_supabase',
+        },
+        syncedRecord,
+      );
+
+      set((state) => ({
+        snapshot: appendEntry(state.snapshot, syncedEntry),
+        source: 'supabase',
+        localRecords: {
+          ...state.localRecords,
+          [recordKey]: syncedRecord,
+        },
+      }));
+      persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+    } else if (isSupabaseWriteEnabled) {
+      const errorRecord = createLocalRecordMeta({
+        table: 'entries',
+        id: entry.id,
+        status: 'error',
+        previous: get().localRecords[recordKey],
+        error: remoteResult.warning,
+      });
+      const errorEntry = withEntryLocalMeta(localEntry, errorRecord);
+
+      set((state) => ({
+        snapshot: appendEntry(state.snapshot, errorEntry),
+        localRecords: {
+          ...state.localRecords,
+          [recordKey]: errorRecord,
+        },
+      }));
+      persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+    }
 
     return {
-      entry: savedEntry,
-      source: remoteResult.ok ? 'supabase' : 'fallback',
+      entry: remoteResult.ok ? remoteResult.entry : localEntry,
+      source: remoteResult.ok ? 'supabase' : 'local',
       warning: remoteResult.warning,
     };
   },
-  updateEntryReview: (entryId, patch) => {
+  setReportPreviewState: (patch) => {
     set((state) => ({
-      snapshot: updateEntryInSnapshot(state.snapshot, entryId, patch),
+      reportPreviewState: {
+        ...state.reportPreviewState,
+        ...patch,
+      },
+      hasPersistedSnapshot: true,
     }));
+    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+  },
+  updateEntryReview: (entryId, patch) => {
+    const key = localRecordKey('entries', entryId);
+    const localRecord = createLocalRecordMeta({
+      table: 'entries',
+      id: entryId,
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateEntryInSnapshot(state.snapshot, entryId, patch, localRecord),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
   },
 }));
 
@@ -407,6 +665,8 @@ export function useCaseIntelligenceHome() {
   const loading = useCaseIntelligenceStore((state) => state.loading);
   const error = useCaseIntelligenceStore((state) => state.error);
   const hasLoaded = useCaseIntelligenceStore((state) => state.hasLoaded);
+  const hasHydrated = useCaseIntelligenceStore((state) => state.hasHydrated);
+  const persistence = useCaseIntelligenceStore((state) => state.persistence);
   const load = useCaseIntelligenceStore((state) => state.load);
 
   useEffect(() => {
@@ -422,11 +682,13 @@ export function useCaseIntelligenceHome() {
     home,
     loading,
     error,
+    hasHydrated,
+    persistence,
   };
 }
 
 export function useCaseIntelligenceTimeline() {
-  const { snapshot, home, loading, error } = useCaseIntelligenceHome();
+  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
 
   return {
     snapshot,
@@ -436,11 +698,13 @@ export function useCaseIntelligenceTimeline() {
     flaggedEntries: getFlaggedEntries(snapshot, home.activeCase?.id),
     loading,
     error,
+    hasHydrated,
+    persistence,
   };
 }
 
 export function useCaseMap() {
-  const { snapshot, home, loading, error } = useCaseIntelligenceHome();
+  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
   const caseId = home.activeCase?.id;
 
   return {
@@ -475,6 +739,8 @@ export function useCaseMap() {
       : [],
     loading,
     error,
+    hasHydrated,
+    persistence,
   };
 }
 
@@ -486,8 +752,19 @@ export function useUpdateEntryReview() {
   return useCaseIntelligenceStore((state) => state.updateEntryReview);
 }
 
+export function useReportPreviewState() {
+  return {
+    reportPreviewState: useCaseIntelligenceStore((state) => state.reportPreviewState),
+    setReportPreviewState: useCaseIntelligenceStore((state) => state.setReportPreviewState),
+  };
+}
+
+export function useLocalPersistenceDiagnostics() {
+  return useCaseIntelligenceStore((state) => state.persistence);
+}
+
 export function useEntryDetail(entryId?: string) {
-  const { snapshot, home, loading, error } = useCaseIntelligenceHome();
+  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
   const entry = snapshot.entries.find((candidate) => candidate.id === entryId) ?? null;
   const child = entry
     ? snapshot.children.find((candidate) => candidate.id === entry.child_id) ?? null
@@ -505,5 +782,7 @@ export function useEntryDetail(entryId?: string) {
     peoplePresent: [],
     loading,
     error,
+    hasHydrated,
+    persistence,
   };
 }

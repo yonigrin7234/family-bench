@@ -135,7 +135,7 @@ export default function EntryDetail() {
         <SoftCard p={18} style={styles.missingCard}>
           <Text style={styles.emptyTitle}>{loading ? 'Loading entry' : 'Entry not found'}</Text>
           <Text style={styles.emptyBody}>
-            This local review layer can only open entries currently loaded in memory.
+            This review layer can open entries after local hydration completes.
           </Text>
           <PillButton
             tone="primary"

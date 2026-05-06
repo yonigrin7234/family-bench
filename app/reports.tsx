@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
@@ -29,17 +29,15 @@ import {
   formatDateLabel,
   getEntryTypeOption,
   useCaseIntelligenceTimeline,
+  useReportPreviewState,
   type Entry,
   type EntryTypeFilterValue,
+  type ReportPreviewFlagFilter,
+  type ReportPreviewType,
 } from '@/lib/case-intelligence';
 
-type FlagFilter = 'all' | 'flagged';
-type ReportType =
-  | 'timeline'
-  | 'flagged'
-  | 'communication'
-  | 'medical'
-  | 'custodyExchange';
+type FlagFilter = ReportPreviewFlagFilter;
+type ReportType = ReportPreviewType;
 
 type ReportPreview = {
   id: ReportType;
@@ -370,10 +368,11 @@ function ReportPreviewCard({ report }: { report: ReportPreview }) {
 }
 
 export default function Reports() {
-  const { entries, activeCase, source, loading } = useCaseIntelligenceTimeline();
-  const [reportType, setReportType] = useState<ReportType>('timeline');
-  const [typeFilter, setTypeFilter] = useState<EntryTypeFilterValue>('all');
-  const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
+  const { entries, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
+  const { reportPreviewState, setReportPreviewState } = useReportPreviewState();
+  const reportType = reportPreviewState.reportType;
+  const typeFilter = reportPreviewState.typeFilter;
+  const flagFilter = reportPreviewState.flagFilter;
 
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
@@ -416,7 +415,7 @@ export default function Reports() {
               label={option.label}
               tone={option.tone}
               active={reportType === option.value}
-              onPress={() => setReportType(option.value)}
+              onPress={() => setReportPreviewState({ reportType: option.value })}
             />
           ))}
         </View>
@@ -427,34 +426,34 @@ export default function Reports() {
             { v: 'flagged', label: 'Flagged' },
           ]}
           value={flagFilter}
-          onChange={setFlagFilter}
+          onChange={(value) => setReportPreviewState({ flagFilter: value })}
         />
 
         <View style={styles.typeFilters}>
           <TypeFilterChip
             value="all"
             active={typeFilter === 'all'}
-            onPress={() => setTypeFilter('all')}
+            onPress={() => setReportPreviewState({ typeFilter: 'all' })}
           />
           {ENTRY_TYPE_OPTIONS.map((option) => (
             <TypeFilterChip
               key={option.value}
               value={option.value}
               active={typeFilter === option.value}
-              onPress={() => setTypeFilter(option.value)}
+              onPress={() => setReportPreviewState({ typeFilter: option.value })}
             />
           ))}
         </View>
       </SoftCard>
 
       <InfoCallout title="Report limits" tone="ink">
-        These previews use existing local or synced entries only. They do not generate AI analysis, legal advice, uploads, database changes, or court PDFs.
+        These previews use existing local or synced entries only. They do not generate AI analysis, legal advice, uploads, database changes, or court PDFs. Local persistence is {persistence.active ? 'active' : 'inactive'}.
       </InfoCallout>
 
       <View style={styles.resultsHeader}>
         <Text style={styles.sectionLabel}>REPORT PREVIEW</Text>
         <Text style={styles.resultCount}>
-          {activeCase?.title || 'Current case'} · {source === 'supabase' ? 'Supabase data' : 'Local demo data'}
+          {activeCase?.title || 'Current case'} · {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
         </Text>
       </View>
 

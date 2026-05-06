@@ -1,4 +1,5 @@
 import type { Tables } from '@/lib/supabase/database.types';
+import type { EntryTypeFilterValue } from './entryTypes';
 
 export type FamilyBenchCase = Tables<'cases'>;
 export type Child = Tables<'children'>;
@@ -16,7 +17,42 @@ export type PatternTag = Tables<'pattern_tags'>;
 export type AIOutput = Tables<'ai_outputs'>;
 export type AdvisorThread = Tables<'advisor_threads'>;
 
-export type CaseIntelligenceSource = 'supabase' | 'fallback';
+export type CaseIntelligenceSource = 'supabase' | 'fallback' | 'local';
+export type LocalSyncStatus = 'pending' | 'error' | 'synced';
+
+export type LocalRecordMeta = {
+  table: string;
+  id: string;
+  local_created_at: string;
+  local_updated_at: string;
+  sync_status: LocalSyncStatus;
+  error?: string | null;
+};
+
+export type ReportPreviewType =
+  | 'timeline'
+  | 'flagged'
+  | 'communication'
+  | 'medical'
+  | 'custodyExchange';
+
+export type ReportPreviewFlagFilter = 'all' | 'flagged';
+
+export type ReportPreviewState = {
+  reportType: ReportPreviewType;
+  typeFilter: EntryTypeFilterValue;
+  flagFilter: ReportPreviewFlagFilter;
+};
+
+export type LocalPersistenceDiagnostics = {
+  active: boolean;
+  adapter: 'localStorage' | 'fileSystem' | 'memory';
+  hydrationCompleted: boolean;
+  lastHydratedAt?: string;
+  lastPersistedAt?: string;
+  syncMode: 'disabled_demo' | 'local_first' | 'remote_write_enabled';
+  error: string | null;
+};
 
 export type CaseIntelligenceSnapshot = {
   cases: FamilyBenchCase[];

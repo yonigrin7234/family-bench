@@ -87,7 +87,7 @@ export default function Timeline() {
         </Display>
         <Text style={styles.subtitle}>
           {activeCase?.title || 'Current case'} · {entries.length} entries ·{' '}
-          {source === 'supabase' ? 'Supabase data' : 'Local demo data'}
+          {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
         </Text>
       </View>
 

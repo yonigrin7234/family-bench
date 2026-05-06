@@ -253,6 +253,7 @@ export default function CaseMap() {
     keyDates,
     filingPackages,
     source,
+    persistence,
   } = useCaseMap();
 
   return (
@@ -295,8 +296,12 @@ export default function CaseMap() {
       <SoftCard p={16} style={styles.section}>
         <SectionHeader icon="shield" title="Data source" />
         <Text style={styles.sourceText}>
-          This view is reading the current {source === 'supabase' ? 'Supabase-backed' : 'local demo'} case-intelligence snapshot. No remote writes are made from Case Map.
+          This view is reading the current {source === 'supabase' ? 'Supabase-backed' : source === 'local' ? 'local persisted' : 'local demo'} case-intelligence snapshot. No remote writes are made from Case Map.
         </Text>
+        <Text style={styles.sourceText}>
+          Local persistence: {persistence.active ? 'active' : 'inactive'} · Hydration: {persistence.hydrationCompleted ? 'complete' : 'pending'} · Sync: {persistence.syncMode === 'remote_write_enabled' ? 'remote writes enabled by env' : persistence.syncMode === 'local_first' ? 'local-first, remote writes disabled' : 'disabled demo mode'}
+        </Text>
+        {persistence.error ? <Text style={styles.sourceWarning}>{persistence.error}</Text> : null}
         <PillButton tone="ghost" size="md" icon="link" disabled full>
           Link selected entry · coming later
         </PillButton>
@@ -406,6 +411,12 @@ const styles = StyleSheet.create({
     color: fbColors.inkSoft,
     fontSize: fbType.body,
     lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  sourceWarning: {
+    color: fbColors.oxDeep,
+    fontSize: fbType.small,
+    lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
   },
 });
