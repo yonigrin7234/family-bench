@@ -1,12 +1,12 @@
 import { Text, type TextStyle, type StyleProp } from 'react-native';
 import type { ReactNode } from 'react';
+import { fbColors, fbFonts, fbWeights } from './tokens';
 
 function interFamily(w: TextStyle['fontWeight']): string {
   const s = String(w ?? '400');
-  if (s === '500') return 'Inter_500Medium';
-  if (s === '600') return 'Inter_600SemiBold';
-  if (s === '700' || s === 'bold') return 'Inter_700Bold';
-  return 'Inter_400Regular';
+  if (s === fbWeights.medium) return fbFonts.sansMedium;
+  if (s === fbWeights.semi || s === '700' || s === 'bold') return fbFonts.sansSemi;
+  return fbFonts.sansRegular;
 }
 
 export function Display({
@@ -23,7 +23,7 @@ export function Display({
   style?: StyleProp<TextStyle>;
 }) {
   const fontFamily = italic
-    ? 'InstrumentSerif_400Regular_Italic'
+    ? fbFonts.serifItalic
     : interFamily(weight);
   return (
     <Text
@@ -31,10 +31,10 @@ export function Display({
       style={[
         {
           fontSize: size,
-          fontWeight: italic ? '400' : weight,
+          fontWeight: italic ? fbWeights.regular : weight === '700' || weight === 'bold' ? fbWeights.semi : weight,
           fontStyle: italic ? 'italic' : 'normal',
           fontFamily,
-          color: '#14181F',
+          color: fbColors.ink,
           letterSpacing: italic ? size * -0.005 : size * -0.025,
           lineHeight: size * 1.02,
         },

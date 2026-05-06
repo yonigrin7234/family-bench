@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { fbColors, fbFonts, fbRadii, fbTouch, fbWeights } from './tokens';
 
 export type SegmentItem<V extends string = string> = { v: V; label: string };
 
@@ -18,8 +19,8 @@ export function Segment<V extends string = string>({
       style={{
         flexDirection: 'row',
         padding: 3,
-        backgroundColor: '#EFEDE7',
-        borderRadius: 10,
+        backgroundColor: fbColors.paperDeep,
+        borderRadius: fbRadii.md - 2,
         alignSelf: full ? 'stretch' : 'flex-start',
       }}
     >
@@ -36,18 +37,20 @@ export function Segment<V extends string = string>({
               flex: full ? 1 : 0,
               paddingVertical: 7,
               paddingHorizontal: 14,
-              borderRadius: 8,
-              backgroundColor: active ? '#FFFFFF' : 'transparent',
+              borderRadius: fbRadii.sm,
+              backgroundColor: active ? fbColors.surface : 'transparent',
               alignItems: 'center',
+              minHeight: fbTouch.min,
+              justifyContent: 'center',
             }}
           >
             <Text
               className="font-sans"
               style={{
                 fontSize: 12.5,
-                fontWeight: active ? '600' : '500',
-                fontFamily: active ? 'Inter_600SemiBold' : 'Inter_500Medium',
-                color: active ? '#14181F' : 'rgba(20,24,31,0.58)',
+                fontWeight: active ? fbWeights.semi : fbWeights.medium,
+                fontFamily: active ? fbFonts.sansSemi : fbFonts.sansMedium,
+                color: active ? fbColors.ink : fbColors.inkMute,
               }}
             >
               {it.label}

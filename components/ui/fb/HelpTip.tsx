@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 import type { ReactNode } from 'react';
+import { fbColors, fbFonts, fbWeights } from './tokens';
 
 export function HelpTip({
   term,
@@ -22,11 +23,11 @@ export function HelpTip({
       <Text
         accessibilityHint="Tap for definition"
         style={{
-          color: '#14181F',
+          color: fbColors.ink,
           textDecorationLine: 'underline',
           // `dotted` is iOS-only per RN docs; Android falls back to solid.
           textDecorationStyle: 'dotted',
-          textDecorationColor: 'rgba(20,24,31,0.34)',
+          textDecorationColor: fbColors.inkFaint,
         }}
       >
         {term}
@@ -37,7 +38,7 @@ export function HelpTip({
             width: 14,
             height: 14,
             borderRadius: 7,
-            backgroundColor: '#EFEDE7',
+            backgroundColor: fbColors.paperDeep,
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -46,9 +47,9 @@ export function HelpTip({
             className="font-sans"
             style={{
               fontSize: 9,
-              fontWeight: '600',
-              fontFamily: 'Inter_600SemiBold',
-              color: 'rgba(20,24,31,0.58)',
+              fontWeight: fbWeights.semi,
+              fontFamily: fbFonts.sansSemi,
+              color: fbColors.inkMute,
             }}
           >
             ?

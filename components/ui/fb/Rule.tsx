@@ -1,7 +1,8 @@
-import { StyleSheet, View, type ViewStyle, type StyleProp } from 'react-native';
+import { View, type ViewStyle, type StyleProp } from 'react-native';
+import { fbBorder, fbColors } from './tokens';
 
 export function Rule({
-  color = 'rgba(20,24,31,0.10)',
+  color = fbColors.rule,
   dashed = false,
   style,
 }: {
@@ -20,6 +21,6 @@ export function Rule({
     );
   }
   return (
-    <View style={[{ height: StyleSheet.hairlineWidth, backgroundColor: color }, style]} />
+    <View style={[{ height: fbBorder.hairline, backgroundColor: color }, style]} />
   );
 }

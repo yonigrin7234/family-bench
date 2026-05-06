@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Svg, { Path, Circle } from 'react-native-svg';
+import { fbColors } from './tokens';
 
 const ICONS: Record<string, () => ReactNode> = {
   mic:       () => <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3ZM5 11a7 7 0 0 0 14 0M12 18v3" />,
@@ -73,7 +74,7 @@ export type IconName = keyof typeof ICONS;
 export function Icon({
   name,
   size = 16,
-  color = '#14181F',
+  color = fbColors.ink,
   strokeWidth = 1.6,
 }: {
   name: IconName;

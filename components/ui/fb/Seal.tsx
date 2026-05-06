@@ -1,4 +1,5 @@
 import { Text, View, type ViewStyle, type StyleProp } from 'react-native';
+import { fbColors, fbFonts, fbWeights } from './tokens';
 
 export function Seal({
   size = 48,
@@ -16,7 +17,7 @@ export function Seal({
         {
           width: size,
           height: size,
-          backgroundColor: '#14181F',
+          backgroundColor: fbColors.ink,
           alignItems: 'center',
           justifyContent: 'center',
         },
@@ -26,10 +27,10 @@ export function Seal({
       <Text
         className="font-sans"
         style={{
-          color: '#F7F6F3',
+          color: fbColors.paper,
           fontSize,
-          fontWeight: '600',
-          fontFamily: 'Inter_600SemiBold',
+          fontWeight: fbWeights.semi,
+          fontFamily: fbFonts.sansSemi,
           letterSpacing: fontSize * -0.04,
         }}
       >

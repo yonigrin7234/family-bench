@@ -1,13 +1,22 @@
 import { Pressable, Text, View } from 'react-native';
+import {
+  fbAlpha,
+  fbBorder,
+  fbColors,
+  fbFonts,
+  fbMoodColors,
+  fbRadii,
+  fbWeights,
+} from './tokens';
 
 export const MOODS = [
-  { k: 'calm',       label: 'Calm',       color: '#6E9E7A', note: 'Relaxed, settled, content' },
-  { k: 'happy',      label: 'Happy',      color: '#C99B3E', note: 'Energetic, smiling, engaged' },
-  { k: 'quiet',      label: 'Quiet',      color: '#8896A8', note: 'Withdrawn, few words' },
-  { k: 'anxious',    label: 'Anxious',    color: '#C99B3E', note: 'Clingy, nervous, watchful' },
-  { k: 'upset',      label: 'Upset',      color: '#B48338', note: 'Tearful, frustrated' },
-  { k: 'distressed', label: 'Distressed', color: '#B44028', note: 'Crying, panicked, shaken' },
-  { k: 'angry',      label: 'Angry',      color: '#842E1C', note: 'Shouting, stomping, resistant' },
+  { k: 'calm', label: 'Calm', color: fbMoodColors.calm, note: 'Relaxed, settled, content' },
+  { k: 'happy', label: 'Happy', color: fbMoodColors.happy, note: 'Energetic, smiling, engaged' },
+  { k: 'quiet', label: 'Quiet', color: fbMoodColors.quiet, note: 'Withdrawn, few words' },
+  { k: 'anxious', label: 'Anxious', color: fbMoodColors.anxious, note: 'Clingy, nervous, watchful' },
+  { k: 'upset', label: 'Upset', color: fbMoodColors.upset, note: 'Tearful, frustrated' },
+  { k: 'distressed', label: 'Distressed', color: fbMoodColors.distressed, note: 'Crying, panicked, shaken' },
+  { k: 'angry', label: 'Angry', color: fbMoodColors.angry, note: 'Shouting, stomping, resistant' },
 ] as const;
 
 export type MoodKey = (typeof MOODS)[number]['k'];
@@ -44,11 +53,11 @@ export function MoodPicker({
               gap: 10,
               paddingVertical: 12,
               paddingHorizontal: 14,
-              borderRadius: 12,
-              backgroundColor: sel ? '#EFEDE7' : '#FFFFFF',
-              borderWidth: sel ? 2 : 1,
-              borderColor: sel ? '#14181F' : 'rgba(20,24,31,0.10)',
-              opacity: pressed ? 0.94 : 1,
+              borderRadius: fbRadii.md,
+              backgroundColor: sel ? fbColors.paperDeep : fbColors.surface,
+              borderWidth: sel ? fbBorder.focus : fbBorder.hairline,
+              borderColor: sel ? fbColors.ink : fbColors.rule,
+              opacity: pressed ? fbAlpha.pressedSubtle : 1,
             })}
           >
             <View
@@ -64,9 +73,9 @@ export function MoodPicker({
                 className="font-sans"
                 style={{
                   fontSize: 13,
-                  fontWeight: '600',
-                  fontFamily: 'Inter_600SemiBold',
-                  color: '#14181F',
+                  fontWeight: fbWeights.semi,
+                  fontFamily: fbFonts.sansSemi,
+                  color: fbColors.ink,
                 }}
               >
                 {m.label}
@@ -76,7 +85,7 @@ export function MoodPicker({
                 className="font-sans"
                 style={{
                   fontSize: 10.5,
-                  color: 'rgba(20,24,31,0.58)',
+                  color: fbColors.inkMute,
                   marginTop: 1,
                 }}
               >

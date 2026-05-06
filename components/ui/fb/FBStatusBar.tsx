@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { fbColors, fbFonts, fbWeights } from './tokens';
 
 export function FBStatusBar({
   dark = false,
@@ -8,11 +9,11 @@ export function FBStatusBar({
   dark?: boolean;
   time?: string;
 }) {
-  const c = dark ? '#FFFFFF' : '#14181F';
+  const c = dark ? fbColors.surface : fbColors.ink;
   return (
     <View
-      pointerEvents="none"
       style={{
+        pointerEvents: 'none',
         position: 'absolute',
         top: 0,
         left: 0,
@@ -30,8 +31,8 @@ export function FBStatusBar({
         className="font-sans"
         style={{
           fontSize: 15,
-          fontWeight: '600',
-          fontFamily: 'Inter_600SemiBold',
+          fontWeight: fbWeights.semi,
+          fontFamily: fbFonts.sansSemi,
           color: c,
           letterSpacing: -0.15,
         }}

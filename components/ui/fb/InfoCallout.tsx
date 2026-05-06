@@ -1,12 +1,18 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { ReactNode } from 'react';
+import { fbBorder, fbColors, fbFonts, fbRadii, fbWeights } from './tokens';
 
 export type CalloutTone = 'ink' | 'ox' | 'forest';
 
 const TONE: Record<CalloutTone, { bg: string; bd: string; fg: string; mark: string }> = {
-  ink:    { bg: '#EFEDE7', bd: 'rgba(20,24,31,0.10)',  fg: '#14181F', mark: '#14181F' },
-  ox:     { bg: '#F4E3DE', bd: 'rgba(180,64,40,0.30)', fg: '#842E1C', mark: '#B44028' },
-  forest: { bg: '#DEE8DD', bd: 'rgba(47,90,58,0.30)',  fg: '#2F5A3A', mark: '#2F5A3A' },
+  ink: { bg: fbColors.paperDeep, bd: fbColors.rule, fg: fbColors.ink, mark: fbColors.ink },
+  ox: { bg: fbColors.oxWash, bd: `${fbColors.ox}4D`, fg: fbColors.oxDeep, mark: fbColors.ox },
+  forest: {
+    bg: fbColors.forestWash,
+    bd: `${fbColors.forest}4D`,
+    fg: fbColors.forest,
+    mark: fbColors.forest,
+  },
 };
 
 export function InfoCallout({
@@ -23,10 +29,10 @@ export function InfoCallout({
     <View
       style={{
         backgroundColor: t.bg,
-        borderRadius: 12,
+        borderRadius: fbRadii.md,
         paddingVertical: 14,
         paddingHorizontal: 16,
-        borderWidth: StyleSheet.hairlineWidth,
+        borderWidth: fbBorder.hairline,
         borderColor: t.bd,
       }}
     >
@@ -43,8 +49,8 @@ export function InfoCallout({
           className="font-sans"
           style={{
             fontSize: 10.5,
-            fontWeight: '600',
-            fontFamily: 'Inter_600SemiBold',
+            fontWeight: fbWeights.semi,
+            fontFamily: fbFonts.sansSemi,
             color: t.fg,
             letterSpacing: 0.84,
             textTransform: 'uppercase',
@@ -55,7 +61,7 @@ export function InfoCallout({
       </View>
       <Text
         className="font-sans"
-        style={{ fontSize: 13, color: '#2B323D', lineHeight: 20.15 }}
+        style={{ fontSize: 13, color: fbColors.inkSoft, lineHeight: 20.15 }}
       >
         {children}
       </Text>

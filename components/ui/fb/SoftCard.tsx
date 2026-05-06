@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View, type ViewStyle, type StyleProp } from 'react-native';
+import { Text, View, type ViewStyle, type StyleProp } from 'react-native';
 import type { ReactNode } from 'react';
+import { fbBorder, fbColors, fbFonts, fbRadii, fbSpacing, fbWeights } from './tokens';
 
 export function SoftCard({
   title,
@@ -22,10 +23,10 @@ export function SoftCard({
     <View
       style={[
         {
-          backgroundColor: '#FFFFFF',
-          borderRadius: 16,
-          borderWidth: accent ? 1 : StyleSheet.hairlineWidth,
-          borderColor: accent ? 'rgba(180,64,40,0.30)' : 'rgba(20,24,31,0.10)',
+          backgroundColor: fbColors.surface,
+          borderRadius: fbRadii.lg,
+          borderWidth: accent ? fbBorder.selected : fbBorder.hairline,
+          borderColor: accent ? `${fbColors.ox}4D` : fbColors.rule,
           padding: p,
         },
         style,
@@ -37,8 +38,8 @@ export function SoftCard({
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
-            marginBottom: 12,
-            gap: 12,
+            marginBottom: fbSpacing.x3,
+            gap: fbSpacing.x3,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -47,9 +48,9 @@ export function SoftCard({
                 className="font-sans"
                 style={{
                   fontSize: 15,
-                  fontWeight: '600',
-                  fontFamily: 'Inter_600SemiBold',
-                  color: '#14181F',
+                  fontWeight: fbWeights.semi,
+                  fontFamily: fbFonts.sansSemi,
+                  color: fbColors.ink,
                   letterSpacing: -0.3,
                 }}
               >
@@ -61,7 +62,7 @@ export function SoftCard({
                 className="font-sans"
                 style={{
                   fontSize: 12.5,
-                  color: 'rgba(20,24,31,0.58)',
+                  color: fbColors.inkMute,
                   marginTop: 2,
                 }}
               >

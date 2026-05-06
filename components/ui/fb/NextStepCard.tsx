@@ -1,5 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import type { ReactNode } from 'react';
 import { PillButton } from './PillButton';
+import { fbBorder, fbColors, fbFonts, fbRadii, fbSpacing, fbWeights } from './tokens';
 
 export type NextStepTone = 'ox' | 'ink';
 
@@ -12,6 +14,8 @@ export function NextStepCard({
   tone = 'ox',
   onPrimary,
   onSecondary,
+  right,
+  children,
 }: {
   kicker: string;
   title: string;
@@ -21,41 +25,48 @@ export function NextStepCard({
   tone?: NextStepTone;
   onPrimary?: () => void;
   onSecondary?: () => void;
+  right?: ReactNode;
+  children?: ReactNode;
 }) {
-  const fg = tone === 'ox' ? '#B44028' : '#14181F';
-  const bg = tone === 'ox' ? '#F4E3DE' : '#EFEDE7';
-  const bd = tone === 'ox' ? 'rgba(180,64,40,0.25)' : 'rgba(20,24,31,0.25)';
+  const fg = tone === 'ox' ? fbColors.ox : fbColors.ink;
+  const bg = tone === 'ox' ? fbColors.oxWash : fbColors.paperDeep;
+  const bd = tone === 'ox' ? `${fbColors.ox}40` : fbColors.rule;
   return (
     <View
       style={{
         paddingVertical: 20,
         paddingHorizontal: 22,
         backgroundColor: bg,
-        borderRadius: 16,
-        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: fbRadii.lg,
+        borderWidth: fbBorder.hairline,
         borderColor: bd,
       }}
     >
-      <Text
-        className="font-sans"
-        style={{
-          fontSize: 10.5,
-          fontWeight: '600',
-          fontFamily: 'Inter_600SemiBold',
-          color: fg,
-          letterSpacing: 1.05,
-          textTransform: 'uppercase',
-        }}
-      >
-        {kicker}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: fbSpacing.x3 }}>
+        <View style={{ flex: 1 }}>
+          <Text
+            className="font-sans"
+            style={{
+              fontSize: 10.5,
+              fontWeight: fbWeights.semi,
+              fontFamily: fbFonts.sansSemi,
+              color: fg,
+              letterSpacing: 1.05,
+              textTransform: 'uppercase',
+            }}
+          >
+            {kicker}
+          </Text>
+        </View>
+        {right}
+      </View>
       <Text
         className="font-sans"
         style={{
           fontSize: 22,
-          fontWeight: '600',
-          fontFamily: 'Inter_600SemiBold',
-          color: '#14181F',
+          fontWeight: fbWeights.semi,
+          fontFamily: fbFonts.sansSemi,
+          color: fbColors.ink,
           marginTop: 6,
           letterSpacing: -0.44,
           lineHeight: 26.4,
@@ -68,7 +79,7 @@ export function NextStepCard({
           className="font-sans"
           style={{
             fontSize: 13.5,
-            color: '#2B323D',
+            color: fbColors.inkSoft,
             marginTop: 6,
             lineHeight: 20.9,
           }}
@@ -76,11 +87,12 @@ export function NextStepCard({
           {body}
         </Text>
       )}
+      {children ? <View style={{ marginTop: fbSpacing.x4 }}>{children}</View> : null}
       {(primary || secondary) && (
         <View
           style={{
             flexDirection: 'row',
-            gap: 8,
+            gap: fbSpacing.x2,
             marginTop: 14,
             flexWrap: 'wrap',
           }}

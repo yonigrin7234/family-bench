@@ -1,4 +1,5 @@
 import { Text, View, type ViewStyle, type StyleProp } from 'react-native';
+import { fbColors, fbFonts, fbWeights } from './tokens';
 
 export function ProgressBar({
   pct,
@@ -24,9 +25,9 @@ export function ProgressBar({
             className="font-sans"
             style={{
               fontSize: 12,
-              fontWeight: '500',
-              fontFamily: 'Inter_500Medium',
-              color: 'rgba(20,24,31,0.58)',
+              fontWeight: fbWeights.medium,
+              fontFamily: fbFonts.sansMedium,
+              color: fbColors.inkMute,
             }}
           >
             {label}
@@ -35,9 +36,9 @@ export function ProgressBar({
             className="font-mono"
             style={{
               fontSize: 12,
-              fontWeight: '600',
-              fontFamily: 'JetBrainsMono_600SemiBold',
-              color: '#14181F',
+              fontWeight: fbWeights.semi,
+              fontFamily: fbFonts.monoSemi,
+              color: fbColors.ink,
             }}
           >
             {clamped}%
@@ -47,7 +48,7 @@ export function ProgressBar({
       <View
         style={{
           height: 6,
-          backgroundColor: '#EFEDE7',
+          backgroundColor: fbColors.paperDeep,
           borderRadius: 3,
           overflow: 'hidden',
         }}
@@ -56,7 +57,7 @@ export function ProgressBar({
           style={{
             width: `${clamped}%`,
             height: '100%',
-            backgroundColor: '#14181F',
+            backgroundColor: fbColors.ink,
             borderRadius: 3,
           }}
         />

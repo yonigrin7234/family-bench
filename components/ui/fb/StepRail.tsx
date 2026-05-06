@@ -1,5 +1,6 @@
 import { Text, View, type ViewStyle, type StyleProp } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { fbColors, fbFonts, fbRadii, fbWeights } from './tokens';
 
 export type StepSub = { label: string; done?: boolean };
 export type Step = {
@@ -34,8 +35,8 @@ export function StepRail({
                 gap: 12,
                 paddingVertical: 10,
                 paddingHorizontal: 12,
-                backgroundColor: active ? '#EFEDE7' : 'transparent',
-                borderRadius: 10,
+                backgroundColor: active ? fbColors.paperDeep : 'transparent',
+                borderRadius: fbRadii.md - 2,
               }}
             >
               <View
@@ -44,9 +45,9 @@ export function StepRail({
                   height: 22,
                   borderRadius: 11,
                   marginTop: 1,
-                  backgroundColor: done ? '#2F5A3A' : active ? '#14181F' : 'transparent',
+                  backgroundColor: done ? fbColors.forest : active ? fbColors.ink : 'transparent',
                   borderWidth: upcoming ? 1 : 0,
-                  borderColor: 'rgba(20,24,31,0.10)',
+                  borderColor: fbColors.rule,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -55,7 +56,7 @@ export function StepRail({
                   <Svg width={11} height={11} viewBox="0 0 11 11">
                     <Path
                       d="M2 5.5l2.2 2L9 2.5"
-                      stroke="#F7F6F3"
+                      stroke={fbColors.paper}
                       strokeWidth={1.6}
                       fill="none"
                       strokeLinecap="round"
@@ -67,9 +68,9 @@ export function StepRail({
                     className="font-sans"
                     style={{
                       fontSize: 11,
-                      fontWeight: '600',
-                      fontFamily: 'Inter_600SemiBold',
-                      color: active ? '#F7F6F3' : 'rgba(20,24,31,0.58)',
+                      fontWeight: fbWeights.semi,
+                      fontFamily: fbFonts.sansSemi,
+                      color: active ? fbColors.paper : fbColors.inkMute,
                     }}
                   >
                     {i + 1}
@@ -81,15 +82,15 @@ export function StepRail({
                   className="font-sans"
                   style={{
                     fontSize: 13.5,
-                    fontWeight: active ? '600' : '500',
-                    fontFamily: active ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                    fontWeight: active ? fbWeights.semi : fbWeights.medium,
+                    fontFamily: active ? fbFonts.sansSemi : fbFonts.sansMedium,
                     color: done
-                      ? '#2B323D'
+                      ? fbColors.inkSoft
                       : active
-                      ? '#14181F'
+                      ? fbColors.ink
                       : upcoming
-                      ? 'rgba(20,24,31,0.58)'
-                      : '#14181F',
+                      ? fbColors.inkMute
+                      : fbColors.ink,
                     letterSpacing: -0.135,
                   }}
                 >
@@ -100,7 +101,7 @@ export function StepRail({
                     className="font-sans"
                     style={{
                       fontSize: 11.5,
-                      color: 'rgba(20,24,31,0.58)',
+                      color: fbColors.inkMute,
                       marginTop: 2,
                     }}
                   >
@@ -111,19 +112,19 @@ export function StepRail({
               {s.badge && (
                 <View
                   style={{
-                    backgroundColor: '#F4E3DE',
+                    backgroundColor: fbColors.oxWash,
                     paddingVertical: 2,
                     paddingHorizontal: 7,
-                    borderRadius: 9999,
+                    borderRadius: fbRadii.pill,
                   }}
                 >
                   <Text
                     className="font-sans"
                     style={{
                       fontSize: 10,
-                      fontWeight: '600',
-                      fontFamily: 'Inter_600SemiBold',
-                      color: '#B44028',
+                      fontWeight: fbWeights.semi,
+                      fontFamily: fbFonts.sansSemi,
+                      color: fbColors.ox,
                     }}
                   >
                     {s.badge}
@@ -148,7 +149,7 @@ export function StepRail({
                         width: 14,
                         height: 14,
                         borderRadius: 4,
-                        backgroundColor: t.done ? '#DEE8DD' : '#EFEDE7',
+                        backgroundColor: t.done ? fbColors.forestWash : fbColors.paperDeep,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -157,7 +158,7 @@ export function StepRail({
                         <Svg width={8} height={8} viewBox="0 0 8 8">
                           <Path
                             d="M1 4l2 2L7 1.5"
-                            stroke="#2F5A3A"
+                            stroke={fbColors.forest}
                             strokeWidth={1.5}
                             fill="none"
                             strokeLinecap="round"
@@ -170,7 +171,7 @@ export function StepRail({
                       className="font-sans"
                       style={{
                         fontSize: 12.5,
-                        color: t.done ? 'rgba(20,24,31,0.58)' : '#2B323D',
+                        color: t.done ? fbColors.inkMute : fbColors.inkSoft,
                         textDecorationLine: t.done ? 'line-through' : 'none',
                       }}
                     >

@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, type ViewStyle, type StyleProp } from 'react-native';
+import { Pressable, Text, type ViewStyle, type StyleProp } from 'react-native';
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
+import { fbAlpha, fbBorder, fbColors, fbFonts, fbTouch, fbWeights } from './tokens';
 
 export type PillButtonTone = 'primary' | 'soft' | 'ghost' | 'accent' | 'accentSoft';
 export type PillButtonSize = 'sm' | 'md' | 'lg';
@@ -12,11 +13,11 @@ const SIZE = {
 } as const;
 
 const TONE: Record<PillButtonTone, { bg: string; fg: string; bd: string }> = {
-  primary:    { bg: '#14181F',    fg: '#F7F6F3', bd: '#14181F' },
-  soft:       { bg: '#EFEDE7',    fg: '#14181F', bd: 'transparent' },
-  ghost:      { bg: 'transparent',fg: '#14181F', bd: 'rgba(20,24,31,0.10)' },
-  accent:     { bg: '#B44028',    fg: '#F7F6F3', bd: '#B44028' },
-  accentSoft: { bg: '#F4E3DE',    fg: '#842E1C', bd: 'transparent' },
+  primary: { bg: fbColors.ink, fg: fbColors.paper, bd: fbColors.ink },
+  soft: { bg: fbColors.paperDeep, fg: fbColors.ink, bd: 'transparent' },
+  ghost: { bg: 'transparent', fg: fbColors.ink, bd: fbColors.rule },
+  accent: { bg: fbColors.ox, fg: fbColors.paper, bd: fbColors.ox },
+  accentSoft: { bg: fbColors.oxWash, fg: fbColors.oxDeep, bd: 'transparent' },
 };
 
 export function PillButton({
@@ -26,6 +27,7 @@ export function PillButton({
   icon,
   iconRight,
   onPress,
+  disabled = false,
   full = false,
   style,
   accessibilityLabel,
@@ -36,6 +38,7 @@ export function PillButton({
   icon?: IconName;
   iconRight?: IconName;
   onPress?: () => void;
+  disabled?: boolean;
   full?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
@@ -46,9 +49,10 @@ export function PillButton({
     accessibilityLabel ?? (typeof children === 'string' ? children : undefined);
   return (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={disabled ? { disabled: true } : undefined}
       style={({ pressed }) => [
         {
           flexDirection: 'row',
@@ -59,10 +63,11 @@ export function PillButton({
           paddingHorizontal: s.px,
           borderRadius: s.r,
           backgroundColor: t.bg,
-          borderWidth: StyleSheet.hairlineWidth,
+          borderWidth: fbBorder.hairline,
           borderColor: t.bd,
+          minHeight: fbTouch.min,
           alignSelf: full ? 'stretch' : 'flex-start',
-          opacity: pressed ? 0.88 : 1,
+          opacity: disabled ? fbAlpha.disabled : pressed ? fbAlpha.pressed : 1,
         },
         style,
       ]}
@@ -72,8 +77,8 @@ export function PillButton({
         className="font-sans"
         style={{
           fontSize: s.fs,
-          fontWeight: '500',
-          fontFamily: 'Inter_500Medium',
+          fontWeight: fbWeights.medium,
+          fontFamily: fbFonts.sansMedium,
           color: t.fg,
           letterSpacing: s.fs * -0.01,
         }}

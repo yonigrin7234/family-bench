@@ -1,6 +1,4 @@
-// Gallery-only layout. Will be replaced when (app) / (auth) routes
-// are rebuilt from the design bundle. global.css is required for
-// NativeWind class compilation.
+// global.css is required for NativeWind class compilation.
 
 import '../global.css';
 import { Stack } from 'expo-router';
@@ -9,7 +7,6 @@ import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
-  Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import {
   InstrumentSerif_400Regular,
@@ -21,13 +18,14 @@ import {
   JetBrainsMono_600SemiBold,
 } from '@expo-google-fonts/jetbrains-mono';
 import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { fbColors } from '@/components/ui/fb';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
-    Inter_700Bold,
     Inter: Inter_400Regular,
     InstrumentSerif_400Regular,
     InstrumentSerif_400Regular_Italic,
@@ -39,8 +37,12 @@ export default function RootLayout() {
   });
 
   if (!fontsLoaded) {
-    return <View style={{ flex: 1, backgroundColor: '#F7F6F3' }} />;
+    return <View style={{ flex: 1, backgroundColor: fbColors.paper }} />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </SafeAreaProvider>
+  );
 }

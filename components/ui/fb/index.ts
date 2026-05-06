@@ -1,3 +1,4 @@
+export * from './tokens';
 export { Icon, type IconName } from './Icon';
 export { Rule } from './Rule';
 export { Chip, type ChipTone } from './Chip';

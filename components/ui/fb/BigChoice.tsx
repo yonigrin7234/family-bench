@@ -1,5 +1,15 @@
 import { Pressable, Text, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
+import {
+  fbAlpha,
+  fbBorder,
+  fbColors,
+  fbFonts,
+  fbRadii,
+  fbSpacing,
+  fbTouch,
+  fbWeights,
+} from './tokens';
 
 export function BigChoice({
   label,
@@ -27,14 +37,15 @@ export function BigChoice({
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        paddingVertical: 16,
-        paddingHorizontal: 18,
-        borderRadius: 14,
-        backgroundColor: selected ? '#EFEDE7' : '#FFFFFF',
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? '#14181F' : 'rgba(20,24,31,0.10)',
-        opacity: pressed ? 0.94 : 1,
+        gap: fbSpacing.x3 + 2,
+        paddingVertical: fbSpacing.x4,
+        paddingHorizontal: fbSpacing.x5 - 2,
+        borderRadius: fbRadii.lg,
+        backgroundColor: selected ? fbColors.paperDeep : fbColors.surface,
+        borderWidth: selected ? fbBorder.focus : fbBorder.hairline,
+        borderColor: selected ? fbColors.ink : fbColors.rule,
+        minHeight: fbTouch.min,
+        opacity: pressed ? fbAlpha.pressedSubtle : 1,
       })}
     >
       {icon && (
@@ -42,13 +53,13 @@ export function BigChoice({
           style={{
             width: 36,
             height: 36,
-            borderRadius: 10,
-            backgroundColor: selected ? '#14181F' : '#EFEDE7',
+            borderRadius: fbRadii.md - 2,
+            backgroundColor: selected ? fbColors.ink : fbColors.paperDeep,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Icon name={icon} size={18} color={selected ? '#F7F6F3' : '#14181F'} />
+          <Icon name={icon} size={18} color={selected ? fbColors.paper : fbColors.ink} />
         </View>
       )}
       <View style={{ flex: 1 }}>
@@ -56,9 +67,9 @@ export function BigChoice({
           className="font-sans"
           style={{
             fontSize: 14.5,
-            fontWeight: '600',
-            fontFamily: 'Inter_600SemiBold',
-            color: '#14181F',
+            fontWeight: fbWeights.semi,
+            fontFamily: fbFonts.sansSemi,
+            color: fbColors.ink,
             letterSpacing: -0.29,
           }}
         >
@@ -69,7 +80,7 @@ export function BigChoice({
             className="font-sans"
             style={{
               fontSize: 12,
-              color: 'rgba(20,24,31,0.58)',
+              color: fbColors.inkMute,
               marginTop: 2,
             }}
           >
@@ -80,19 +91,19 @@ export function BigChoice({
       {badge && (
         <View
           style={{
-            backgroundColor: '#F4E3DE',
+            backgroundColor: fbColors.oxWash,
             paddingVertical: 3,
             paddingHorizontal: 8,
-            borderRadius: 9999,
+            borderRadius: fbRadii.pill,
           }}
         >
           <Text
             className="font-sans"
             style={{
               fontSize: 10,
-              fontWeight: '600',
-              fontFamily: 'Inter_600SemiBold',
-              color: '#B44028',
+              fontWeight: fbWeights.semi,
+              fontFamily: fbFonts.sansSemi,
+              color: fbColors.ox,
             }}
           >
             {badge}
@@ -105,15 +116,15 @@ export function BigChoice({
           height: 18,
           borderRadius: 9,
           borderWidth: 1.5,
-          borderColor: selected ? '#14181F' : 'rgba(20,24,31,0.10)',
-          backgroundColor: selected ? '#14181F' : 'transparent',
+          borderColor: selected ? fbColors.ink : fbColors.rule,
+          backgroundColor: selected ? fbColors.ink : 'transparent',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
         {selected && (
           <View
-            style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#F7F6F3' }}
+            style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: fbColors.paper }}
           />
         )}
       </View>
