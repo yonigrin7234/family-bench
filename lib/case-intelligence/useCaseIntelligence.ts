@@ -128,7 +128,11 @@ export type CaptureEntryInput = {
   locationName?: string | null;
   childMood?: string | null;
   isFlagged: boolean;
+  flagSeverity?: string | null;
   privateNotes?: string | null;
+  sourceCapturedText?: string | null;
+  captureSource?: 'manual' | 'voice_placeholder';
+  forceLocalOnly?: boolean;
 };
 
 type SaveEntryResult = {
@@ -228,6 +232,7 @@ async function buildEntry(
     normalizeTime(input.eventTime),
     title,
     body,
+    nullIfBlank(input.sourceCapturedText),
     nullIfBlank(input.locationName),
     nullIfBlank(input.privateNotes),
   ]
@@ -248,17 +253,25 @@ async function buildEntry(
     body,
     child_mood: input.childMood ?? null,
     is_flagged: input.isFlagged,
-    flag_severity: input.isFlagged ? 'review' : null,
+    flag_severity: input.isFlagged ? input.flagSeverity ?? 'review' : null,
     flag_category: input.isFlagged ? option.issueKey : null,
     issue_key: option.issueKey,
     location_name: nullIfBlank(input.locationName),
     location_lat: null,
     location_lng: null,
     metadata: {
-      capture_version: 'pr3a',
+      capture_version: input.captureSource === 'voice_placeholder' ? 'pr4c_voice_placeholder' : 'pr3a',
       entry_type_label: option.label,
+      captured_body: nullIfBlank(input.sourceCapturedText) ?? body,
+      source_mode: input.captureSource ?? 'manual',
+      transcript_status: input.captureSource === 'voice_placeholder' ? 'typed_placeholder' : null,
+      ai_structured_interpretation_status:
+        input.captureSource === 'voice_placeholder' ? 'not_generated' : null,
+      reviewed_body_source:
+        input.captureSource === 'voice_placeholder' ? 'manual_transcript_review' : null,
     },
-    voice_transcript: null,
+    voice_transcript:
+      input.captureSource === 'voice_placeholder' ? nullIfBlank(input.sourceCapturedText) : null,
     capture_method: 'manual',
     content_hash: await hashString(hashInput),
     is_edited: false,
@@ -459,8 +472,9 @@ function hasLocalEntryState(entry: Entry, localRecords: Record<string, LocalReco
   const localRecord = localRecords[localRecordKey('entries', entry.id)];
 
   return Boolean(
-    localRecord ||
+      localRecord ||
       entry.capture_method === 'manual_local' ||
+      entry.capture_method === 'voice_placeholder_local' ||
       metadata.sync_status === 'pending' ||
       metadata.sync_status === 'error',
   );
@@ -683,7 +697,8 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
     const localEntry = withEntryLocalMeta(
       {
         ...entry,
-        capture_method: 'manual_local',
+        capture_method:
+          input.captureSource === 'voice_placeholder' ? 'voice_placeholder_local' : 'manual_local',
       },
       localRecord,
     );
@@ -698,6 +713,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       },
     }));
     persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+
+    if (input.forceLocalOnly) {
+      return {
+        entry: localEntry,
+        source: 'local',
+        warning: 'Entry was saved locally. Remote writes are disabled for voice placeholders.',
+      };
+    }
 
     const remoteResult = await trySaveEntryToSupabase(localEntry);
     if (remoteResult.ok) {

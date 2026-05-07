@@ -163,6 +163,38 @@ function FlagToggle({
   );
 }
 
+function VoiceCaptureLauncher() {
+  return (
+    <SoftCard p={16} style={styles.voiceLauncher}>
+      <View style={styles.voiceHeader}>
+        <View style={styles.voiceTitleRow}>
+          <View style={styles.voiceIcon}>
+            <Icon name="mic" size={16} color={fbColors.ink} />
+          </View>
+          <View style={styles.voiceCopy}>
+            <Text style={styles.voiceTitle}>Voice capture placeholder</Text>
+            <Text style={styles.voiceBody}>
+              Type or paste a transcript and review it before saving a local journal entry.
+            </Text>
+          </View>
+        </View>
+        <Chip tone="amber" outline={false}>
+          Local
+        </Chip>
+      </View>
+      <PillButton
+        tone="soft"
+        size="md"
+        icon="mic"
+        full
+        onPress={() => router.push('/voice-capture' as never)}
+      >
+        Open voice placeholder
+      </PillButton>
+    </SoftCard>
+  );
+}
+
 export default function Capture() {
   const params = useLocalSearchParams();
   const createEntry = useCaptureEntry();
@@ -250,6 +282,8 @@ export default function Capture() {
         {home.activeCase?.title || 'Current case'} · Separate private notes from court-ready facts.
       </InfoCallout>
 
+      <VoiceCaptureLauncher />
+
       <SoftCard p={16} style={styles.section}>
         <View style={styles.sectionTitleRow}>
           <Text style={styles.sectionTitle}>Entry type</Text>
@@ -331,6 +365,48 @@ const styles = StyleSheet.create({
   section: {
     marginTop: fbSpacing.x4,
     gap: fbSpacing.x4,
+  },
+  voiceLauncher: {
+    marginTop: fbSpacing.x4,
+    gap: fbSpacing.x4,
+  },
+  voiceHeader: {
+    minHeight: fbTouch.min,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  voiceTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x3,
+  },
+  voiceIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: fbRadii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fbColors.paperDeep,
+  },
+  voiceCopy: {
+    flex: 1,
+  },
+  voiceTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  voiceBody: {
+    marginTop: fbSpacing.x1,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
   },
   sectionTitleRow: {
     flexDirection: 'row',

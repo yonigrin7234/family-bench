@@ -20,6 +20,7 @@ const NAV_ITEMS = [
 ] as const;
 
 function isActive(pathname: string, href: string) {
+  if (href === '/capture' && pathname === '/voice-capture') return true;
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
 }
 

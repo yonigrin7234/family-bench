@@ -1,4 +1,5 @@
 export type EntryTypeValue =
+  | 'journal'
   | 'pickup_dropoff'
   | 'visit_denied'
   | 'child_statement'
@@ -22,6 +23,16 @@ export type EntryTypeOption = {
 };
 
 export const ENTRY_TYPE_OPTIONS = [
+  {
+    value: 'journal',
+    label: 'Journal',
+    shortLabel: 'Journal',
+    body: 'A factual note for the case record.',
+    defaultTitle: 'Journal entry recorded',
+    issueKey: 'general',
+    icon: 'doc',
+    tone: 'mute',
+  },
   {
     value: 'pickup_dropoff',
     label: 'Exchange',
