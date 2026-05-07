@@ -6,6 +6,7 @@ import type { Database, Tables, TablesInsert } from '@/lib/supabase/database.typ
 import { hashString } from '@/lib/utils/hash';
 import { getEntryTypeOption, type EntryTypeValue } from './entryTypes';
 import {
+  DEFAULT_ADVISOR_STATE,
   DEFAULT_REPORT_PREVIEW_STATE,
   createLocalRecordMeta,
   getLocalPersistenceAdapter,
@@ -26,6 +27,8 @@ import {
   getUpcomingKeyDates,
 } from './selectors';
 import type {
+  AdvisorConversationState,
+  AdvisorMessage,
   CaseIntelligenceSnapshot,
   CaseIntelligenceSource,
   Entry,
@@ -159,10 +162,19 @@ type SaveAttachmentResult = {
   warning: string;
 };
 
+export type SendAdvisorMessageInput = {
+  prompt: string;
+  caseTitle: string;
+  upcomingHearingLabel?: string | null;
+  flaggedEntriesCount: number;
+  linkedEntryIds: string[];
+};
+
 type CaseIntelligenceState = {
   snapshot: CaseIntelligenceSnapshot;
   source: CaseIntelligenceSource;
   reportPreviewState: ReportPreviewState;
+  advisorState: AdvisorConversationState;
   localRecords: Record<string, LocalRecordMeta>;
   persistence: LocalPersistenceDiagnostics;
   loading: boolean;
@@ -175,6 +187,7 @@ type CaseIntelligenceState = {
   createPlaceholderAttachment: (
     input: CreatePlaceholderAttachmentInput,
   ) => Promise<SaveAttachmentResult>;
+  sendAdvisorMessage: (input: SendAdvisorMessageInput) => void;
   setReportPreviewState: (patch: Partial<ReportPreviewState>) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
 };
@@ -372,6 +385,67 @@ function buildPlaceholderAttachment(
   };
 }
 
+function buildStaticAdvisorResponse(input: SendAdvisorMessageInput) {
+  const normalized = input.prompt.toLowerCase();
+  const hearing = input.upcomingHearingLabel
+    ? `Upcoming hearing noted: ${input.upcomingHearingLabel}.`
+    : 'No upcoming hearing date is recorded in the local case data.';
+  const flagged =
+    input.flaggedEntriesCount === 1
+      ? 'There is 1 flagged entry available for review.'
+      : `There are ${input.flaggedEntriesCount} flagged entries available for review.`;
+  const contextLine = `Current case: ${input.caseTitle}. ${hearing} ${flagged}`;
+
+  if (normalized.includes('denied visit')) {
+    return `${contextLine}\n\nFor a denied-visit entry, the factual record usually benefits from the scheduled date and time, where the exchange was supposed to occur, what communication happened, who was present, and whether make-up time was offered or discussed. Keep the child-centered facts separate from conclusions about intent.\n\nThis is legal information, not legal advice.`;
+  }
+
+  if (normalized.includes('organize') || normalized.includes('court')) {
+    return `${contextLine}\n\nA court-facing packet is easier to review when entries are grouped by date, issue type, and source. Start with the clearest facts, attach source references where available, and keep private notes separate from reviewed body text. The Reports preview can help identify the entries to include later.\n\nThis is legal information, not legal advice.`;
+  }
+
+  if (normalized.includes('document')) {
+    return `${contextLine}\n\nUseful documentation is specific: date, time, location, people present, what was said or done, immediate impact on the child, and any follow-up communication. Screenshots, documents, photos, and voice notes can be linked as evidence metadata placeholders until uploads are enabled.\n\nThis is legal information, not legal advice.`;
+  }
+
+  if (normalized.includes('filing')) {
+    return `${contextLine}\n\nFiling categories can vary by court and jurisdiction. In a custody record, people often organize facts around parenting-time enforcement, schedule changes, custody modification, support-related expenses, or response materials. Match any filing decision to local rules and qualified legal guidance.\n\nThis is legal information, not legal advice.`;
+  }
+
+  return `${contextLine}\n\nI can help organize the local record into factual questions, source entries, and next documentation steps. This placeholder does not analyze law, predict outcomes, or generate AI advice.\n\nThis is legal information, not legal advice.`;
+}
+
+function appendAdvisorExchange(
+  advisorState: AdvisorConversationState,
+  input: SendAdvisorMessageInput,
+): AdvisorConversationState {
+  const now = new Date().toISOString();
+  const userMessage: AdvisorMessage = {
+    id: `local-advisor-user-${Crypto.randomUUID()}`,
+    role: 'user',
+    body: input.prompt.trim(),
+    createdAt: now,
+    linkedEntryIds: [],
+    prompt: input.prompt,
+    localOnly: true,
+  };
+  const advisorMessage: AdvisorMessage = {
+    id: `local-advisor-response-${Crypto.randomUUID()}`,
+    role: 'advisor',
+    body: buildStaticAdvisorResponse(input),
+    createdAt: now,
+    linkedEntryIds: input.linkedEntryIds.slice(0, 4),
+    prompt: input.prompt,
+    localOnly: true,
+  };
+
+  return {
+    ...advisorState,
+    messages: [...advisorState.messages, userMessage, advisorMessage],
+    updatedAt: now,
+  };
+}
+
 type SupabaseEntrySaveResult =
   | { ok: true; entry: Entry; warning?: undefined }
   | { ok: false; warning: string; entry?: undefined };
@@ -537,6 +611,7 @@ function mergeLocalFirstSnapshot(
 function persistStateSnapshot(
   snapshot: CaseIntelligenceSnapshot,
   reportPreviewState: ReportPreviewState,
+  advisorState: AdvisorConversationState,
   localRecords: Record<string, LocalRecordMeta>,
   set: (patch: Partial<CaseIntelligenceState>) => void,
   get: () => CaseIntelligenceState,
@@ -544,6 +619,7 @@ function persistStateSnapshot(
   void writePersistedCaseIntelligence({
     snapshot,
     reportPreviewState,
+    advisorState,
     localRecords,
   })
     .then(({ adapter, savedAt }) => {
@@ -572,6 +648,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
   snapshot: createFallbackCaseIntelligence(),
   source: 'fallback',
   reportPreviewState: DEFAULT_REPORT_PREVIEW_STATE,
+  advisorState: DEFAULT_ADVISOR_STATE,
   localRecords: {},
   persistence: createPersistenceDiagnostics(),
   loading: false,
@@ -586,6 +663,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
     let hydratedSnapshot = get().snapshot;
     let hydratedSource: CaseIntelligenceSource = get().source;
     let hydratedReportPreviewState = get().reportPreviewState;
+    let hydratedAdvisorState = get().advisorState;
     let hydratedLocalRecords = get().localRecords;
     let hasPersistedSnapshot = false;
 
@@ -597,6 +675,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         hydratedSnapshot = localResult.document.snapshot;
         hydratedSource = 'local';
         hydratedReportPreviewState = localResult.document.reportPreviewState;
+        hydratedAdvisorState = localResult.document.advisorState;
         hydratedLocalRecords = localResult.document.localRecords;
         hasPersistedSnapshot = true;
 
@@ -604,6 +683,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
           snapshot: hydratedSnapshot,
           source: hydratedSource,
           reportPreviewState: hydratedReportPreviewState,
+          advisorState: hydratedAdvisorState,
           localRecords: hydratedLocalRecords,
           hasHydrated: true,
           hasPersistedSnapshot: true,
@@ -664,7 +744,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         hasLoaded: true,
         error: null,
       });
-      persistStateSnapshot(nextSnapshot, get().reportPreviewState, get().localRecords, set, get);
+      persistStateSnapshot(
+        nextSnapshot,
+        get().reportPreviewState,
+        get().advisorState,
+        get().localRecords,
+        set,
+        get,
+      );
     } catch (err) {
       const persistedState = get();
       const nextSnapshot = persistedState.hasPersistedSnapshot
@@ -681,7 +768,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         hasLoaded: true,
         error: err instanceof Error ? err.message : 'Unable to load case intelligence.',
       });
-      persistStateSnapshot(nextSnapshot, get().reportPreviewState, get().localRecords, set, get);
+      persistStateSnapshot(
+        nextSnapshot,
+        get().reportPreviewState,
+        get().advisorState,
+        get().localRecords,
+        set,
+        get,
+      );
     }
   },
   createEntry: async (input) => {
@@ -712,7 +806,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         [recordKey]: localRecord,
       },
     }));
-    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
 
     if (input.forceLocalOnly) {
       return {
@@ -746,7 +847,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
           [recordKey]: syncedRecord,
         },
       }));
-      persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+      persistStateSnapshot(
+        get().snapshot,
+        get().reportPreviewState,
+        get().advisorState,
+        get().localRecords,
+        set,
+        get,
+      );
     } else if (isSupabaseWriteEnabled) {
       const errorRecord = createLocalRecordMeta({
         table: 'entries',
@@ -764,7 +872,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
           [recordKey]: errorRecord,
         },
       }));
-      persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+      persistStateSnapshot(
+        get().snapshot,
+        get().reportPreviewState,
+        get().advisorState,
+        get().localRecords,
+        set,
+        get,
+      );
     }
 
     return {
@@ -794,13 +909,40 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         [recordKey]: localRecord,
       },
     }));
-    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
 
     return {
       attachment: localAttachment,
       source: 'local',
       warning: 'Attachment metadata was saved locally. Uploads and remote storage sync are not enabled in this PR.',
     };
+  },
+  sendAdvisorMessage: (input) => {
+    const prompt = input.prompt.trim();
+    if (!prompt) return;
+
+    set((state) => ({
+      advisorState: appendAdvisorExchange(state.advisorState, {
+        ...input,
+        prompt,
+      }),
+      hasPersistedSnapshot: true,
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
   },
   setReportPreviewState: (patch) => {
     set((state) => ({
@@ -810,7 +952,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       },
       hasPersistedSnapshot: true,
     }));
-    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
   },
   updateEntryReview: (entryId, patch) => {
     const key = localRecordKey('entries', entryId);
@@ -829,7 +978,14 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         [key]: localRecord,
       },
     }));
-    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
   },
 }));
 
@@ -896,6 +1052,23 @@ export function useCaseIntelligenceTimeline() {
     source: home.source,
     activeCase: home.activeCase,
     entries: getRecentEntries(snapshot, home.activeCase?.id, 100),
+    flaggedEntries: getFlaggedEntries(snapshot, home.activeCase?.id),
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  };
+}
+
+export function useAdvisorConversation() {
+  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
+
+  return {
+    snapshot,
+    advisorState: useCaseIntelligenceStore((state) => state.advisorState),
+    sendAdvisorMessage: useCaseIntelligenceStore((state) => state.sendAdvisorMessage),
+    activeCase: home.activeCase,
+    upcomingHearing: home.upcomingKeyDates[0] ?? null,
     flaggedEntries: getFlaggedEntries(snapshot, home.activeCase?.id),
     loading,
     error,

@@ -167,6 +167,36 @@ function HearingStrip({ keyDate }: { keyDate?: KeyDate }) {
   );
 }
 
+function AdvisorLauncher({
+  activeCase,
+  flaggedCount,
+}: {
+  activeCase: FamilyBenchCase | null;
+  flaggedCount: number;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Open Advisor"
+      onPress={() => router.push('/advisor' as never)}
+      style={({ pressed }) => [styles.advisorPressable, pressed && styles.pressed]}
+    >
+      <SoftCard p={14} style={styles.advisorCard}>
+        <View style={styles.advisorIcon}>
+          <Icon name="chat" size={16} color={fbColors.ink} />
+        </View>
+        <View style={styles.advisorCopy}>
+          <Text style={styles.advisorTitle}>Advisor placeholder</Text>
+          <Text style={styles.advisorBody}>
+            {activeCase?.title || 'Current case'} · {flaggedCount} flagged entries available
+          </Text>
+        </View>
+        <Icon name="chevR" size={15} color={fbColors.inkMute} />
+      </SoftCard>
+    </Pressable>
+  );
+}
+
 function CaptureTile({
   icon,
   title,
@@ -321,6 +351,7 @@ export default function Home() {
       <CaseCard activeCase={home.activeCase} primaryPerson={home.primaryPerson} />
       <FilingNextStep nextStep={home.nextStep} />
       <HearingStrip keyDate={home.upcomingKeyDates[0]} />
+      <AdvisorLauncher activeCase={home.activeCase} flaggedCount={home.flaggedEntries.length} />
       <Rule style={styles.captureRule} />
       <QuickCapture />
       <RecentEntries entries={home.recentEntries} attachments={snapshot.evidenceAttachments} />
@@ -427,6 +458,42 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x1,
     color: fbColors.inkMute,
     fontSize: fbType.small,
+    fontFamily: fbFonts.sansRegular,
+  },
+  advisorPressable: {
+    marginTop: fbSpacing.x3,
+  },
+  advisorCard: {
+    minHeight: 72,
+    borderRadius: fbRadii.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x3,
+    backgroundColor: fbColors.paperDeep,
+  },
+  advisorIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: fbRadii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fbColors.surface,
+  },
+  advisorCopy: {
+    flex: 1,
+  },
+  advisorTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  advisorBody: {
+    marginTop: fbSpacing.x1,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
   },
   captureRule: {

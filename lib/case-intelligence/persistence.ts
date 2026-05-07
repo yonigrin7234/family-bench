@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import type { Json } from '@/lib/supabase/database.types';
 import type {
+  AdvisorConversationState,
   CaseIntelligenceSnapshot,
   Entry,
   EvidenceAttachment,
@@ -21,6 +22,13 @@ export const DEFAULT_REPORT_PREVIEW_STATE: ReportPreviewState = {
   flagFilter: 'all',
 };
 
+export const DEFAULT_ADVISOR_STATE: AdvisorConversationState = {
+  threadId: 'local-advisor-thread',
+  pinnedThreadId: 'local-advisor-thread',
+  messages: [],
+  updatedAt: null,
+};
+
 export type LocalPersistenceAdapter = 'localStorage' | 'fileSystem' | 'memory';
 
 export type PersistedCaseIntelligenceDocument = {
@@ -28,6 +36,7 @@ export type PersistedCaseIntelligenceDocument = {
   savedAt: string;
   snapshot: CaseIntelligenceSnapshot;
   reportPreviewState: ReportPreviewState;
+  advisorState: AdvisorConversationState;
   localRecords: Record<string, LocalRecordMeta>;
 };
 
@@ -120,6 +129,31 @@ function normalizeReportPreviewState(value: unknown): ReportPreviewState {
   };
 }
 
+function normalizeAdvisorState(value: unknown): AdvisorConversationState {
+  if (!value || typeof value !== 'object') return DEFAULT_ADVISOR_STATE;
+  const candidate = value as Partial<AdvisorConversationState>;
+  const messages = Array.isArray(candidate.messages)
+    ? candidate.messages.filter(
+        (message) =>
+          message &&
+          typeof message === 'object' &&
+          'id' in message &&
+          'role' in message &&
+          'body' in message,
+      )
+    : [];
+
+  return {
+    threadId: typeof candidate.threadId === 'string' ? candidate.threadId : DEFAULT_ADVISOR_STATE.threadId,
+    pinnedThreadId:
+      typeof candidate.pinnedThreadId === 'string'
+        ? candidate.pinnedThreadId
+        : DEFAULT_ADVISOR_STATE.pinnedThreadId,
+    messages: messages as AdvisorConversationState['messages'],
+    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : null,
+  };
+}
+
 function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
   const parsed = JSON.parse(raw) as Partial<PersistedCaseIntelligenceDocument>;
   if (parsed.version !== PERSISTENCE_VERSION || !parsed.snapshot) return null;
@@ -129,6 +163,7 @@ function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
     savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString(),
     snapshot: parsed.snapshot,
     reportPreviewState: normalizeReportPreviewState(parsed.reportPreviewState),
+    advisorState: normalizeAdvisorState(parsed.advisorState),
     localRecords: parsed.localRecords ?? {},
   };
 }
@@ -156,10 +191,12 @@ export async function readPersistedCaseIntelligence(): Promise<{
 export async function writePersistedCaseIntelligence({
   snapshot,
   reportPreviewState,
+  advisorState,
   localRecords,
 }: {
   snapshot: CaseIntelligenceSnapshot;
   reportPreviewState: ReportPreviewState;
+  advisorState: AdvisorConversationState;
   localRecords: Record<string, LocalRecordMeta>;
 }): Promise<{ adapter: LocalPersistenceAdapter; savedAt: string }> {
   const adapter = getLocalPersistenceAdapter();
@@ -168,6 +205,7 @@ export async function writePersistedCaseIntelligence({
     savedAt: new Date().toISOString(),
     snapshot,
     reportPreviewState,
+    advisorState,
     localRecords,
   };
   const serialized = JSON.stringify(document);

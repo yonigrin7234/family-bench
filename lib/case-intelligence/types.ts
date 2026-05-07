@@ -46,6 +46,25 @@ export type ReportPreviewState = {
   flagFilter: ReportPreviewFlagFilter;
 };
 
+export type AdvisorMessageRole = 'advisor' | 'user';
+
+export type AdvisorMessage = {
+  id: string;
+  role: AdvisorMessageRole;
+  body: string;
+  createdAt: string;
+  linkedEntryIds: string[];
+  prompt?: string | null;
+  localOnly: boolean;
+};
+
+export type AdvisorConversationState = {
+  threadId: string;
+  pinnedThreadId: string | null;
+  messages: AdvisorMessage[];
+  updatedAt: string | null;
+};
+
 export type LocalPersistenceDiagnostics = {
   active: boolean;
   adapter: 'localStorage' | 'fileSystem' | 'memory';
