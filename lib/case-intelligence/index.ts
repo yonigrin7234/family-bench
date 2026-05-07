@@ -8,10 +8,12 @@ export {
   useCaseMap,
   useCaseIntelligenceHome,
   useCaseIntelligenceTimeline,
+  useCreatePlaceholderAttachment,
   useEntryDetail,
   useLocalPersistenceDiagnostics,
   useReportPreviewState,
   useUpdateEntryReview,
   type CaptureEntryInput,
+  type CreatePlaceholderAttachmentInput,
   type EntryReviewPatch,
 } from './useCaseIntelligence';

@@ -103,6 +103,7 @@ type AttachmentRow = {
   file_type: string | null;
   mime_type: string | null;
   file_size_bytes: number | null;
+  storage_bucket: string | null;
   storage_path: string;
   thumbnail_path: string | null;
   description: string | null;

@@ -4,6 +4,7 @@ import type { Json } from '@/lib/supabase/database.types';
 import type {
   CaseIntelligenceSnapshot,
   Entry,
+  EvidenceAttachment,
   LocalRecordMeta,
   LocalSyncStatus,
   ReportPreviewState,
@@ -81,6 +82,22 @@ export function withEntryLocalMeta(entry: Entry, meta: LocalRecordMeta): Entry {
     ...entry,
     metadata: {
       ...asObjectJson(entry.metadata),
+      local_created_at: meta.local_created_at,
+      local_updated_at: meta.local_updated_at,
+      sync_status: meta.sync_status,
+      sync_error: meta.error ?? null,
+    },
+  };
+}
+
+export function withEvidenceAttachmentLocalMeta(
+  attachment: EvidenceAttachment,
+  meta: LocalRecordMeta,
+): EvidenceAttachment {
+  return {
+    ...attachment,
+    exif: {
+      ...asObjectJson(attachment.exif),
       local_created_at: meta.local_created_at,
       local_updated_at: meta.local_updated_at,
       sync_status: meta.sync_status,

@@ -48,6 +48,7 @@ type ReportPreview = {
   keyFacts: string[];
   placeholder?: string;
 };
+type AttachmentCountsByEntryId = Record<string, number>;
 
 const REPORT_TYPES: Array<{ value: ReportType; label: string; tone: ChipTone }> = [
   { value: 'timeline', label: 'Timeline summary', tone: 'ink' },
@@ -263,8 +264,18 @@ function ReportTypeChip({
   );
 }
 
-function SourceEntryRow({ entry }: { entry: Entry }) {
+function SourceEntryRow({
+  entry,
+  attachmentCount,
+}: {
+  entry: Entry;
+  attachmentCount: number;
+}) {
   const option = getEntryTypeOption(entry.entry_type);
+  const attachmentLabel =
+    attachmentCount > 0
+      ? ` · ${attachmentCount === 1 ? '1 attachment' : `${attachmentCount} attachments`}`
+      : '';
 
   return (
     <Pressable
@@ -279,7 +290,7 @@ function SourceEntryRow({ entry }: { entry: Entry }) {
       <View style={styles.sourceCopy}>
         <Text style={styles.sourceTitle}>{titleForEntry(entry)}</Text>
         <Text style={styles.sourceMeta}>
-          {formatDateLabel(entry.event_date, entry.event_time)} · {option.shortLabel}
+          {formatDateLabel(entry.event_date, entry.event_time)} · {option.shortLabel}{attachmentLabel}
         </Text>
       </View>
       {entry.is_flagged ? (
@@ -291,8 +302,18 @@ function SourceEntryRow({ entry }: { entry: Entry }) {
   );
 }
 
-function ReportPreviewCard({ report }: { report: ReportPreview }) {
+function ReportPreviewCard({
+  report,
+  attachmentCountsByEntryId,
+}: {
+  report: ReportPreview;
+  attachmentCountsByEntryId: AttachmentCountsByEntryId;
+}) {
   const references = report.entries.slice(0, 6);
+  const attachmentCount = report.entries.reduce(
+    (total, entry) => total + (attachmentCountsByEntryId[entry.id] ?? 0),
+    0,
+  );
 
   return (
     <SoftCard p={16} style={styles.reportCard}>
@@ -319,6 +340,14 @@ function ReportPreviewCard({ report }: { report: ReportPreview }) {
         <View style={styles.metaBox}>
           <Text style={styles.metaLabel}>INCLUDED ENTRIES</Text>
           <Text style={styles.metaValue}>{report.entries.length} entries</Text>
+        </View>
+        <View style={styles.metaBox}>
+          <Text style={styles.metaLabel}>SOURCE ATTACHMENTS</Text>
+          <Text style={styles.metaValue}>
+            {attachmentCount
+              ? `${attachmentCount} local attachment metadata records`
+              : 'No attachment metadata in this preview'}
+          </Text>
         </View>
       </View>
 
@@ -347,7 +376,11 @@ function ReportPreviewCard({ report }: { report: ReportPreview }) {
         {references.length ? (
           <View style={styles.sourceStack}>
             {references.map((entry) => (
-              <SourceEntryRow key={entry.id} entry={entry} />
+              <SourceEntryRow
+                key={entry.id}
+                entry={entry}
+                attachmentCount={attachmentCountsByEntryId[entry.id] ?? 0}
+              />
             ))}
             {report.entries.length > references.length ? (
               <Text style={styles.moreText}>
@@ -368,7 +401,7 @@ function ReportPreviewCard({ report }: { report: ReportPreview }) {
 }
 
 export default function Reports() {
-  const { entries, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
+  const { snapshot, entries, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
   const { reportPreviewState, setReportPreviewState } = useReportPreviewState();
   const reportType = reportPreviewState.reportType;
   const typeFilter = reportPreviewState.typeFilter;
@@ -384,6 +417,13 @@ export default function Reports() {
 
   const reports = useMemo(() => buildReports(filteredEntries), [filteredEntries]);
   const activeReport = reports[reportType];
+  const attachmentCountsByEntryId = useMemo(() => {
+    return snapshot.evidenceAttachments.reduce<AttachmentCountsByEntryId>((counts, attachment) => {
+      if (!attachment.entry_id || attachment.deleted_at) return counts;
+      counts[attachment.entry_id] = (counts[attachment.entry_id] ?? 0) + 1;
+      return counts;
+    }, {});
+  }, [snapshot.evidenceAttachments]);
 
   return (
     <CaseScreen>
@@ -457,7 +497,10 @@ export default function Reports() {
         </Text>
       </View>
 
-      <ReportPreviewCard report={activeReport} />
+      <ReportPreviewCard
+        report={activeReport}
+        attachmentCountsByEntryId={attachmentCountsByEntryId}
+      />
     </CaseScreen>
   );
 }

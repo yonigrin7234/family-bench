@@ -11,6 +11,7 @@ import {
   getLocalPersistenceAdapter,
   localRecordKey,
   readPersistedCaseIntelligence,
+  withEvidenceAttachmentLocalMeta,
   withEntryLocalMeta,
   writePersistedCaseIntelligence,
 } from './persistence';
@@ -28,10 +29,12 @@ import type {
   CaseIntelligenceSnapshot,
   CaseIntelligenceSource,
   Entry,
+  EvidenceAttachment,
   HomeCaseIntelligence,
   LocalPersistenceDiagnostics,
   LocalRecordMeta,
   ReportPreviewState,
+  AttachmentKind,
 } from './types';
 
 type TableName = keyof Database['public']['Tables'];
@@ -140,6 +143,18 @@ export type EntryReviewPatch = {
   reviewVisibility?: 'court_ready' | 'private';
 };
 
+export type CreatePlaceholderAttachmentInput = {
+  entryId: string;
+  kind: AttachmentKind;
+  sourceLabel?: string | null;
+};
+
+type SaveAttachmentResult = {
+  attachment: EvidenceAttachment;
+  source: 'local';
+  warning: string;
+};
+
 type CaseIntelligenceState = {
   snapshot: CaseIntelligenceSnapshot;
   source: CaseIntelligenceSource;
@@ -153,6 +168,9 @@ type CaseIntelligenceState = {
   error: string | null;
   load: () => Promise<void>;
   createEntry: (input: CaptureEntryInput) => Promise<SaveEntryResult>;
+  createPlaceholderAttachment: (
+    input: CreatePlaceholderAttachmentInput,
+  ) => Promise<SaveAttachmentResult>;
   setReportPreviewState: (patch: Partial<ReportPreviewState>) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
 };
@@ -252,6 +270,95 @@ async function buildEntry(
   };
 }
 
+const ATTACHMENT_PLACEHOLDER_DETAILS: Record<
+  AttachmentKind,
+  { label: string; filenameStem: string; fileType: string; mimeType: string; extension: string }
+> = {
+  photo: {
+    label: 'Photo placeholder',
+    filenameStem: 'photo',
+    fileType: 'photo',
+    mimeType: 'image/jpeg',
+    extension: 'jpg',
+  },
+  document: {
+    label: 'Document placeholder',
+    filenameStem: 'document',
+    fileType: 'document',
+    mimeType: 'application/pdf',
+    extension: 'pdf',
+  },
+  voice_memo: {
+    label: 'Voice memo placeholder',
+    filenameStem: 'voice-memo',
+    fileType: 'voice_memo',
+    mimeType: 'audio/m4a',
+    extension: 'm4a',
+  },
+  screenshot: {
+    label: 'Screenshot placeholder',
+    filenameStem: 'screenshot',
+    fileType: 'screenshot',
+    mimeType: 'image/png',
+    extension: 'png',
+  },
+};
+
+function compactTimestamp(value: string) {
+  return value.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z').replace('T', '-');
+}
+
+function buildPlaceholderAttachment(
+  input: CreatePlaceholderAttachmentInput,
+  snapshot: CaseIntelligenceSnapshot,
+  userId: string,
+): EvidenceAttachment {
+  const entry = snapshot.entries.find(
+    (candidate) => candidate.id === input.entryId && !candidate.deleted_at,
+  );
+  if (!entry) {
+    throw new Error('Open a saved entry before adding attachment metadata.');
+  }
+
+  const details = ATTACHMENT_PLACEHOLDER_DETAILS[input.kind];
+  const now = new Date().toISOString();
+  const id = `local-attachment-${Crypto.randomUUID()}`;
+  const sourceLabel = nullIfBlank(input.sourceLabel) ?? details.label;
+  const fileName = `${compactTimestamp(now)}-${details.filenameStem}.${details.extension}`;
+  const caseId = entry.case_id ?? getActiveCase(snapshot)?.id ?? null;
+
+  return {
+    id,
+    user_id: userId,
+    case_id: caseId,
+    entry_id: entry.id,
+    file_name: fileName,
+    file_type: details.fileType,
+    mime_type: details.mimeType,
+    file_size_bytes: 0,
+    storage_bucket: 'evidence-originals',
+    storage_path: `local-only/placeholders/${caseId ?? 'case'}/${entry.id}/${fileName}`,
+    thumbnail_path: null,
+    description: `${details.label} metadata record. Original evidence is preserved when uploads are enabled later.`,
+    is_receipt: false,
+    file_hash: `placeholder:${id}`,
+    hash_algorithm: 'sha256-placeholder',
+    captured_at: now,
+    source_device: sourceLabel,
+    exif: {
+      attachment_kind: input.kind,
+      source_label: sourceLabel,
+      storage_status: 'placeholder_only',
+      original_evidence_preserved: true,
+      derived_previews_pending: true,
+      file_size_placeholder: true,
+      hash_status: 'placeholder_not_content_hash',
+    },
+    created_at: now,
+    deleted_at: null,
+  };
+}
+
 type SupabaseEntrySaveResult =
   | { ok: true; entry: Entry; warning?: undefined }
   | { ok: false; warning: string; entry?: undefined };
@@ -290,6 +397,19 @@ function appendEntry(snapshot: CaseIntelligenceSnapshot, entry: Entry): CaseInte
   return {
     ...snapshot,
     entries: [entry, ...snapshot.entries.filter((existing) => existing.id !== entry.id)],
+  };
+}
+
+function appendAttachment(
+  snapshot: CaseIntelligenceSnapshot,
+  attachment: EvidenceAttachment,
+): CaseIntelligenceSnapshot {
+  return {
+    ...snapshot,
+    evidenceAttachments: [
+      attachment,
+      ...snapshot.evidenceAttachments.filter((existing) => existing.id !== attachment.id),
+    ],
   };
 }
 
@@ -346,6 +466,15 @@ function hasLocalEntryState(entry: Entry, localRecords: Record<string, LocalReco
   );
 }
 
+function hasLocalAttachmentState(
+  attachment: EvidenceAttachment,
+  localRecords: Record<string, LocalRecordMeta>,
+) {
+  const localRecord = localRecords[localRecordKey('attachments', attachment.id)];
+  if (localRecord && localRecord.sync_status !== 'synced') return true;
+  return attachment.id.startsWith('local-attachment-');
+}
+
 function mergeLocalFirstSnapshot(
   loadedSnapshot: CaseIntelligenceSnapshot,
   localSnapshot: CaseIntelligenceSnapshot,
@@ -353,8 +482,18 @@ function mergeLocalFirstSnapshot(
 ): CaseIntelligenceSnapshot {
   const loadedEntryIds = new Set(loadedSnapshot.entries.map((entry) => entry.id));
   const localEntryById = new Map(localSnapshot.entries.map((entry) => [entry.id, entry]));
+  const loadedAttachmentIds = new Set(
+    loadedSnapshot.evidenceAttachments.map((attachment) => attachment.id),
+  );
+  const localAttachmentById = new Map(
+    localSnapshot.evidenceAttachments.map((attachment) => [attachment.id, attachment]),
+  );
   const localOnlyEntries = localSnapshot.entries.filter(
     (entry) => !loadedEntryIds.has(entry.id) && hasLocalEntryState(entry, localRecords),
+  );
+  const localOnlyAttachments = localSnapshot.evidenceAttachments.filter(
+    (attachment) =>
+      !loadedAttachmentIds.has(attachment.id) && hasLocalAttachmentState(attachment, localRecords),
   );
 
   const entries = [
@@ -364,10 +503,20 @@ function mergeLocalFirstSnapshot(
       return localEntry && hasLocalEntryState(localEntry, localRecords) ? localEntry : entry;
     }),
   ];
+  const evidenceAttachments = [
+    ...localOnlyAttachments,
+    ...loadedSnapshot.evidenceAttachments.map((attachment) => {
+      const localAttachment = localAttachmentById.get(attachment.id);
+      return localAttachment && hasLocalAttachmentState(localAttachment, localRecords)
+        ? localAttachment
+        : attachment;
+    }),
+  ];
 
   return {
     ...loadedSnapshot,
     entries,
+    evidenceAttachments,
   };
 }
 
@@ -601,6 +750,35 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       warning: remoteResult.warning,
     };
   },
+  createPlaceholderAttachment: async (input) => {
+    const current = get();
+    const activeCase = getActiveCase(current.snapshot);
+    const userId = activeCase?.user_id || '';
+    const attachment = buildPlaceholderAttachment(input, current.snapshot, userId);
+    const recordKey = localRecordKey('attachments', attachment.id);
+    const localRecord = createLocalRecordMeta({
+      table: 'attachments',
+      id: attachment.id,
+    });
+    const localAttachment = withEvidenceAttachmentLocalMeta(attachment, localRecord);
+
+    set((state) => ({
+      snapshot: appendAttachment(state.snapshot, localAttachment),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [recordKey]: localRecord,
+      },
+    }));
+    persistStateSnapshot(get().snapshot, get().reportPreviewState, get().localRecords, set, get);
+
+    return {
+      attachment: localAttachment,
+      source: 'local',
+      warning: 'Attachment metadata was saved locally. Uploads and remote storage sync are not enabled in this PR.',
+    };
+  },
   setReportPreviewState: (patch) => {
     set((state) => ({
       reportPreviewState: {
@@ -752,6 +930,10 @@ export function useUpdateEntryReview() {
   return useCaseIntelligenceStore((state) => state.updateEntryReview);
 }
 
+export function useCreatePlaceholderAttachment() {
+  return useCaseIntelligenceStore((state) => state.createPlaceholderAttachment);
+}
+
 export function useReportPreviewState() {
   return {
     reportPreviewState: useCaseIntelligenceStore((state) => state.reportPreviewState),
@@ -770,7 +952,12 @@ export function useEntryDetail(entryId?: string) {
     ? snapshot.children.find((candidate) => candidate.id === entry.child_id) ?? null
     : null;
   const attachments = entry
-    ? snapshot.evidenceAttachments.filter((attachment) => attachment.entry_id === entry.id)
+    ? snapshot.evidenceAttachments
+        .filter((attachment) => attachment.entry_id === entry.id)
+        .filter((attachment) => !attachment.deleted_at)
+        .sort((a, b) =>
+          (b.captured_at ?? b.created_at).localeCompare(a.captured_at ?? a.created_at),
+        )
     : [];
 
   return {

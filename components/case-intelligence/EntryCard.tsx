@@ -22,10 +22,12 @@ import {
 
 export function EntryCard({
   entry,
+  attachmentCount = 0,
   compact = false,
   onPress,
 }: {
   entry: Entry;
+  attachmentCount?: number;
   compact?: boolean;
   onPress?: () => void;
 }) {
@@ -54,6 +56,11 @@ export function EntryCard({
           {entry.is_flagged ? (
             <Chip tone="ox" outline={false}>
               Flagged
+            </Chip>
+          ) : null}
+          {attachmentCount > 0 ? (
+            <Chip tone="amber" outline={false}>
+              {attachmentCount === 1 ? '1 attachment' : `${attachmentCount} attachments`}
             </Chip>
           ) : null}
           {!compact ? (

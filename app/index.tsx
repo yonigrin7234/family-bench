@@ -29,6 +29,7 @@ import {
   type IconName,
 } from '@/components/ui/fb';
 import {
+  type EvidenceAttachment,
   type Entry,
   type EntryTypeValue,
   formatDateLabel,
@@ -254,7 +255,17 @@ function QuickCapture() {
   );
 }
 
-function RecentEntries({ entries }: { entries: Entry[] }) {
+function attachmentCountForEntry(attachments: EvidenceAttachment[], entryId: string) {
+  return attachments.filter((attachment) => attachment.entry_id === entryId && !attachment.deleted_at).length;
+}
+
+function RecentEntries({
+  entries,
+  attachments,
+}: {
+  entries: Entry[];
+  attachments: EvidenceAttachment[];
+}) {
   return (
     <View style={styles.recentSection}>
       <View style={styles.sectionHeader}>
@@ -272,7 +283,13 @@ function RecentEntries({ entries }: { entries: Entry[] }) {
       {entries.length ? (
         <View style={styles.entryStack}>
           {entries.slice(0, 3).map((entry) => (
-            <EntryCard key={entry.id} entry={entry} compact onPress={() => openEntry(entry.id)} />
+            <EntryCard
+              key={entry.id}
+              entry={entry}
+              attachmentCount={attachmentCountForEntry(attachments, entry.id)}
+              compact
+              onPress={() => openEntry(entry.id)}
+            />
           ))}
         </View>
       ) : (
@@ -288,7 +305,7 @@ function RecentEntries({ entries }: { entries: Entry[] }) {
 }
 
 export default function Home() {
-  const { home } = useCaseIntelligenceHome();
+  const { home, snapshot } = useCaseIntelligenceHome();
 
   return (
     <CaseScreen>
@@ -306,7 +323,7 @@ export default function Home() {
       <HearingStrip keyDate={home.upcomingKeyDates[0]} />
       <Rule style={styles.captureRule} />
       <QuickCapture />
-      <RecentEntries entries={home.recentEntries} />
+      <RecentEntries entries={home.recentEntries} attachments={snapshot.evidenceAttachments} />
     </CaseScreen>
   );
 }

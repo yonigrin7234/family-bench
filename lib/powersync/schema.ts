@@ -100,6 +100,7 @@ const attachments = new Table({
   file_type: column.text,
   mime_type: column.text,
   file_size_bytes: column.integer,
+  storage_bucket: column.text,
   storage_path: column.text,
   thumbnail_path: column.text,
   description: column.text,

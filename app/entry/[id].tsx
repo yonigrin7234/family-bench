@@ -29,8 +29,11 @@ import {
   getEntryMetadata,
   getEntryTypeOption,
   isEntryReviewed,
+  useCreatePlaceholderAttachment,
   useEntryDetail,
   useUpdateEntryReview,
+  type AttachmentKind,
+  type EvidenceAttachment,
 } from '@/lib/case-intelligence';
 
 type ReviewVisibility = 'court_ready' | 'private';
@@ -82,14 +85,97 @@ function ComingLaterButton({
   );
 }
 
+const ATTACHMENT_OPTIONS: Array<{
+  kind: AttachmentKind;
+  label: string;
+  icon: IconName;
+}> = [
+  { kind: 'photo', label: 'Add photo placeholder', icon: 'camera' },
+  { kind: 'document', label: 'Add document placeholder', icon: 'doc' },
+  { kind: 'voice_memo', label: 'Add voice memo placeholder', icon: 'mic' },
+  { kind: 'screenshot', label: 'Add screenshot placeholder', icon: 'camera' },
+];
+
+function attachmentMeta(attachment: EvidenceAttachment): Record<string, unknown> {
+  const exif = attachment.exif;
+  if (!exif || typeof exif !== 'object' || Array.isArray(exif)) return {};
+  return exif as Record<string, unknown>;
+}
+
+function stringMeta(value: unknown) {
+  return typeof value === 'string' ? value : null;
+}
+
+function attachmentKindLabel(attachment: EvidenceAttachment) {
+  const kind = stringMeta(attachmentMeta(attachment).attachment_kind) ?? attachment.file_type;
+  if (kind === 'voice_memo') return 'Voice memo';
+  if (kind === 'photo') return 'Photo';
+  if (kind === 'document') return 'Document';
+  if (kind === 'screenshot') return 'Screenshot';
+  return attachment.file_type || 'Attachment';
+}
+
+function attachmentIconName(attachment: EvidenceAttachment): IconName {
+  if (attachment.file_type === 'voice_memo') return 'mic';
+  if (attachment.file_type === 'document') return 'doc';
+  return 'paperclip';
+}
+
+function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
+  const exif = attachmentMeta(attachment);
+  const syncStatus = stringMeta(exif.sync_status) ?? 'pending';
+  const sourceLabel = stringMeta(exif.source_label) ?? attachment.source_device;
+
+  return (
+    <View style={styles.attachmentRecord}>
+      <View style={styles.attachmentHeader}>
+        <View style={styles.attachmentTitleRow}>
+          <View style={styles.attachmentIcon}>
+            <Icon
+              name={attachmentIconName(attachment)}
+              size={14}
+              color={fbColors.ink}
+            />
+          </View>
+          <View style={styles.attachmentCopy}>
+            <Text style={styles.attachmentTitle}>{attachmentKindLabel(attachment)}</Text>
+            <Text style={styles.attachmentMeta}>{attachment.file_name}</Text>
+          </View>
+        </View>
+        <Chip
+          tone={syncStatus === 'error' ? 'ox' : syncStatus === 'synced' ? 'forest' : 'amber'}
+          outline={false}
+        >
+          {syncStatus}
+        </Chip>
+      </View>
+      <Text style={styles.attachmentBody}>
+        Original evidence is preserved. Uploads, previews, and derived files come later.
+      </Text>
+      <View style={styles.attachmentDetails}>
+        <DetailRow label="MIME type" value={attachment.mime_type} />
+        <DetailRow label="File size" value={`${attachment.file_size_bytes ?? 0} bytes placeholder`} />
+        <DetailRow label="Storage bucket" value={attachment.storage_bucket || 'Not assigned'} />
+        <DetailRow label="Storage path" value={attachment.storage_path} />
+        <DetailRow label="Hash" value={attachment.file_hash} />
+        <DetailRow label="Captured" value={attachment.captured_at} />
+        <DetailRow label="Source label" value={sourceLabel} />
+      </View>
+    </View>
+  );
+}
+
 export default function EntryDetail() {
   const params = useLocalSearchParams();
   const entryId = getParam(params.id);
   const updateEntryReview = useUpdateEntryReview();
+  const createPlaceholderAttachment = useCreatePlaceholderAttachment();
   const { entry, child, attachments, loading } = useEntryDetail(entryId);
   const [mode, setMode] = useState<'read' | 'edit'>('read');
   const [bodyDraft, setBodyDraft] = useState('');
   const [visibility, setVisibility] = useState<ReviewVisibility>('court_ready');
+  const [addingAttachmentKind, setAddingAttachmentKind] = useState<AttachmentKind | null>(null);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const option = getEntryTypeOption(entry?.entry_type);
   const metadata = entry ? getEntryMetadata(entry) : {};
   const capturedBody = entry ? getCapturedBody(entry) : null;
@@ -123,6 +209,27 @@ export default function EntryDetail() {
     setVisibility(next);
     if (entry) {
       updateEntryReview(entry.id, { reviewVisibility: next });
+    }
+  }
+
+  async function addAttachmentPlaceholder(kind: AttachmentKind) {
+    if (!entry || addingAttachmentKind) return;
+    setAddingAttachmentKind(kind);
+    setAttachmentNotice(null);
+
+    try {
+      const result = await createPlaceholderAttachment({
+        entryId: entry.id,
+        kind,
+        sourceLabel: 'Family Bench local placeholder',
+      });
+      setAttachmentNotice(result.warning);
+    } catch (err) {
+      setAttachmentNotice(
+        err instanceof Error ? err.message : 'Unable to create attachment metadata locally.',
+      );
+    } finally {
+      setAddingAttachmentKind(null);
     }
   }
 
@@ -276,13 +383,53 @@ export default function EntryDetail() {
       )}
 
       <SoftCard p={16} style={styles.section}>
-        <SectionTitle icon="paperclip" title="Evidence and attachments" />
+        <SectionTitle
+          icon="paperclip"
+          title="Evidence and attachments"
+          right={
+            <Chip tone={attachments.length ? 'amber' : 'mute'} outline={false}>
+              {attachments.length}
+            </Chip>
+          }
+        />
         <Text style={styles.sectionBody}>
           {attachments.length
-            ? `${attachments.length} attachment records are linked to this entry.`
-            : 'No evidence is attached yet. File uploads will be added after storage policy review.'}
+            ? `${attachments.length} local attachment metadata records are linked to this entry.`
+            : 'No evidence metadata is attached yet. Add a local placeholder record now; file uploads will be added after storage policy review.'}
         </Text>
-        <ComingLaterButton icon="paperclip">Add evidence</ComingLaterButton>
+        <Text style={styles.sectionBody}>
+          Placeholder records describe original evidence. The original file, previews, OCR, and
+          derived files are not created in this PR.
+        </Text>
+        <View style={styles.attachmentActionGrid}>
+          {ATTACHMENT_OPTIONS.map((option) => (
+            <PillButton
+              key={option.kind}
+              tone="soft"
+              size="md"
+              icon={option.icon}
+              full
+              disabled={Boolean(addingAttachmentKind)}
+              onPress={() => addAttachmentPlaceholder(option.kind)}
+            >
+              {addingAttachmentKind === option.kind ? 'Saving metadata' : option.label}
+            </PillButton>
+          ))}
+        </View>
+        {attachmentNotice ? <Text style={styles.attachmentNotice}>{attachmentNotice}</Text> : null}
+        {attachments.length ? (
+          <View style={styles.attachmentStack}>
+            {attachments.map((attachment) => (
+              <AttachmentRecord key={attachment.id} attachment={attachment} />
+            ))}
+          </View>
+        ) : null}
+        <Rule />
+        <View style={styles.attachmentActionGrid}>
+          <ComingLaterButton icon="upload">Upload file</ComingLaterButton>
+          <ComingLaterButton icon="camera">Capture photo</ComingLaterButton>
+          <ComingLaterButton icon="mic">Record voice memo</ComingLaterButton>
+        </View>
       </SoftCard>
 
       <SoftCard p={16} style={styles.section}>
@@ -430,6 +577,73 @@ const styles = StyleSheet.create({
     fontSize: fbType.body,
     lineHeight: 21,
     fontFamily: fbFonts.sansRegular,
+  },
+  attachmentActionGrid: {
+    gap: fbSpacing.x2,
+  },
+  attachmentNotice: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  attachmentStack: {
+    gap: fbSpacing.x3,
+  },
+  attachmentRecord: {
+    gap: fbSpacing.x3,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.paperDeep,
+  },
+  attachmentHeader: {
+    minHeight: fbTouch.min,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  attachmentTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x2,
+  },
+  attachmentIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: fbRadii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fbColors.surface,
+  },
+  attachmentCopy: {
+    flex: 1,
+  },
+  attachmentTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 17,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  attachmentMeta: {
+    marginTop: 2,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 17,
+    fontFamily: fbFonts.sansRegular,
+  },
+  attachmentBody: {
+    color: fbColors.inkSoft,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  attachmentDetails: {
+    gap: fbSpacing.x2,
   },
   reviewActions: {
     marginTop: fbSpacing.x4,

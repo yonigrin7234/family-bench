@@ -67,7 +67,7 @@ function TypeFilterChip({
 }
 
 export default function Timeline() {
-  const { entries, activeCase, source, loading } = useCaseIntelligenceTimeline();
+  const { snapshot, entries, activeCase, source, loading } = useCaseIntelligenceTimeline();
   const [typeFilter, setTypeFilter] = useState<EntryTypeFilterValue>('all');
   const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
 
@@ -143,7 +143,16 @@ export default function Timeline() {
       {filteredEntries.length ? (
         <View style={styles.entryStack}>
           {filteredEntries.map((entry) => (
-            <EntryCard key={entry.id} entry={entry} onPress={() => openEntry(entry.id)} />
+            <EntryCard
+              key={entry.id}
+              entry={entry}
+              attachmentCount={
+                snapshot.evidenceAttachments.filter(
+                  (attachment) => attachment.entry_id === entry.id && !attachment.deleted_at,
+                ).length
+              }
+              onPress={() => openEntry(entry.id)}
+            />
           ))}
         </View>
       ) : (

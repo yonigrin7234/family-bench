@@ -29,6 +29,8 @@ export type LocalRecordMeta = {
   error?: string | null;
 };
 
+export type AttachmentKind = 'photo' | 'document' | 'voice_memo' | 'screenshot';
+
 export type ReportPreviewType =
   | 'timeline'
   | 'flagged'
