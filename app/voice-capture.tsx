@@ -3,6 +3,10 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
+  LocalAudioRecorder,
+  type RecordedAudioMemo,
+} from '@/components/case-intelligence/LocalAudioRecorder';
+import {
   Chip,
   Display,
   Icon,
@@ -22,11 +26,13 @@ import {
   fbType,
   fbWeights,
 } from '@/components/ui/fb';
-import { useCaptureEntry, useCaseIntelligenceHome } from '@/lib/case-intelligence';
+import {
+  useCaptureEntry,
+  useCaseIntelligenceHome,
+  useCreateLocalAttachment,
+} from '@/lib/case-intelligence';
 
 type FlagSeverity = 'low' | 'medium' | 'high';
-
-const WAVEFORM_BARS = [20, 34, 18, 42, 28, 52, 24, 40, 32, 22, 46, 26];
 
 function toDateInput(date = new Date()) {
   return date.toISOString().slice(0, 10);
@@ -73,16 +79,6 @@ function Field({
   );
 }
 
-function WaveformPlaceholder() {
-  return (
-    <View style={styles.waveform}>
-      {WAVEFORM_BARS.map((height, index) => (
-        <View key={`${height}-${index}`} style={[styles.waveformBar, { height }]} />
-      ))}
-    </View>
-  );
-}
-
 function FlagToggle({
   value,
   onChange,
@@ -111,7 +107,9 @@ function FlagToggle({
 
 export default function VoiceCapture() {
   const createEntry = useCaptureEntry();
+  const createLocalAttachment = useCreateLocalAttachment();
   const { home } = useCaseIntelligenceHome();
+  const [recordedAudio, setRecordedAudio] = useState<RecordedAudioMemo | null>(null);
   const [transcript, setTranscript] = useState('');
   const [reviewedBody, setReviewedBody] = useState('');
   const [reviewedTouched, setReviewedTouched] = useState(false);
@@ -123,8 +121,9 @@ export default function VoiceCapture() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasTranscript = Boolean(transcript.trim());
+  const hasAudio = Boolean(recordedAudio);
   const hasReviewedBody = Boolean(reviewedBody.trim());
-  const canAccept = hasTranscript && hasReviewedBody && isDateInput(eventDate) && !saving;
+  const canAccept = (hasTranscript || hasAudio) && hasReviewedBody && isDateInput(eventDate) && !saving;
 
   function onTranscriptChange(next: string) {
     setTranscript(next);
@@ -143,6 +142,7 @@ export default function VoiceCapture() {
     setReviewedBody('');
     setReviewedTouched(false);
     setTitle('Voice transcript reviewed');
+    setRecordedAudio(null);
     setIsFlagged(false);
     setFlagSeverity('low');
     setError(null);
@@ -150,7 +150,7 @@ export default function VoiceCapture() {
 
   async function acceptDraft() {
     if (!canAccept) {
-      setError('Paste a transcript, review the body, and use a valid date before accepting.');
+      setError('Add a recording or transcript, review the body, and use a valid date before accepting.');
       return;
     }
 
@@ -158,7 +158,7 @@ export default function VoiceCapture() {
     setError(null);
 
     try {
-      await createEntry({
+      const result = await createEntry({
         entryType: 'journal',
         eventDate: eventDate.trim(),
         eventTime: eventTime.trim() || null,
@@ -173,6 +173,19 @@ export default function VoiceCapture() {
         captureSource: 'voice_placeholder',
         forceLocalOnly: true,
       });
+      if (recordedAudio) {
+        await createLocalAttachment({
+          entryId: result.entry.id,
+          kind: 'voice_memo',
+          filename: recordedAudio.filename,
+          mimeType: recordedAudio.mimeType,
+          fileSizeBytes: recordedAudio.fileSizeBytes,
+          durationMs: recordedAudio.durationMs,
+          localUri: recordedAudio.uri,
+          localReference: recordedAudio.localReference,
+          sourceLabel: 'Voice Capture local recording',
+        });
+      }
       router.replace('/timeline' as never);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save this transcript draft.');
@@ -200,7 +213,7 @@ export default function VoiceCapture() {
             size="md"
             full
             icon="x"
-            disabled={!hasTranscript || saving}
+            disabled={!(hasTranscript || hasAudio) || saving}
             onPress={rejectDraft}
           >
             Reject draft
@@ -225,38 +238,25 @@ export default function VoiceCapture() {
           Voice capture
         </Display>
         <Text style={styles.subtitle}>
-          Prepare a transcript-based journal entry. {fbLegalCopy.legalInformationNotAdvice}
+          Record a local voice memo or prepare a manual transcript-based journal entry. {fbLegalCopy.legalInformationNotAdvice}
         </Text>
       </View>
 
       <InfoCallout title="Case record" tone="ink">
-        {home.activeCase?.title || 'Current case'} · No audio is recorded, uploaded, or analyzed in
-        this placeholder.
+        {home.activeCase?.title || 'Current case'} · Audio remains local. No upload,
+        transcription, AI, or remote write is performed.
       </InfoCallout>
 
       <SoftCard p={16} style={styles.section}>
-        <View style={styles.sectionTitleRow}>
-          <View style={styles.sectionTitleLeft}>
-            <Icon name="mic" size={16} color={fbColors.ink} />
-            <Text style={styles.sectionTitle}>Voice memo placeholder</Text>
-          </View>
-          <Text style={styles.timer}>00:00</Text>
-        </View>
-        <WaveformPlaceholder />
-        <Text style={styles.sectionBody}>
-          Record voice memo coming later. This screen only prepares the review workflow.
-        </Text>
-        <View style={styles.actionStack}>
-          <PillButton tone="ghost" size="md" icon="mic" disabled full>
-            Record voice memo coming later
-          </PillButton>
-          <PillButton tone="ghost" size="md" icon="clock" disabled full>
-            Pause coming later
-          </PillButton>
-          <PillButton tone="ghost" size="md" icon="clock" disabled full>
-            Resume coming later
-          </PillButton>
-        </View>
+        <LocalAudioRecorder
+          title="Voice memo source"
+          body="Record the source audio for this draft. The audio can be attached when you accept the reviewed entry. Manual transcript remains separate."
+          saveLabel="Use recording with draft"
+          savedLabel="Voice memo will attach when this draft is accepted."
+          onSave={(memo) => {
+            setRecordedAudio(memo);
+          }}
+        />
       </SoftCard>
 
       <SoftCard p={16} style={styles.section}>
@@ -330,8 +330,8 @@ export default function VoiceCapture() {
       </SoftCard>
 
       <InfoCallout title="Source separation" tone="ink">
-        Raw transcript, reviewed body, and future AI-structured interpretation stay separate. AI
-        interpretation is not generated in this PR.
+        Raw audio, manual transcript, reviewed body, and future AI-structured interpretation stay
+        separate. Transcription and AI interpretation are not generated in this PR.
       </InfoCallout>
     </CaseScreen>
   );
@@ -385,35 +385,6 @@ const styles = StyleSheet.create({
     fontSize: fbType.body,
     lineHeight: 21,
     fontFamily: fbFonts.sansRegular,
-  },
-  timer: {
-    minWidth: 64,
-    textAlign: 'right',
-    color: fbColors.ink,
-    fontSize: fbType.body,
-    fontFamily: fbFonts.monoMedium,
-    fontWeight: fbWeights.medium,
-  },
-  waveform: {
-    minHeight: 78,
-    borderRadius: fbRadii.md,
-    borderWidth: fbBorder.hairline,
-    borderColor: fbColors.ruleSoft,
-    backgroundColor: fbColors.paperDeep,
-    paddingHorizontal: fbSpacing.x3,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  waveformBar: {
-    flex: 1,
-    maxWidth: 12,
-    borderRadius: fbRadii.pill,
-    backgroundColor: fbColors.inkFaint,
-  },
-  actionStack: {
-    gap: fbSpacing.x2,
   },
   field: {
     gap: fbSpacing.x2,

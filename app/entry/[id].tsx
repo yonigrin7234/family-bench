@@ -4,6 +4,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
+  LocalAudioRecorder,
+  type RecordedAudioMemo,
+} from '@/components/case-intelligence/LocalAudioRecorder';
+import {
   Chip,
   Display,
   Icon,
@@ -138,6 +142,14 @@ function formatFileSize(bytes?: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatDuration(ms?: number | null) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return 'Not available';
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 function filenameFromUri(uri: string, fallback: string) {
   const cleaned = uri.split('?')[0]?.split('#')[0] ?? '';
   const name = cleaned.split('/').filter(Boolean).pop();
@@ -239,6 +251,7 @@ function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
   const localUri = stringMeta(exif.local_uri);
   const localReference = stringMeta(exif.local_reference);
   const selectedAt = stringMeta(exif.selected_at);
+  const durationMs = numberMeta(exif.duration_ms);
   const isLocalSelection = stringMeta(exif.selection_source) === 'local_picker';
   const canPreviewImage = Boolean(localUri && attachment.mime_type?.startsWith('image/'));
 
@@ -290,6 +303,7 @@ function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
               : formatFileSize(attachment.file_size_bytes)
           }
         />
+        <DetailRow label="Duration" value={durationMs === null ? null : formatDuration(durationMs)} />
         <DetailRow label="Local reference" value={localReference || localUri} />
         <DetailRow label="Storage bucket" value={attachment.storage_bucket || 'Not assigned'} />
         <DetailRow label="Storage path" value={attachment.storage_path} />
@@ -396,6 +410,23 @@ export default function EntryDetail() {
     } finally {
       setPickingAttachment(null);
     }
+  }
+
+  async function saveEntryVoiceMemo(memo: RecordedAudioMemo) {
+    if (!entry) return;
+
+    const result = await createLocalAttachment({
+      entryId: entry.id,
+      kind: 'voice_memo',
+      filename: memo.filename,
+      mimeType: memo.mimeType,
+      fileSizeBytes: memo.fileSizeBytes,
+      durationMs: memo.durationMs,
+      localUri: memo.uri,
+      localReference: memo.localReference,
+      sourceLabel: 'Local voice memo recording',
+    });
+    setAttachmentNotice(result.warning);
   }
 
   if (!entry) {
@@ -566,6 +597,13 @@ export default function EntryDetail() {
           Original evidence stays local. Cloud uploads, OCR, AI extraction, and derived files are
           not created in this PR.
         </Text>
+        <LocalAudioRecorder
+          title="Record voice memo"
+          body="Record a local audio source for this entry. It is saved as attachment metadata only; transcription and upload come later."
+          saveLabel="Attach voice memo to entry"
+          savedLabel="Voice memo metadata attached to this entry."
+          onSave={saveEntryVoiceMemo}
+        />
         <View style={styles.attachmentActionGrid}>
           <PillButton
             tone="primary"
@@ -623,7 +661,6 @@ export default function EntryDetail() {
         <View style={styles.attachmentActionGrid}>
           <ComingLaterButton icon="upload">Upload to storage</ComingLaterButton>
           <ComingLaterButton icon="camera">Capture photo</ComingLaterButton>
-          <ComingLaterButton icon="mic">Record voice memo</ComingLaterButton>
         </View>
       </SoftCard>
 

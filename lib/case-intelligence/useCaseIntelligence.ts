@@ -166,6 +166,7 @@ export type CreateLocalAttachmentInput = {
   filename: string;
   mimeType?: string | null;
   fileSizeBytes?: number | null;
+  durationMs?: number | null;
   localUri?: string | null;
   localReference?: string | null;
   sourceLabel?: string | null;
@@ -547,6 +548,10 @@ function buildLocalAttachment(
       derived_previews_pending: true,
       file_size_placeholder: input.fileSizeBytes == null,
       hash_status: 'placeholder_not_content_hash',
+      duration_ms:
+        typeof input.durationMs === 'number' && Number.isFinite(input.durationMs)
+          ? input.durationMs
+          : null,
       local_uri: nullIfBlank(input.localUri),
       local_reference: nullIfBlank(input.localReference),
       selected_at: now,
