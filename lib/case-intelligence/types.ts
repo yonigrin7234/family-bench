@@ -46,6 +46,33 @@ export type ReportPreviewState = {
   flagFilter: ReportPreviewFlagFilter;
 };
 
+export type FilingPackageStatus = 'draft' | 'in_progress' | 'ready_for_review';
+
+export type FilingChecklistKey = 'forms' | 'exhibits' | 'declarations' | 'service';
+
+export type FilingChecklistState = Record<FilingChecklistKey, boolean>;
+
+export type FilingPackageLocalState = {
+  packageId: string;
+  linkedEntryIds: string[];
+  linkedAttachmentIds: string[];
+  linkedReportTypes: ReportPreviewType[];
+  checklist: FilingChecklistState;
+  exhibitGroups: Array<{
+    id: string;
+    label: string;
+    entryIds: string[];
+    attachmentIds: string[];
+  }>;
+  updatedAt: string;
+};
+
+export type FilingBuilderState = {
+  selectedPackageId: string | null;
+  packageStates: Record<string, FilingPackageLocalState>;
+  updatedAt: string | null;
+};
+
 export type AdvisorMessageRole = 'advisor' | 'user';
 
 export type AdvisorMessage = {

@@ -1,0 +1,840 @@
+import { useEffect, useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
+import { EntryCard } from '@/components/case-intelligence/EntryCard';
+import {
+  Chip,
+  Display,
+  Icon,
+  InfoCallout,
+  PillButton,
+  ProgressBar,
+  Rule,
+  Segment,
+  SoftCard,
+  fbAlpha,
+  fbBorder,
+  fbColors,
+  fbFonts,
+  fbLegalCopy,
+  fbRadii,
+  fbSpacing,
+  fbTouch,
+  fbType,
+  fbWeights,
+  type ChipTone,
+  type IconName,
+} from '@/components/ui/fb';
+import {
+  formatDateLabel,
+  getEntryTypeOption,
+  useFilingBuilder,
+  type EvidenceAttachment,
+  type FilingChecklistKey,
+  type FilingPackage,
+  type FilingPackageLocalState,
+  type FilingPackageStatus,
+  type ReportPreviewType,
+} from '@/lib/case-intelligence';
+
+type FilingTypeOption = {
+  value: string;
+  label: string;
+  tone: ChipTone;
+};
+
+const FILING_TYPES: FilingTypeOption[] = [
+  { value: 'request_for_order', label: 'Request for order', tone: 'ink' },
+  { value: 'response', label: 'Response', tone: 'sand' },
+  { value: 'custody_visitation', label: 'Custody / visitation', tone: 'forest' },
+  { value: 'compliance_packet', label: 'Compliance packet', tone: 'amber' },
+  { value: 'expense_support', label: 'Expense support', tone: 'ox' },
+];
+
+const REPORT_OPTIONS: Array<{ value: ReportPreviewType; label: string; icon: IconName }> = [
+  { value: 'timeline', label: 'Timeline summary', icon: 'clock' },
+  { value: 'flagged', label: 'Flagged entries report', icon: 'flag' },
+  { value: 'communication', label: 'Communication summary', icon: 'chat' },
+  { value: 'medical', label: 'Medical summary', icon: 'shield' },
+  { value: 'custodyExchange', label: 'Custody/exchange summary placeholder', icon: 'home' },
+];
+
+const CHECKLIST_ITEMS: Array<{ value: FilingChecklistKey; label: string; body: string }> = [
+  {
+    value: 'forms',
+    label: 'Forms',
+    body: 'Placeholder for required court forms and local form rules.',
+  },
+  {
+    value: 'exhibits',
+    label: 'Exhibits',
+    body: 'Placeholder for source entries, attachments, and exhibit labels.',
+  },
+  {
+    value: 'declarations',
+    label: 'Declarations',
+    body: 'Placeholder for declaration drafting. AI drafting is not enabled.',
+  },
+  {
+    value: 'service',
+    label: 'Service',
+    body: 'Placeholder for service tracking and proof of service.',
+  },
+];
+
+function getParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function statusLabel(status: string) {
+  if (status === 'in_progress') return 'In progress';
+  if (status === 'ready_for_review') return 'Ready for review';
+  return 'Draft';
+}
+
+function statusTone(status: string): ChipTone {
+  if (status === 'ready_for_review') return 'forest';
+  if (status === 'in_progress') return 'amber';
+  return 'mute';
+}
+
+function filingTypeLabel(value: string) {
+  return FILING_TYPES.find((option) => option.value === value)?.label ?? value.replace(/_/g, ' ');
+}
+
+function titleForEntry(entry: { title: string | null; entry_type: string }) {
+  return entry.title || getEntryTypeOption(entry.entry_type).defaultTitle;
+}
+
+function attachmentKind(attachment: EvidenceAttachment) {
+  if (attachment.file_type === 'voice_memo' || attachment.mime_type?.startsWith('audio/')) return 'Voice memo';
+  if (attachment.file_type === 'document') return 'Document';
+  if (attachment.file_type === 'screenshot') return 'Screenshot';
+  if (attachment.mime_type?.startsWith('image/')) return 'Photo';
+  return attachment.file_type || 'Attachment';
+}
+
+function attachmentIcon(attachment: EvidenceAttachment): IconName {
+  if (attachment.file_type === 'voice_memo' || attachment.mime_type?.startsWith('audio/')) return 'mic';
+  if (attachment.file_type === 'document') return 'doc';
+  return 'paperclip';
+}
+
+function attachmentCountForEntry(attachments: EvidenceAttachment[], entryId: string) {
+  return attachments.filter((attachment) => attachment.entry_id === entryId).length;
+}
+
+function linkedCount(state: FilingPackageLocalState | null) {
+  if (!state) return 0;
+  return state.linkedEntryIds.length + state.linkedAttachmentIds.length + state.linkedReportTypes.length;
+}
+
+function PackageCard({
+  filingPackage,
+  packageState,
+  active,
+  onPress,
+}: {
+  filingPackage: FilingPackage;
+  packageState: FilingPackageLocalState | null;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`Open filing package: ${filingPackage.title}`}
+      onPress={onPress}
+      style={({ pressed }) => [pressed && styles.pressed]}
+    >
+      <SoftCard p={14} style={[styles.packageCard, active && styles.packageCardActive]}>
+        <View style={styles.packageHeader}>
+          <View style={styles.packageTitleCopy}>
+            <Text style={styles.packageTitle}>{filingPackage.title}</Text>
+            <Text style={styles.packageMeta}>
+              {filingTypeLabel(filingPackage.filing_type)} · Due date placeholder:{' '}
+              {filingPackage.due_date || 'not set'}
+            </Text>
+          </View>
+          <Chip tone={statusTone(filingPackage.status)} outline={false}>
+            {statusLabel(filingPackage.status)}
+          </Chip>
+        </View>
+        <ProgressBar pct={filingPackage.completion_percent} label="Checklist progress" />
+        <Text style={styles.packageMeta}>{linkedCount(packageState)} linked source items</Text>
+      </SoftCard>
+    </Pressable>
+  );
+}
+
+function ChecklistRow({
+  item,
+  completed,
+  onToggle,
+}: {
+  item: (typeof CHECKLIST_ITEMS)[number];
+  completed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: completed }}
+      accessibilityLabel={`${item.label} checklist item`}
+      onPress={onToggle}
+      style={({ pressed }) => [styles.checklistRow, pressed && styles.pressed]}
+    >
+      <View style={[styles.checkbox, completed && styles.checkboxActive]}>
+        {completed ? <Icon name="check" size={14} color={fbColors.paper} /> : null}
+      </View>
+      <View style={styles.checklistCopy}>
+        <Text style={styles.rowTitle}>{item.label}</Text>
+        <Text style={styles.rowBody}>{item.body}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function ReportLinkRow({
+  report,
+  linked,
+  onToggle,
+}: {
+  report: (typeof REPORT_OPTIONS)[number];
+  linked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <View style={styles.linkRow}>
+      <View style={styles.rowIcon}>
+        <Icon name={report.icon} size={15} color={fbColors.ink} />
+      </View>
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{report.label}</Text>
+        <Text style={styles.rowBody}>Report preview source. Final court PDF generation comes later.</Text>
+      </View>
+      <PillButton tone={linked ? 'soft' : 'primary'} size="sm" icon={linked ? 'check' : 'plus'} onPress={onToggle}>
+        {linked ? 'Linked' : 'Link'}
+      </PillButton>
+    </View>
+  );
+}
+
+function AttachmentLinkRow({
+  attachment,
+  linked,
+  onToggle,
+}: {
+  attachment: EvidenceAttachment;
+  linked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <View style={styles.linkRow}>
+      <View style={styles.rowIcon}>
+        <Icon name={attachmentIcon(attachment)} size={15} color={fbColors.ink} />
+      </View>
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{attachment.file_name}</Text>
+        <Text style={styles.rowBody}>{attachmentKind(attachment)} · Local metadata only</Text>
+      </View>
+      <PillButton tone={linked ? 'soft' : 'primary'} size="sm" icon={linked ? 'check' : 'plus'} onPress={onToggle}>
+        {linked ? 'Linked' : 'Link'}
+      </PillButton>
+    </View>
+  );
+}
+
+function ExhibitPlaceholders({ packageState }: { packageState: FilingPackageLocalState }) {
+  return (
+    <View style={styles.exhibitStack}>
+      {packageState.exhibitGroups.map((group) => (
+        <View key={group.id} style={styles.exhibitGroup}>
+          <View style={styles.exhibitHeader}>
+            <Text style={styles.rowTitle}>{group.label}</Text>
+            <Chip tone="sand" outline={false}>
+              Placeholder
+            </Chip>
+          </View>
+          <Text style={styles.rowBody}>
+            {group.entryIds.length} entries · {group.attachmentIds.length} attachments. Ordering controls are
+            reserved for a later filing-package pass.
+          </Text>
+          <View style={styles.actionRow}>
+            <PillButton tone="ghost" size="sm" icon="caret" disabled>
+              Move up coming later
+            </PillButton>
+            <PillButton tone="ghost" size="sm" icon="caret" disabled>
+              Move down coming later
+            </PillButton>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export default function Filings() {
+  const params = useLocalSearchParams();
+  const packageIdParam = getParam(params.packageId);
+  const {
+    activeCase,
+    filingPackages,
+    selectedPackage,
+    selectedPackageState,
+    filingBuilderState,
+    entries,
+    attachments,
+    filingEntryLinkCounts,
+    createFilingPackage,
+    selectFilingPackage,
+    updateFilingPackageStatus,
+    toggleFilingPackageEntry,
+    toggleFilingPackageAttachment,
+    toggleFilingPackageReport,
+    toggleFilingPackageChecklist,
+    loading,
+    persistence,
+  } = useFilingBuilder();
+  const [title, setTitle] = useState('');
+  const [filingType, setFilingType] = useState(FILING_TYPES[0].value);
+  const [dueDate, setDueDate] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (packageIdParam && filingPackages.some((filingPackage) => filingPackage.id === packageIdParam)) {
+      selectFilingPackage(packageIdParam);
+    }
+  }, [filingPackages, packageIdParam, selectFilingPackage]);
+
+  const linkedEntries = useMemo(() => {
+    if (!selectedPackageState) return [];
+    const linkedIds = new Set(selectedPackageState.linkedEntryIds);
+    return entries.filter((entry) => linkedIds.has(entry.id));
+  }, [entries, selectedPackageState]);
+
+  async function createPackage() {
+    if (creating) return;
+    setCreating(true);
+    setNotice(null);
+
+    try {
+      const result = await createFilingPackage({
+        title: title.trim() || `${filingTypeLabel(filingType)} package`,
+        filingType,
+        dueDate,
+        status: 'draft',
+      });
+      setTitle('');
+      setDueDate('');
+      setNotice(`${result.filingPackage.title} was saved locally. No remote write was made.`);
+      router.setParams({ packageId: result.filingPackage.id });
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to create the filing package locally.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <CaseScreen>
+      <View style={styles.header}>
+        <Display italic size={32} style={styles.title}>
+          Filing Builder
+        </Display>
+        <Text style={styles.subtitle}>
+          Group entries, attachments, and report previews into local filing-package structures.{' '}
+          {fbLegalCopy.legalInformationNotAdvice}
+        </Text>
+      </View>
+
+      <SoftCard p={16} style={styles.createCard}>
+        <View style={styles.sectionTitleRow}>
+          <View style={styles.sectionTitleLeft}>
+            <Icon name="folder" size={16} color={fbColors.ink} />
+            <Text style={styles.sectionTitle}>New filing package</Text>
+          </View>
+          <Chip tone={persistence.active ? 'forest' : 'amber'} outline={false}>
+            Local persistence {persistence.active ? 'active' : 'inactive'}
+          </Chip>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Title</Text>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Example: May hearing evidence packet"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.input}
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Filing type</Text>
+          <View style={styles.chipWrap}>
+            {FILING_TYPES.map((option) => (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: filingType === option.value }}
+                accessibilityLabel={`Filing type: ${option.label}`}
+                onPress={() => setFilingType(option.value)}
+                style={({ pressed }) => [
+                  styles.filterChip,
+                  filingType === option.value && styles.filterChipActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Chip tone={option.tone} outline={filingType !== option.value}>
+                  {option.label}
+                </Chip>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Due date placeholder</Text>
+          <TextInput
+            value={dueDate}
+            onChangeText={setDueDate}
+            placeholder="YYYY-MM-DD optional"
+            placeholderTextColor={fbColors.inkFaint}
+            autoCapitalize="none"
+            style={styles.input}
+          />
+        </View>
+
+        <PillButton tone="primary" size="lg" icon="plus" full disabled={creating} onPress={createPackage}>
+          {creating ? 'Saving locally' : 'Create filing package'}
+        </PillButton>
+        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      </SoftCard>
+
+      <View style={styles.resultsHeader}>
+        <Text style={styles.sectionLabel}>FILING PACKAGES</Text>
+        <Text style={styles.resultCount}>
+          {loading ? 'Loading' : `${filingPackages.length} packages`} · {activeCase?.title || 'Current case'}
+        </Text>
+      </View>
+
+      {filingPackages.length ? (
+        <View style={styles.packageStack}>
+          {filingPackages.map((filingPackage) => (
+            <PackageCard
+              key={filingPackage.id}
+              filingPackage={filingPackage}
+              packageState={filingBuilderState.packageStates[filingPackage.id] ?? null}
+              active={selectedPackage?.id === filingPackage.id}
+              onPress={() => {
+                selectFilingPackage(filingPackage.id);
+                router.setParams({ packageId: filingPackage.id });
+              }}
+            />
+          ))}
+        </View>
+      ) : (
+        <SoftCard p={18} style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No filing packages yet</Text>
+          <Text style={styles.emptyBody}>
+            Create a draft package to group local entries, evidence metadata, and report previews. No PDF or e-filing is generated.
+          </Text>
+        </SoftCard>
+      )}
+
+      {selectedPackage && selectedPackageState ? (
+        <View style={styles.detailStack}>
+          <SoftCard p={16} style={styles.detailCard}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionTitleLeft}>
+                <Icon name="scales" size={16} color={fbColors.ink} />
+                <Text style={styles.sectionTitle}>{selectedPackage.title}</Text>
+              </View>
+              <Chip tone={statusTone(selectedPackage.status)} outline={false}>
+                {statusLabel(selectedPackage.status)}
+              </Chip>
+            </View>
+            <Text style={styles.sectionBody}>
+              {filingTypeLabel(selectedPackage.filing_type)} · Due date placeholder:{' '}
+              {selectedPackage.due_date || 'not set'}
+            </Text>
+            <Segment<FilingPackageStatus>
+              items={[
+                { v: 'draft', label: 'Draft' },
+                { v: 'in_progress', label: 'In progress' },
+                { v: 'ready_for_review', label: 'Ready for review' },
+              ]}
+              value={selectedPackage.status as FilingPackageStatus}
+              onChange={(status) => updateFilingPackageStatus(selectedPackage.id, status)}
+            />
+            <ProgressBar pct={selectedPackage.completion_percent} label="Checklist progress" />
+          </SoftCard>
+
+          <SoftCard p={16} style={styles.detailCard}>
+            <Text style={styles.sectionLabel}>CHECKLIST PLACEHOLDER</Text>
+            {CHECKLIST_ITEMS.map((item) => (
+              <ChecklistRow
+                key={item.value}
+                item={item}
+                completed={selectedPackageState.checklist[item.value]}
+                onToggle={() => toggleFilingPackageChecklist(selectedPackage.id, item.value)}
+              />
+            ))}
+          </SoftCard>
+
+          <SoftCard p={16} style={styles.detailCard}>
+            <Text style={styles.sectionLabel}>LINK ENTRIES</Text>
+            <Text style={styles.sectionBody}>
+              Select factual source entries for this package. Private notes stay separate from court-ready material.
+            </Text>
+            <View style={styles.entryStack}>
+              {entries.map((entry) => {
+                const linked = selectedPackageState.linkedEntryIds.includes(entry.id);
+                return (
+                  <View key={entry.id} style={styles.entryLinkBlock}>
+                    <EntryCard
+                      entry={entry}
+                      attachmentCount={attachmentCountForEntry(attachments, entry.id)}
+                      filingLinkCount={filingEntryLinkCounts[entry.id] ?? 0}
+                      compact
+                      onPress={() => router.push({ pathname: '/entry/[id]', params: { id: entry.id } } as never)}
+                    />
+                    <PillButton
+                      tone={linked ? 'soft' : 'primary'}
+                      size="sm"
+                      icon={linked ? 'check' : 'plus'}
+                      onPress={() => toggleFilingPackageEntry(selectedPackage.id, entry.id)}
+                    >
+                      {linked ? 'Linked to filing' : 'Link entry'}
+                    </PillButton>
+                  </View>
+                );
+              })}
+            </View>
+          </SoftCard>
+
+          <SoftCard p={16} style={styles.detailCard}>
+            <Text style={styles.sectionLabel}>LINK REPORT PREVIEWS</Text>
+            {REPORT_OPTIONS.map((report) => (
+              <ReportLinkRow
+                key={report.value}
+                report={report}
+                linked={selectedPackageState.linkedReportTypes.includes(report.value)}
+                onToggle={() => toggleFilingPackageReport(selectedPackage.id, report.value)}
+              />
+            ))}
+          </SoftCard>
+
+          <SoftCard p={16} style={styles.detailCard}>
+            <Text style={styles.sectionLabel}>LINK ATTACHMENTS</Text>
+            <Text style={styles.sectionBody}>
+              Attachment links use local metadata only. Uploads and storage sync are not enabled.
+            </Text>
+            {attachments.length ? (
+              attachments.map((attachment) => (
+                <AttachmentLinkRow
+                  key={attachment.id}
+                  attachment={attachment}
+                  linked={selectedPackageState.linkedAttachmentIds.includes(attachment.id)}
+                  onToggle={() => toggleFilingPackageAttachment(selectedPackage.id, attachment.id)}
+                />
+              ))
+            ) : (
+              <Text style={styles.emptyBody}>No local attachment metadata is available yet.</Text>
+            )}
+          </SoftCard>
+
+          <SoftCard p={16} style={styles.detailCard}>
+            <Text style={styles.sectionLabel}>EXHIBIT GROUPING PLACEHOLDERS</Text>
+            <ExhibitPlaceholders packageState={selectedPackageState} />
+            {linkedEntries.length ? (
+              <Text style={styles.sectionBody}>
+                Current linked entries begin with {titleForEntry(linkedEntries[0])}. Exhibit labels and reordering are placeholders.
+              </Text>
+            ) : null}
+          </SoftCard>
+
+          <InfoCallout title="Filing limits" tone="ink">
+            This builder groups local records only. It does not draft declarations with AI, generate final court PDFs, e-file, upload evidence, or write to Supabase.
+          </InfoCallout>
+
+          <View style={styles.actionRow}>
+            <PillButton tone="ghost" size="md" icon="doc" disabled>
+              Final court PDF coming later
+            </PillButton>
+            <PillButton tone="ghost" size="md" icon="upload" disabled>
+              E-filing coming later
+            </PillButton>
+          </View>
+        </View>
+      ) : null}
+
+      <Rule style={styles.bottomRule} />
+      <Text style={styles.footerNote}>
+        Filing Builder is local-first and factual. It does not provide legal advice or determine which filing is appropriate.
+      </Text>
+    </CaseScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    gap: fbSpacing.x2,
+  },
+  title: {
+    lineHeight: 34,
+  },
+  subtitle: {
+    color: fbColors.inkMute,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  createCard: {
+    marginTop: fbSpacing.x5,
+    gap: fbSpacing.x4,
+  },
+  sectionTitleRow: {
+    minHeight: fbTouch.min,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  sectionTitleLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+  },
+  sectionTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  field: {
+    gap: fbSpacing.x2,
+  },
+  label: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.84,
+    textTransform: 'uppercase',
+  },
+  input: {
+    minHeight: fbTouch.min,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+    paddingHorizontal: fbSpacing.x3,
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansRegular,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: fbSpacing.x2,
+  },
+  filterChip: {
+    minHeight: fbTouch.min,
+    justifyContent: 'center',
+    borderRadius: fbRadii.pill,
+  },
+  filterChipActive: {
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.inkFaint,
+  },
+  notice: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  resultsHeader: {
+    marginTop: fbSpacing.x5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  sectionLabel: {
+    color: fbColors.ox,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 1.05,
+  },
+  resultCount: {
+    flexShrink: 1,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    textAlign: 'right',
+    fontFamily: fbFonts.sansRegular,
+  },
+  packageStack: {
+    marginTop: fbSpacing.x3,
+    gap: fbSpacing.x3,
+  },
+  packageCard: {
+    gap: fbSpacing.x3,
+  },
+  packageCardActive: {
+    borderColor: fbColors.ox,
+  },
+  packageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  packageTitleCopy: {
+    flex: 1,
+  },
+  packageTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  packageMeta: {
+    marginTop: fbSpacing.x1,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  emptyCard: {
+    marginTop: fbSpacing.x3,
+  },
+  emptyTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  emptyBody: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  detailStack: {
+    marginTop: fbSpacing.x5,
+    gap: fbSpacing.x4,
+  },
+  detailCard: {
+    gap: fbSpacing.x4,
+  },
+  sectionBody: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  checklistRow: {
+    minHeight: fbTouch.min,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x3,
+    paddingVertical: fbSpacing.x2,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: fbRadii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: fbBorder.selected,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+  },
+  checkboxActive: {
+    backgroundColor: fbColors.ink,
+    borderColor: fbColors.ink,
+  },
+  checklistCopy: {
+    flex: 1,
+  },
+  rowTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  rowBody: {
+    marginTop: 2,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  linkRow: {
+    minHeight: fbTouch.min,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x3,
+    paddingVertical: fbSpacing.x2,
+  },
+  rowIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fbColors.paperDeep,
+  },
+  rowCopy: {
+    flex: 1,
+  },
+  entryStack: {
+    gap: fbSpacing.x3,
+  },
+  entryLinkBlock: {
+    gap: fbSpacing.x2,
+  },
+  exhibitStack: {
+    gap: fbSpacing.x3,
+  },
+  exhibitGroup: {
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.paperDeep,
+    gap: fbSpacing.x2,
+  },
+  exhibitHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: fbSpacing.x2,
+  },
+  bottomRule: {
+    marginTop: fbSpacing.x5,
+  },
+  footerNote: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  pressed: {
+    opacity: fbAlpha.pressedSubtle,
+  },
+});

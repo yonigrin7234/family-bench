@@ -42,6 +42,7 @@ type EvidenceRow = {
   entry: Entry;
   attachments: EvidenceAttachment[];
   attachmentCount: number;
+  filingLinkCount: number;
 };
 
 const ATTACHMENT_FILTERS: Array<{
@@ -363,6 +364,7 @@ function EvidenceResult({ row }: { row: EvidenceRow }) {
       <EntryCard
         entry={row.entry}
         attachmentCount={row.attachmentCount}
+        filingLinkCount={row.filingLinkCount}
         onPress={() => openEntry(row.entry.id)}
       />
       {row.attachments.length ? (
@@ -388,7 +390,15 @@ function EvidenceResult({ row }: { row: EvidenceRow }) {
 }
 
 export default function Evidence() {
-  const { activeCase, entries, attachments, children, source, loading } = useCaseEvidence();
+  const {
+    activeCase,
+    entries,
+    attachments,
+    children,
+    filingEntryLinkCounts,
+    source,
+    loading,
+  } = useCaseEvidence();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<EntryTypeFilterValue>('all');
   const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
@@ -430,10 +440,21 @@ export default function Evidence() {
         entry,
         attachments: visibleAttachments,
         attachmentCount: attachmentsByEntryId[entry.id]?.length ?? 0,
+        filingLinkCount: filingEntryLinkCounts[entry.id] ?? 0,
       }));
 
     return sortRows(nextRows, sortMode);
-  }, [attachmentFilter, attachmentsByEntryId, childFilter, entries, flagFilter, query, sortMode, typeFilter]);
+  }, [
+    attachmentFilter,
+    attachmentsByEntryId,
+    childFilter,
+    entries,
+    filingEntryLinkCounts,
+    flagFilter,
+    query,
+    sortMode,
+    typeFilter,
+  ]);
 
   const visibleAttachmentCount = rows.reduce((sum, row) => sum + row.attachments.length, 0);
   const voiceMemoCount = rows.reduce(

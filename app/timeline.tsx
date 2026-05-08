@@ -67,7 +67,8 @@ function TypeFilterChip({
 }
 
 export default function Timeline() {
-  const { snapshot, entries, activeCase, source, loading } = useCaseIntelligenceTimeline();
+  const { snapshot, entries, activeCase, source, loading, filingEntryLinkCounts } =
+    useCaseIntelligenceTimeline();
   const [typeFilter, setTypeFilter] = useState<EntryTypeFilterValue>('all');
   const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
 
@@ -151,6 +152,7 @@ export default function Timeline() {
                   (attachment) => attachment.entry_id === entry.id && !attachment.deleted_at,
                 ).length
               }
+              filingLinkCount={filingEntryLinkCounts[entry.id] ?? 0}
               onPress={() => openEntry(entry.id)}
             />
           ))}

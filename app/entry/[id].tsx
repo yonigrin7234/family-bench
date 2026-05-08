@@ -321,7 +321,7 @@ export default function EntryDetail() {
   const updateEntryReview = useUpdateEntryReview();
   const createPlaceholderAttachment = useCreatePlaceholderAttachment();
   const createLocalAttachment = useCreateLocalAttachment();
-  const { entry, child, attachments, loading } = useEntryDetail(entryId);
+  const { entry, child, attachments, filingLinkCount, loading } = useEntryDetail(entryId);
   const [mode, setMode] = useState<'read' | 'edit'>('read');
   const [bodyDraft, setBodyDraft] = useState('');
   const [visibility, setVisibility] = useState<ReviewVisibility>('court_ready');
@@ -482,6 +482,11 @@ export default function EntryDetail() {
           {entry.is_flagged ? (
             <Chip tone="ox" outline={false}>
               Flagged
+            </Chip>
+          ) : null}
+          {filingLinkCount > 0 ? (
+            <Chip tone="forest" outline={false}>
+              Linked to filing
             </Chip>
           ) : null}
         </View>

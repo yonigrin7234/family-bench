@@ -7,6 +7,8 @@ import { hashString } from '@/lib/utils/hash';
 import { getEntryTypeOption, type EntryTypeValue } from './entryTypes';
 import {
   DEFAULT_ADVISOR_STATE,
+  DEFAULT_FILING_BUILDER_STATE,
+  DEFAULT_FILING_CHECKLIST_STATE,
   DEFAULT_REPORT_PREVIEW_STATE,
   createLocalRecordMeta,
   getLocalPersistenceAdapter,
@@ -35,11 +37,18 @@ import type {
   Entry,
   EvidenceAttachment,
   FamilyBenchCase,
+  FilingBuilderState,
+  FilingChecklistKey,
+  FilingChecklistState,
+  FilingPackage,
+  FilingPackageLocalState,
+  FilingPackageStatus,
   HomeCaseIntelligence,
   KeyDate,
   LocalPersistenceDiagnostics,
   LocalRecordMeta,
   Person,
+  ReportPreviewType,
   ReportPreviewState,
   AttachmentKind,
 } from './types';
@@ -206,11 +215,24 @@ type SaveCaseSetupResult = {
   source: 'local';
 };
 
+export type CreateFilingPackageInput = {
+  title: string;
+  filingType: string;
+  status?: FilingPackageStatus;
+  dueDate?: string | null;
+};
+
+type SaveFilingPackageResult = {
+  filingPackage: FilingPackage;
+  source: 'local';
+};
+
 type CaseIntelligenceState = {
   snapshot: CaseIntelligenceSnapshot;
   source: CaseIntelligenceSource;
   reportPreviewState: ReportPreviewState;
   advisorState: AdvisorConversationState;
+  filingBuilderState: FilingBuilderState;
   localRecords: Record<string, LocalRecordMeta>;
   persistence: LocalPersistenceDiagnostics;
   loading: boolean;
@@ -225,6 +247,13 @@ type CaseIntelligenceState = {
     input: CreatePlaceholderAttachmentInput,
   ) => Promise<SaveAttachmentResult>;
   createLocalAttachment: (input: CreateLocalAttachmentInput) => Promise<SaveAttachmentResult>;
+  createFilingPackage: (input: CreateFilingPackageInput) => Promise<SaveFilingPackageResult>;
+  selectFilingPackage: (packageId: string | null) => void;
+  updateFilingPackageStatus: (packageId: string, status: FilingPackageStatus) => void;
+  toggleFilingPackageEntry: (packageId: string, entryId: string) => void;
+  toggleFilingPackageAttachment: (packageId: string, attachmentId: string) => void;
+  toggleFilingPackageReport: (packageId: string, reportType: ReportPreviewType) => void;
+  toggleFilingPackageChecklist: (packageId: string, item: FilingChecklistKey) => void;
   sendAdvisorMessage: (input: SendAdvisorMessageInput) => void;
   setReportPreviewState: (patch: Partial<ReportPreviewState>) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
@@ -851,6 +880,146 @@ function buildCaseSetupSnapshot(
   };
 }
 
+function normalizeFilingStatus(status?: string | null): FilingPackageStatus {
+  if (status === 'in_progress' || status === 'ready_for_review') return status;
+  return 'draft';
+}
+
+function filingStatusLabel(status: FilingPackageStatus) {
+  if (status === 'in_progress') return 'In progress';
+  if (status === 'ready_for_review') return 'Ready for review';
+  return 'Draft';
+}
+
+function calculateChecklistProgress(checklist: FilingChecklistState) {
+  const values = Object.values(checklist);
+  const completed = values.filter(Boolean).length;
+  return Math.round((completed / values.length) * 100);
+}
+
+function createDefaultFilingPackageState(
+  packageId: string,
+  now = new Date().toISOString(),
+): FilingPackageLocalState {
+  return {
+    packageId,
+    linkedEntryIds: [],
+    linkedAttachmentIds: [],
+    linkedReportTypes: [],
+    checklist: { ...DEFAULT_FILING_CHECKLIST_STATE },
+    exhibitGroups: [
+      {
+        id: `${packageId}-exhibit-a`,
+        label: 'Exhibit group A placeholder',
+        entryIds: [],
+        attachmentIds: [],
+      },
+      {
+        id: `${packageId}-exhibit-b`,
+        label: 'Exhibit group B placeholder',
+        entryIds: [],
+        attachmentIds: [],
+      },
+    ],
+    updatedAt: now,
+  };
+}
+
+function syncExhibitGroups(localState: FilingPackageLocalState): FilingPackageLocalState {
+  const [firstGroup, secondGroup, ...rest] =
+    localState.exhibitGroups.length >= 2
+      ? localState.exhibitGroups
+      : createDefaultFilingPackageState(localState.packageId, localState.updatedAt).exhibitGroups;
+
+  return {
+    ...localState,
+    exhibitGroups: [
+      {
+        ...firstGroup,
+        entryIds: localState.linkedEntryIds,
+        attachmentIds: [],
+      },
+      {
+        ...secondGroup,
+        entryIds: [],
+        attachmentIds: localState.linkedAttachmentIds,
+      },
+      ...rest,
+    ],
+  };
+}
+
+function ensureFilingPackageState(
+  filingBuilderState: FilingBuilderState,
+  packageId: string,
+  now = new Date().toISOString(),
+) {
+  return filingBuilderState.packageStates[packageId] ?? createDefaultFilingPackageState(packageId, now);
+}
+
+function updateFilingBuilderPackageState(
+  filingBuilderState: FilingBuilderState,
+  packageId: string,
+  updater: (state: FilingPackageLocalState) => FilingPackageLocalState,
+): FilingBuilderState {
+  const now = new Date().toISOString();
+  const current = ensureFilingPackageState(filingBuilderState, packageId, now);
+  const nextPackageState = syncExhibitGroups({
+    ...updater(current),
+    packageId,
+    updatedAt: now,
+  });
+
+  return {
+    selectedPackageId: packageId,
+    packageStates: {
+      ...filingBuilderState.packageStates,
+      [packageId]: nextPackageState,
+    },
+    updatedAt: now,
+  };
+}
+
+function toggleString(values: string[], value: string) {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
+
+function buildFilingPackage(
+  input: CreateFilingPackageInput,
+  snapshot: CaseIntelligenceSnapshot,
+  userId: string,
+): { filingPackage: FilingPackage; localState: FilingPackageLocalState } {
+  const activeCase = getActiveCase(snapshot);
+  if (!activeCase) {
+    throw new Error('Set up a case before creating a filing package.');
+  }
+
+  const now = new Date().toISOString();
+  const id = `local-filing-${Crypto.randomUUID()}`;
+  const status = normalizeFilingStatus(input.status);
+  const title = nullIfBlank(input.title) ?? `${filingStatusLabel(status)} filing package`;
+  const localState = createDefaultFilingPackageState(id, now);
+
+  return {
+    filingPackage: {
+      id,
+      user_id: userId,
+      case_id: activeCase.id,
+      title,
+      filing_type: nullIfBlank(input.filingType) ?? 'general_case_packet',
+      status,
+      due_date: normalizeDate(input.dueDate),
+      completion_percent: calculateChecklistProgress(localState.checklist),
+      court_ready_summary:
+        'Local filing package foundation. No AI drafting, e-filing, remote write, or final court PDF has been generated.',
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    },
+    localState,
+  };
+}
+
 function buildStaticAdvisorResponse(input: SendAdvisorMessageInput) {
   const normalized = input.prompt.toLowerCase();
   const hearing = input.upcomingHearingLabel
@@ -963,6 +1132,38 @@ function appendAttachment(
       attachment,
       ...snapshot.evidenceAttachments.filter((existing) => existing.id !== attachment.id),
     ],
+  };
+}
+
+function appendFilingPackage(
+  snapshot: CaseIntelligenceSnapshot,
+  filingPackage: FilingPackage,
+): CaseIntelligenceSnapshot {
+  return {
+    ...snapshot,
+    filingPackages: [
+      filingPackage,
+      ...snapshot.filingPackages.filter((existing) => existing.id !== filingPackage.id),
+    ],
+  };
+}
+
+function updateFilingPackageRow(
+  snapshot: CaseIntelligenceSnapshot,
+  packageId: string,
+  patch: Partial<FilingPackage>,
+): CaseIntelligenceSnapshot {
+  return {
+    ...snapshot,
+    filingPackages: snapshot.filingPackages.map((filingPackage) =>
+      filingPackage.id === packageId
+        ? {
+            ...filingPackage,
+            ...patch,
+            updated_at: new Date().toISOString(),
+          }
+        : filingPackage,
+    ),
   };
 }
 
@@ -1093,6 +1294,12 @@ function mergeLocalFirstSnapshot(
     cases: mergeLocalRows('cases', loadedSnapshot.cases, localSnapshot.cases, localRecords),
     children: mergeLocalRows('children', loadedSnapshot.children, localSnapshot.children, localRecords),
     people: mergeLocalRows('people', loadedSnapshot.people, localSnapshot.people, localRecords),
+    filingPackages: mergeLocalRows(
+      'filing_packages',
+      loadedSnapshot.filingPackages,
+      localSnapshot.filingPackages,
+      localRecords,
+    ),
     entries,
     evidenceAttachments,
     keyDates: mergeLocalRows('key_dates', loadedSnapshot.keyDates, localSnapshot.keyDates, localRecords),
@@ -1111,6 +1318,7 @@ function persistStateSnapshot(
     snapshot,
     reportPreviewState,
     advisorState,
+    filingBuilderState: get().filingBuilderState,
     localRecords,
   })
     .then(({ adapter, savedAt }) => {
@@ -1140,6 +1348,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
   source: 'fallback',
   reportPreviewState: DEFAULT_REPORT_PREVIEW_STATE,
   advisorState: DEFAULT_ADVISOR_STATE,
+  filingBuilderState: DEFAULT_FILING_BUILDER_STATE,
   localRecords: {},
   persistence: createPersistenceDiagnostics(),
   loading: false,
@@ -1155,6 +1364,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
     let hydratedSource: CaseIntelligenceSource = get().source;
     let hydratedReportPreviewState = get().reportPreviewState;
     let hydratedAdvisorState = get().advisorState;
+    let hydratedFilingBuilderState = get().filingBuilderState;
     let hydratedLocalRecords = get().localRecords;
     let hasPersistedSnapshot = false;
 
@@ -1167,6 +1377,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         hydratedSource = 'local';
         hydratedReportPreviewState = localResult.document.reportPreviewState;
         hydratedAdvisorState = localResult.document.advisorState;
+        hydratedFilingBuilderState = localResult.document.filingBuilderState;
         hydratedLocalRecords = localResult.document.localRecords;
         hasPersistedSnapshot = true;
 
@@ -1175,6 +1386,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
           source: hydratedSource,
           reportPreviewState: hydratedReportPreviewState,
           advisorState: hydratedAdvisorState,
+          filingBuilderState: hydratedFilingBuilderState,
           localRecords: hydratedLocalRecords,
           hasHydrated: true,
           hasPersistedSnapshot: true,
@@ -1477,6 +1689,256 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         'Attachment metadata was saved locally. Original evidence stays on this device; remote storage uploads are disabled.',
     };
   },
+  createFilingPackage: async (input) => {
+    const current = get();
+    const activeCase = getActiveCase(current.snapshot);
+    const userId = activeCase?.user_id || '';
+    const built = buildFilingPackage(input, current.snapshot, userId);
+    const recordKey = localRecordKey('filing_packages', built.filingPackage.id);
+    const localRecord = createLocalRecordMeta({
+      table: 'filing_packages',
+      id: built.filingPackage.id,
+      status: 'local_pending',
+    });
+
+    set((state) => ({
+      snapshot: appendFilingPackage(state.snapshot, built.filingPackage),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      filingBuilderState: {
+        selectedPackageId: built.filingPackage.id,
+        packageStates: {
+          ...state.filingBuilderState.packageStates,
+          [built.filingPackage.id]: built.localState,
+        },
+        updatedAt: new Date().toISOString(),
+      },
+      localRecords: {
+        ...state.localRecords,
+        [recordKey]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+
+    return {
+      filingPackage: built.filingPackage,
+      source: 'local',
+    };
+  },
+  selectFilingPackage: (packageId) => {
+    set((state) => ({
+      filingBuilderState: {
+        ...state.filingBuilderState,
+        selectedPackageId: packageId,
+        updatedAt: new Date().toISOString(),
+      },
+      hasPersistedSnapshot: true,
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  updateFilingPackageStatus: (packageId, status) => {
+    const key = localRecordKey('filing_packages', packageId);
+    const localRecord = createLocalRecordMeta({
+      table: 'filing_packages',
+      id: packageId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateFilingPackageRow(state.snapshot, packageId, { status }),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      filingBuilderState: {
+        ...state.filingBuilderState,
+        selectedPackageId: packageId,
+        updatedAt: new Date().toISOString(),
+      },
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  toggleFilingPackageEntry: (packageId, entryId) => {
+    const key = localRecordKey('filing_packages', packageId);
+    const localRecord = createLocalRecordMeta({
+      table: 'filing_packages',
+      id: packageId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateFilingPackageRow(state.snapshot, packageId, {}),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      filingBuilderState: updateFilingBuilderPackageState(
+        state.filingBuilderState,
+        packageId,
+        (packageState) => ({
+          ...packageState,
+          linkedEntryIds: toggleString(packageState.linkedEntryIds, entryId),
+        }),
+      ),
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  toggleFilingPackageAttachment: (packageId, attachmentId) => {
+    const key = localRecordKey('filing_packages', packageId);
+    const localRecord = createLocalRecordMeta({
+      table: 'filing_packages',
+      id: packageId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateFilingPackageRow(state.snapshot, packageId, {}),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      filingBuilderState: updateFilingBuilderPackageState(
+        state.filingBuilderState,
+        packageId,
+        (packageState) => ({
+          ...packageState,
+          linkedAttachmentIds: toggleString(packageState.linkedAttachmentIds, attachmentId),
+        }),
+      ),
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  toggleFilingPackageReport: (packageId, reportType) => {
+    const key = localRecordKey('filing_packages', packageId);
+    const localRecord = createLocalRecordMeta({
+      table: 'filing_packages',
+      id: packageId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateFilingPackageRow(state.snapshot, packageId, {}),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      filingBuilderState: updateFilingBuilderPackageState(
+        state.filingBuilderState,
+        packageId,
+        (packageState) => ({
+          ...packageState,
+          linkedReportTypes: packageState.linkedReportTypes.includes(reportType)
+            ? packageState.linkedReportTypes.filter((item) => item !== reportType)
+            : [...packageState.linkedReportTypes, reportType],
+        }),
+      ),
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  toggleFilingPackageChecklist: (packageId, item) => {
+    const key = localRecordKey('filing_packages', packageId);
+    const localRecord = createLocalRecordMeta({
+      table: 'filing_packages',
+      id: packageId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+    let nextProgress = 0;
+
+    set((state) => {
+      const filingBuilderState = updateFilingBuilderPackageState(
+        state.filingBuilderState,
+        packageId,
+        (packageState) => {
+          const checklist = {
+            ...packageState.checklist,
+            [item]: !packageState.checklist[item],
+          };
+          nextProgress = calculateChecklistProgress(checklist);
+
+          return {
+            ...packageState,
+            checklist,
+          };
+        },
+      );
+
+      return {
+        snapshot: updateFilingPackageRow(state.snapshot, packageId, {
+          completion_percent: nextProgress,
+        }),
+        source: 'local',
+        hasPersistedSnapshot: true,
+        filingBuilderState,
+        localRecords: {
+          ...state.localRecords,
+          [key]: localRecord,
+        },
+      };
+    });
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
   sendAdvisorMessage: (input) => {
     const prompt = input.prompt.trim();
     if (!prompt) return;
@@ -1569,9 +2031,34 @@ function createHomeModel(
   };
 }
 
+function getFilingEntryLinkCounts(filingBuilderState: FilingBuilderState) {
+  return Object.values(filingBuilderState.packageStates).reduce<Record<string, number>>(
+    (counts, packageState) => {
+      packageState.linkedEntryIds.forEach((entryId) => {
+        counts[entryId] = (counts[entryId] ?? 0) + 1;
+      });
+      return counts;
+    },
+    {},
+  );
+}
+
+function getFilingReportLinkCounts(filingBuilderState: FilingBuilderState) {
+  return Object.values(filingBuilderState.packageStates).reduce<Record<ReportPreviewType, number>>(
+    (counts, packageState) => {
+      packageState.linkedReportTypes.forEach((reportType) => {
+        counts[reportType] = (counts[reportType] ?? 0) + 1;
+      });
+      return counts;
+    },
+    {} as Record<ReportPreviewType, number>,
+  );
+}
+
 export function useCaseIntelligenceHome() {
   const snapshot = useCaseIntelligenceStore((state) => state.snapshot);
   const source = useCaseIntelligenceStore((state) => state.source);
+  const filingBuilderState = useCaseIntelligenceStore((state) => state.filingBuilderState);
   const localRecords = useCaseIntelligenceStore((state) => state.localRecords);
   const loading = useCaseIntelligenceStore((state) => state.loading);
   const error = useCaseIntelligenceStore((state) => state.error);
@@ -1596,10 +2083,21 @@ export function useCaseIntelligenceHome() {
     [snapshot, localRecords],
   );
   const demoCase = useMemo(() => isDemoCase(snapshot, localRecords), [snapshot, localRecords]);
+  const filingEntryLinkCounts = useMemo(
+    () => getFilingEntryLinkCounts(filingBuilderState),
+    [filingBuilderState],
+  );
+  const filingReportLinkCounts = useMemo(
+    () => getFilingReportLinkCounts(filingBuilderState),
+    [filingBuilderState],
+  );
 
   return {
     snapshot,
     home,
+    filingBuilderState,
+    filingEntryLinkCounts,
+    filingReportLinkCounts,
     loading,
     error,
     hasHydrated,
@@ -1662,7 +2160,15 @@ export function useCaseSetup() {
 }
 
 export function useCaseIntelligenceTimeline() {
-  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
+  const {
+    snapshot,
+    home,
+    filingEntryLinkCounts,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  } = useCaseIntelligenceHome();
 
   return {
     snapshot,
@@ -1670,6 +2176,7 @@ export function useCaseIntelligenceTimeline() {
     activeCase: home.activeCase,
     entries: getRecentEntries(snapshot, home.activeCase?.id, 100),
     flaggedEntries: getFlaggedEntries(snapshot, home.activeCase?.id),
+    filingEntryLinkCounts,
     loading,
     error,
     hasHydrated,
@@ -1678,7 +2185,15 @@ export function useCaseIntelligenceTimeline() {
 }
 
 export function useCaseEvidence() {
-  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
+  const {
+    snapshot,
+    home,
+    filingEntryLinkCounts,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  } = useCaseIntelligenceHome();
   const caseId = home.activeCase?.id;
   const entries = useMemo(() => {
     if (!caseId) return [];
@@ -1720,6 +2235,7 @@ export function useCaseEvidence() {
     entries,
     attachments,
     children,
+    filingEntryLinkCounts,
     loading,
     error,
     hasHydrated,
@@ -1814,10 +2330,90 @@ export function useCreateLocalAttachment() {
   return useCaseIntelligenceStore((state) => state.createLocalAttachment);
 }
 
+export function useFilingBuilder() {
+  const {
+    snapshot,
+    home,
+    filingBuilderState,
+    filingEntryLinkCounts,
+    filingReportLinkCounts,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  } = useCaseIntelligenceHome();
+  const caseId = home.activeCase?.id;
+  const filingPackages = useMemo(() => {
+    if (!caseId) return [];
+
+    return snapshot.filingPackages
+      .filter((filingPackage) => !filingPackage.deleted_at && filingPackage.case_id === caseId)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }, [caseId, snapshot.filingPackages]);
+  const selectedPackageId =
+    filingBuilderState.selectedPackageId && filingPackages.some((pkg) => pkg.id === filingBuilderState.selectedPackageId)
+      ? filingBuilderState.selectedPackageId
+      : filingPackages[0]?.id ?? null;
+  const selectedPackage =
+    filingPackages.find((filingPackage) => filingPackage.id === selectedPackageId) ?? null;
+  const selectedPackageState = selectedPackage
+    ? ensureFilingPackageState(filingBuilderState, selectedPackage.id)
+    : null;
+  const entries = caseId
+    ? snapshot.entries
+        .filter((entry) => !entry.deleted_at && entry.case_id === caseId)
+        .sort((a, b) =>
+          `${b.event_date}T${b.event_time ?? '00:00:00'}`.localeCompare(
+            `${a.event_date}T${a.event_time ?? '00:00:00'}`,
+          ),
+        )
+    : [];
+  const entryIds = new Set(entries.map((entry) => entry.id));
+  const attachments = caseId
+    ? snapshot.evidenceAttachments
+        .filter((attachment) => !attachment.deleted_at)
+        .filter(
+          (attachment) =>
+            attachment.case_id === caseId || Boolean(attachment.entry_id && entryIds.has(attachment.entry_id)),
+        )
+        .sort((a, b) =>
+          (b.captured_at ?? b.created_at).localeCompare(a.captured_at ?? a.created_at),
+        )
+    : [];
+
+  return {
+    snapshot,
+    source: home.source,
+    activeCase: home.activeCase,
+    filingPackages,
+    selectedPackage,
+    selectedPackageState,
+    filingBuilderState,
+    filingEntryLinkCounts,
+    filingReportLinkCounts,
+    entries,
+    attachments,
+    createFilingPackage: useCaseIntelligenceStore((state) => state.createFilingPackage),
+    selectFilingPackage: useCaseIntelligenceStore((state) => state.selectFilingPackage),
+    updateFilingPackageStatus: useCaseIntelligenceStore((state) => state.updateFilingPackageStatus),
+    toggleFilingPackageEntry: useCaseIntelligenceStore((state) => state.toggleFilingPackageEntry),
+    toggleFilingPackageAttachment: useCaseIntelligenceStore((state) => state.toggleFilingPackageAttachment),
+    toggleFilingPackageReport: useCaseIntelligenceStore((state) => state.toggleFilingPackageReport),
+    toggleFilingPackageChecklist: useCaseIntelligenceStore((state) => state.toggleFilingPackageChecklist),
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  };
+}
+
 export function useReportPreviewState() {
+  const filingBuilderState = useCaseIntelligenceStore((state) => state.filingBuilderState);
+
   return {
     reportPreviewState: useCaseIntelligenceStore((state) => state.reportPreviewState),
     setReportPreviewState: useCaseIntelligenceStore((state) => state.setReportPreviewState),
+    filingReportLinkCounts: getFilingReportLinkCounts(filingBuilderState),
   };
 }
 
@@ -1826,7 +2422,8 @@ export function useLocalPersistenceDiagnostics() {
 }
 
 export function useEntryDetail(entryId?: string) {
-  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
+  const { snapshot, home, filingEntryLinkCounts, loading, error, hasHydrated, persistence } =
+    useCaseIntelligenceHome();
   const entry = snapshot.entries.find((candidate) => candidate.id === entryId) ?? null;
   const child = entry
     ? snapshot.children.find((candidate) => candidate.id === entry.child_id) ?? null
@@ -1846,6 +2443,7 @@ export function useEntryDetail(entryId?: string) {
     entry,
     child,
     attachments,
+    filingLinkCount: entry ? filingEntryLinkCounts[entry.id] ?? 0 : 0,
     peoplePresent: [],
     loading,
     error,

@@ -204,6 +204,30 @@ function AdvisorLauncher({
   );
 }
 
+function FilingBuilderLauncher({ packageCount }: { packageCount: number }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Open Filing Builder"
+      onPress={() => router.push('/filings' as never)}
+      style={({ pressed }) => [styles.advisorPressable, pressed && styles.pressed]}
+    >
+      <SoftCard p={14} style={styles.advisorCard}>
+        <View style={styles.advisorIcon}>
+          <Icon name="folder" size={16} color={fbColors.ink} />
+        </View>
+        <View style={styles.advisorCopy}>
+          <Text style={styles.advisorTitle}>Filing Builder</Text>
+          <Text style={styles.advisorBody}>
+            {packageCount} local filing {packageCount === 1 ? 'package' : 'packages'}
+          </Text>
+        </View>
+        <Icon name="chevR" size={15} color={fbColors.inkMute} />
+      </SoftCard>
+    </Pressable>
+  );
+}
+
 function CaptureTile({
   icon,
   title,
@@ -299,9 +323,11 @@ function attachmentCountForEntry(attachments: EvidenceAttachment[], entryId: str
 function RecentEntries({
   entries,
   attachments,
+  filingEntryLinkCounts,
 }: {
   entries: Entry[];
   attachments: EvidenceAttachment[];
+  filingEntryLinkCounts: Record<string, number>;
 }) {
   return (
     <View style={styles.recentSection}>
@@ -324,6 +350,7 @@ function RecentEntries({
               key={entry.id}
               entry={entry}
               attachmentCount={attachmentCountForEntry(attachments, entry.id)}
+              filingLinkCount={filingEntryLinkCounts[entry.id] ?? 0}
               compact
               onPress={() => openEntry(entry.id)}
             />
@@ -390,7 +417,8 @@ function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
 }
 
 export default function Home() {
-  const { home, snapshot, hasUserCaseSetup, hasHydrated, isDemoCase } = useCaseIntelligenceHome();
+  const { home, snapshot, filingEntryLinkCounts, hasUserCaseSetup, hasHydrated, isDemoCase } =
+    useCaseIntelligenceHome();
 
   if (hasHydrated && !hasUserCaseSetup) {
     return <FirstRunSetup demoCase={isDemoCase} />;
@@ -411,9 +439,23 @@ export default function Home() {
       <FilingNextStep nextStep={home.nextStep} />
       <HearingStrip keyDate={home.upcomingKeyDates[0]} />
       <AdvisorLauncher activeCase={home.activeCase} flaggedCount={home.flaggedEntries.length} />
+      <FilingBuilderLauncher
+        packageCount={
+          home.activeCase
+            ? snapshot.filingPackages.filter(
+                (filingPackage) =>
+                  !filingPackage.deleted_at && filingPackage.case_id === home.activeCase?.id,
+              ).length
+            : 0
+        }
+      />
       <Rule style={styles.captureRule} />
       <QuickCapture />
-      <RecentEntries entries={home.recentEntries} attachments={snapshot.evidenceAttachments} />
+      <RecentEntries
+        entries={home.recentEntries}
+        attachments={snapshot.evidenceAttachments}
+        filingEntryLinkCounts={filingEntryLinkCounts}
+      />
     </CaseScreen>
   );
 }

@@ -23,11 +23,13 @@ import {
 export function EntryCard({
   entry,
   attachmentCount = 0,
+  filingLinkCount = 0,
   compact = false,
   onPress,
 }: {
   entry: Entry;
   attachmentCount?: number;
+  filingLinkCount?: number;
   compact?: boolean;
   onPress?: () => void;
 }) {
@@ -61,6 +63,11 @@ export function EntryCard({
           {attachmentCount > 0 ? (
             <Chip tone="amber" outline={false}>
               {attachmentCount === 1 ? '1 attachment' : `${attachmentCount} attachments`}
+            </Chip>
+          ) : null}
+          {filingLinkCount > 0 ? (
+            <Chip tone="forest" outline={false}>
+              {filingLinkCount === 1 ? 'Linked to filing' : `${filingLinkCount} filings`}
             </Chip>
           ) : null}
           {!compact ? (

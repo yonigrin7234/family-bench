@@ -6,8 +6,12 @@ import type {
   CaseIntelligenceSnapshot,
   Entry,
   EvidenceAttachment,
+  FilingBuilderState,
+  FilingChecklistKey,
+  FilingPackageLocalState,
   LocalRecordMeta,
   LocalSyncStatus,
+  ReportPreviewType,
   ReportPreviewState,
 } from './types';
 
@@ -29,6 +33,19 @@ export const DEFAULT_ADVISOR_STATE: AdvisorConversationState = {
   updatedAt: null,
 };
 
+export const DEFAULT_FILING_CHECKLIST_STATE = {
+  forms: false,
+  exhibits: false,
+  declarations: false,
+  service: false,
+} satisfies Record<FilingChecklistKey, boolean>;
+
+export const DEFAULT_FILING_BUILDER_STATE: FilingBuilderState = {
+  selectedPackageId: null,
+  packageStates: {},
+  updatedAt: null,
+};
+
 export type LocalPersistenceAdapter = 'localStorage' | 'fileSystem' | 'memory';
 
 export type PersistedCaseIntelligenceDocument = {
@@ -37,6 +54,7 @@ export type PersistedCaseIntelligenceDocument = {
   snapshot: CaseIntelligenceSnapshot;
   reportPreviewState: ReportPreviewState;
   advisorState: AdvisorConversationState;
+  filingBuilderState: FilingBuilderState;
   localRecords: Record<string, LocalRecordMeta>;
 };
 
@@ -154,6 +172,93 @@ function normalizeAdvisorState(value: unknown): AdvisorConversationState {
   };
 }
 
+const CHECKLIST_KEYS: FilingChecklistKey[] = ['forms', 'exhibits', 'declarations', 'service'];
+const REPORT_TYPES: ReportPreviewType[] = [
+  'timeline',
+  'flagged',
+  'communication',
+  'medical',
+  'custodyExchange',
+];
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function normalizeChecklist(value: unknown) {
+  const candidate = value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Partial<Record<FilingChecklistKey, unknown>>)
+    : {};
+
+  return CHECKLIST_KEYS.reduce(
+    (checklist, key) => ({
+      ...checklist,
+      [key]: typeof candidate[key] === 'boolean' ? candidate[key] : false,
+    }),
+    { ...DEFAULT_FILING_CHECKLIST_STATE },
+  );
+}
+
+function normalizePackageState(packageId: string, value: unknown): FilingPackageLocalState {
+  const candidate =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Partial<FilingPackageLocalState>)
+      : {};
+  const exhibitGroups = Array.isArray(candidate.exhibitGroups)
+    ? candidate.exhibitGroups
+        .filter((group) => group && typeof group === 'object')
+        .map((group, index) => {
+          const normalized = group as Partial<FilingPackageLocalState['exhibitGroups'][number]>;
+          const label = typeof normalized.label === 'string' ? normalized.label : `Group ${index + 1}`;
+
+          return {
+            id: typeof normalized.id === 'string' ? normalized.id : `${packageId}-group-${index + 1}`,
+            label,
+            entryIds: stringArray(normalized.entryIds),
+            attachmentIds: stringArray(normalized.attachmentIds),
+          };
+        })
+    : [];
+
+  return {
+    packageId,
+    linkedEntryIds: stringArray(candidate.linkedEntryIds),
+    linkedAttachmentIds: stringArray(candidate.linkedAttachmentIds),
+    linkedReportTypes: stringArray(candidate.linkedReportTypes).filter(
+      (report): report is ReportPreviewType => REPORT_TYPES.includes(report as ReportPreviewType),
+    ),
+    checklist: normalizeChecklist(candidate.checklist),
+    exhibitGroups,
+    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
+  };
+}
+
+function normalizeFilingBuilderState(value: unknown): FilingBuilderState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return DEFAULT_FILING_BUILDER_STATE;
+  const candidate = value as Partial<FilingBuilderState>;
+  const rawPackageStates =
+    candidate.packageStates && typeof candidate.packageStates === 'object' && !Array.isArray(candidate.packageStates)
+      ? candidate.packageStates
+      : {};
+  const packageStates = Object.entries(rawPackageStates).reduce<Record<string, FilingPackageLocalState>>(
+    (states, [packageId, packageState]) => ({
+      ...states,
+      [packageId]: normalizePackageState(packageId, packageState),
+    }),
+    {},
+  );
+  const selectedPackageId =
+    typeof candidate.selectedPackageId === 'string' && packageStates[candidate.selectedPackageId]
+      ? candidate.selectedPackageId
+      : null;
+
+  return {
+    selectedPackageId,
+    packageStates,
+    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : null,
+  };
+}
+
 function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
   const parsed = JSON.parse(raw) as Partial<PersistedCaseIntelligenceDocument>;
   if (parsed.version !== PERSISTENCE_VERSION || !parsed.snapshot) return null;
@@ -164,6 +269,7 @@ function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
     snapshot: parsed.snapshot,
     reportPreviewState: normalizeReportPreviewState(parsed.reportPreviewState),
     advisorState: normalizeAdvisorState(parsed.advisorState),
+    filingBuilderState: normalizeFilingBuilderState(parsed.filingBuilderState),
     localRecords: parsed.localRecords ?? {},
   };
 }
@@ -192,11 +298,13 @@ export async function writePersistedCaseIntelligence({
   snapshot,
   reportPreviewState,
   advisorState,
+  filingBuilderState,
   localRecords,
 }: {
   snapshot: CaseIntelligenceSnapshot;
   reportPreviewState: ReportPreviewState;
   advisorState: AdvisorConversationState;
+  filingBuilderState: FilingBuilderState;
   localRecords: Record<string, LocalRecordMeta>;
 }): Promise<{ adapter: LocalPersistenceAdapter; savedAt: string }> {
   const adapter = getLocalPersistenceAdapter();
@@ -206,6 +314,7 @@ export async function writePersistedCaseIntelligence({
     snapshot,
     reportPreviewState,
     advisorState,
+    filingBuilderState,
     localRecords,
   };
   const serialized = JSON.stringify(document);

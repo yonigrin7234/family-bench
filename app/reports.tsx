@@ -237,12 +237,14 @@ function ReportTypeChip({
   label,
   tone,
   active,
+  filingLinkCount,
   onPress,
 }: {
   value: ReportType;
   label: string;
   tone: ChipTone;
   active: boolean;
+  filingLinkCount: number;
   onPress: () => void;
 }) {
   return (
@@ -258,7 +260,7 @@ function ReportTypeChip({
       ]}
     >
       <Chip tone={tone} outline={!active}>
-        {label}
+        {filingLinkCount > 0 ? `${label} · linked to filing` : label}
       </Chip>
     </Pressable>
   );
@@ -305,9 +307,11 @@ function SourceEntryRow({
 function ReportPreviewCard({
   report,
   attachmentCountsByEntryId,
+  filingLinkCount,
 }: {
   report: ReportPreview;
   attachmentCountsByEntryId: AttachmentCountsByEntryId;
+  filingLinkCount: number;
 }) {
   const references = report.entries.slice(0, 6);
   const attachmentCount = report.entries.reduce(
@@ -330,6 +334,11 @@ function ReportPreviewCard({
         <Chip tone={report.entries.length ? 'ink' : 'mute'} outline={false}>
           {report.entries.length}
         </Chip>
+        {filingLinkCount > 0 ? (
+          <Chip tone="forest" outline={false}>
+            Linked to filing
+          </Chip>
+        ) : null}
       </View>
 
       <View style={styles.metaGrid}>
@@ -402,7 +411,7 @@ function ReportPreviewCard({
 
 export default function Reports() {
   const { snapshot, entries, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
-  const { reportPreviewState, setReportPreviewState } = useReportPreviewState();
+  const { reportPreviewState, setReportPreviewState, filingReportLinkCounts } = useReportPreviewState();
   const reportType = reportPreviewState.reportType;
   const typeFilter = reportPreviewState.typeFilter;
   const flagFilter = reportPreviewState.flagFilter;
@@ -455,6 +464,7 @@ export default function Reports() {
               label={option.label}
               tone={option.tone}
               active={reportType === option.value}
+              filingLinkCount={filingReportLinkCounts[option.value] ?? 0}
               onPress={() => setReportPreviewState({ reportType: option.value })}
             />
           ))}
@@ -500,6 +510,7 @@ export default function Reports() {
       <ReportPreviewCard
         report={activeReport}
         attachmentCountsByEntryId={attachmentCountsByEntryId}
+        filingLinkCount={filingReportLinkCounts[activeReport.id] ?? 0}
       />
     </CaseScreen>
   );
