@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
@@ -253,6 +254,8 @@ export default function CaseMap() {
     keyDates,
     filingPackages,
     source,
+    hasLocalCaseSetup,
+    isDemoCase,
     persistence,
   } = useCaseMap();
 
@@ -270,13 +273,29 @@ export default function CaseMap() {
       <SoftCard p={16} style={styles.caseSummary}>
         <SectionHeader icon="scales" title="Active case" />
         {activeCase ? (
-          <View style={styles.summaryGrid}>
-            <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
-            <DetailRow label="Court" value={activeCase.court_name} />
-            <DetailRow label="County" value={activeCase.county} />
-            <DetailRow label="Department" value={activeCase.department} />
-            <DetailRow label="Judge" value={activeCase.judge_name} />
-            <DetailRow label="Status" value={activeCase.status} />
+          <View style={styles.caseSummaryBody}>
+            <View style={styles.summaryGrid}>
+              <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
+              <DetailRow label="Court" value={activeCase.court_name} />
+              <DetailRow label="County" value={activeCase.county} />
+              <DetailRow label="Department" value={activeCase.department} />
+              <DetailRow label="Judge" value={activeCase.judge_name} />
+              <DetailRow label="Status" value={activeCase.status} />
+            </View>
+            <View style={styles.caseActions}>
+              <Chip tone={isDemoCase ? 'amber' : 'forest'} outline={false}>
+                {hasLocalCaseSetup ? 'Local case' : 'Demo case'}
+              </Chip>
+              <PillButton
+                tone="soft"
+                size="md"
+                icon="scales"
+                full
+                onPress={() => router.push({ pathname: '/onboarding', params: { mode: 'edit' } } as never)}
+              >
+                {hasLocalCaseSetup ? 'Edit case details' : 'Set up local case'}
+              </PillButton>
+            </View>
           </View>
         ) : (
           <EmptyState>No active case has been selected yet.</EmptyState>
@@ -352,6 +371,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.14,
   },
   summaryGrid: {
+    gap: fbSpacing.x3,
+  },
+  caseSummaryBody: {
+    gap: fbSpacing.x4,
+  },
+  caseActions: {
     gap: fbSpacing.x3,
   },
   detailRow: {

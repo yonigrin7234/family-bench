@@ -334,8 +334,60 @@ function RecentEntries({
   );
 }
 
+function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
+  return (
+    <CaseScreen>
+      <TopChrome />
+
+      <View style={styles.setupHero}>
+        <View style={styles.kickerRow}>
+          <Chip tone="forest" outline={false}>
+            Local setup
+          </Chip>
+          {demoCase ? (
+            <Chip tone="amber" outline={false}>
+              Demo data loaded
+            </Chip>
+          ) : null}
+        </View>
+        <Display italic size={32} style={styles.setupTitle}>
+          Set up your local case
+        </Display>
+        <Text style={styles.setupBody}>
+          Add the basic case, party, child, and hearing details that Family Bench will use across
+          Home, Case Map, Advisor, Timeline, and Reports. This stays on this device.
+        </Text>
+      </View>
+
+      <SoftCard p={16} style={styles.setupCard}>
+        <View style={styles.setupCardHeader}>
+          <Icon name="shield" size={17} color={fbColors.ink} />
+          <Text style={styles.setupCardTitle}>No remote writes</Text>
+        </View>
+        <Text style={styles.setupCardBody}>
+          Demo seed data remains available until a local case is saved. This setup records factual
+          case details only and does not provide legal advice.
+        </Text>
+        <PillButton
+          tone="primary"
+          size="lg"
+          full
+          icon="plus"
+          onPress={() => router.push('/onboarding' as never)}
+        >
+          Start case setup
+        </PillButton>
+      </SoftCard>
+    </CaseScreen>
+  );
+}
+
 export default function Home() {
-  const { home, snapshot } = useCaseIntelligenceHome();
+  const { home, snapshot, hasUserCaseSetup, hasHydrated, isDemoCase } = useCaseIntelligenceHome();
+
+  if (hasHydrated && !hasUserCaseSetup) {
+    return <FirstRunSetup demoCase={isDemoCase} />;
+  }
 
   return (
     <CaseScreen>
@@ -367,6 +419,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  kickerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: fbSpacing.x2,
+  },
+  setupHero: {
+    marginTop: fbSpacing.x8,
+    gap: fbSpacing.x3,
+  },
+  setupTitle: {
+    lineHeight: 34,
+  },
+  setupBody: {
+    color: fbColors.inkMute,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  setupCard: {
+    marginTop: fbSpacing.x5,
+    gap: fbSpacing.x4,
+  },
+  setupCardHeader: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+  },
+  setupCardTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  setupCardBody: {
+    color: fbColors.inkMute,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
   },
   chromeButton: {
     width: fbTouch.min,

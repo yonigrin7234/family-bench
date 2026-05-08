@@ -29,13 +29,17 @@ import {
 import type {
   AdvisorConversationState,
   AdvisorMessage,
+  Child,
   CaseIntelligenceSnapshot,
   CaseIntelligenceSource,
   Entry,
   EvidenceAttachment,
+  FamilyBenchCase,
   HomeCaseIntelligence,
+  KeyDate,
   LocalPersistenceDiagnostics,
   LocalRecordMeta,
+  Person,
   ReportPreviewState,
   AttachmentKind,
 } from './types';
@@ -170,6 +174,26 @@ export type SendAdvisorMessageInput = {
   linkedEntryIds: string[];
 };
 
+export type CaseSetupUserRole = 'petitioner' | 'respondent' | 'other';
+
+export type CaseSetupInput = {
+  caseName: string;
+  caseNumber?: string | null;
+  courtName?: string | null;
+  county?: string | null;
+  department?: string | null;
+  judgeName?: string | null;
+  userRole: CaseSetupUserRole;
+  otherParentName: string;
+  childName: string;
+  nextHearingDate?: string | null;
+};
+
+type SaveCaseSetupResult = {
+  case: FamilyBenchCase;
+  source: 'local';
+};
+
 type CaseIntelligenceState = {
   snapshot: CaseIntelligenceSnapshot;
   source: CaseIntelligenceSource;
@@ -183,6 +207,7 @@ type CaseIntelligenceState = {
   hasPersistedSnapshot: boolean;
   error: string | null;
   load: () => Promise<void>;
+  saveCaseSetup: (input: CaseSetupInput) => Promise<SaveCaseSetupResult>;
   createEntry: (input: CaptureEntryInput) => Promise<SaveEntryResult>;
   createPlaceholderAttachment: (
     input: CreatePlaceholderAttachmentInput,
@@ -221,6 +246,63 @@ function normalizeTime(value?: string | null) {
 function nullIfBlank(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeDate(value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+function isLiveRow(row: { deleted_at: string | null }) {
+  return !row.deleted_at;
+}
+
+function isFallbackId(id: string) {
+  return id.startsWith('fallback-');
+}
+
+function hasLocalTableRecord(
+  table: string,
+  id: string,
+  localRecords: Record<string, LocalRecordMeta>,
+) {
+  const record = localRecords[localRecordKey(table, id)];
+  return Boolean(record) || id.startsWith('local-');
+}
+
+function getLocalSetupCase(
+  snapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
+) {
+  return (
+    snapshot.cases
+      .filter(isLiveRow)
+      .find((caseRow) => hasLocalTableRecord('cases', caseRow.id, localRecords)) ?? null
+  );
+}
+
+function hasLocalCaseSetup(
+  snapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
+) {
+  return Boolean(getLocalSetupCase(snapshot, localRecords));
+}
+
+function hasUserCaseSetup(
+  snapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
+) {
+  if (hasLocalCaseSetup(snapshot, localRecords)) return true;
+  return snapshot.cases.filter(isLiveRow).some((caseRow) => !isFallbackId(caseRow.id));
+}
+
+function isDemoCase(
+  snapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
+) {
+  const activeCase = getActiveCase(snapshot);
+  return Boolean(activeCase && isFallbackId(activeCase.id) && !hasLocalCaseSetup(snapshot, localRecords));
 }
 
 async function buildEntry(
@@ -382,6 +464,295 @@ function buildPlaceholderAttachment(
     },
     created_at: now,
     deleted_at: null,
+  };
+}
+
+function otherParentRole(userRole: CaseSetupUserRole) {
+  if (userRole === 'petitioner') return 'respondent';
+  if (userRole === 'respondent') return 'petitioner';
+  return 'other_parent';
+}
+
+function localMetaForUpdate(
+  table: string,
+  id: string,
+  localRecords: Record<string, LocalRecordMeta>,
+  now: string,
+) {
+  return createLocalRecordMeta({
+    table,
+    id,
+    now,
+    previous: localRecords[localRecordKey(table, id)],
+  });
+}
+
+function findLocalPerson(
+  snapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
+  caseId: string,
+  predicate: (person: Person) => boolean,
+) {
+  return (
+    snapshot.people
+      .filter(isLiveRow)
+      .filter((person) => person.case_id === caseId)
+      .find((person) => hasLocalTableRecord('people', person.id, localRecords) && predicate(person)) ??
+    null
+  );
+}
+
+function findLocalChild(
+  snapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
+  caseId: string,
+) {
+  return (
+    snapshot.children
+      .filter(isLiveRow)
+      .filter((child) => child.case_id === caseId)
+      .find((child) => hasLocalTableRecord('children', child.id, localRecords)) ?? null
+  );
+}
+
+function findLocalSetupHearing(
+  snapshot: CaseIntelligenceSnapshot,
+  localRecords: Record<string, LocalRecordMeta>,
+  caseId: string,
+) {
+  return (
+    snapshot.keyDates
+      .filter(isLiveRow)
+      .filter((date) => date.case_id === caseId && date.date_type === 'hearing')
+      .find((date) => hasLocalTableRecord('key_dates', date.id, localRecords)) ?? null
+  );
+}
+
+function buildCaseSetupSnapshot(
+  input: CaseSetupInput,
+  currentSnapshot: CaseIntelligenceSnapshot,
+  currentLocalRecords: Record<string, LocalRecordMeta>,
+): {
+  snapshot: CaseIntelligenceSnapshot;
+  localRecords: Record<string, LocalRecordMeta>;
+  activeCase: FamilyBenchCase;
+} {
+  const now = new Date().toISOString();
+  const existingLocalCase = getLocalSetupCase(currentSnapshot, currentLocalRecords);
+  const previousActiveCase = getActiveCase(currentSnapshot);
+  const caseId = existingLocalCase?.id ?? `local-case-${Crypto.randomUUID()}`;
+  const userId = existingLocalCase?.user_id ?? previousActiveCase?.user_id ?? '';
+  const hearingDate = normalizeDate(input.nextHearingDate);
+  const caseName = nullIfBlank(input.caseName) ?? 'Local family case';
+  const childName = nullIfBlank(input.childName) ?? 'Child';
+  const otherName = nullIfBlank(input.otherParentName) ?? 'Other parent';
+  const nextHearingAt = hearingDate ? `${hearingDate}T09:00:00` : null;
+  const localRecordUpdates: Record<string, LocalRecordMeta> = {};
+
+  const caseRecord = localMetaForUpdate('cases', caseId, currentLocalRecords, now);
+  localRecordUpdates[localRecordKey('cases', caseId)] = caseRecord;
+
+  const activeCase: FamilyBenchCase = {
+    id: caseId,
+    user_id: userId,
+    title: caseName,
+    case_number: nullIfBlank(input.caseNumber),
+    court_name: nullIfBlank(input.courtName),
+    department: nullIfBlank(input.department),
+    judge_name: nullIfBlank(input.judgeName),
+    case_type: existingLocalCase?.case_type ?? 'custody',
+    status: 'active',
+    county: nullIfBlank(input.county),
+    state: existingLocalCase?.state ?? null,
+    is_active: true,
+    next_hearing_at: nextHearingAt,
+    created_at: existingLocalCase?.created_at ?? now,
+    updated_at: now,
+    deleted_at: null,
+  };
+
+  const existingChild = findLocalChild(currentSnapshot, currentLocalRecords, caseId);
+  const childId = existingChild?.id ?? `local-child-${Crypto.randomUUID()}`;
+  const childRecord = localMetaForUpdate('children', childId, currentLocalRecords, now);
+  localRecordUpdates[localRecordKey('children', childId)] = childRecord;
+
+  const child: Child = {
+    id: childId,
+    user_id: userId,
+    case_id: caseId,
+    name: childName,
+    date_of_birth: existingChild?.date_of_birth ?? null,
+    created_at: existingChild?.created_at ?? now,
+    updated_at: now,
+    deleted_at: null,
+  };
+
+  const existingPrimaryPerson = findLocalPerson(
+    currentSnapshot,
+    currentLocalRecords,
+    caseId,
+    (person) => person.is_primary_client,
+  );
+  const primaryPersonId = existingPrimaryPerson?.id ?? `local-person-${Crypto.randomUUID()}`;
+  const primaryRecord = localMetaForUpdate('people', primaryPersonId, currentLocalRecords, now);
+  localRecordUpdates[localRecordKey('people', primaryPersonId)] = primaryRecord;
+
+  const primaryPerson: Person = {
+    id: primaryPersonId,
+    user_id: userId,
+    case_id: caseId,
+    display_name: existingPrimaryPerson?.display_name ?? 'You',
+    role: input.userRole,
+    relationship: 'parent',
+    email: existingPrimaryPerson?.email ?? null,
+    phone: existingPrimaryPerson?.phone ?? null,
+    is_primary_client: true,
+    notes: existingPrimaryPerson?.notes ?? null,
+    created_at: existingPrimaryPerson?.created_at ?? now,
+    updated_at: now,
+    deleted_at: null,
+  };
+
+  const existingOtherParent = findLocalPerson(
+    currentSnapshot,
+    currentLocalRecords,
+    caseId,
+    (person) => !person.is_primary_client,
+  );
+  const otherParentId = existingOtherParent?.id ?? `local-person-${Crypto.randomUUID()}`;
+  const otherParentRecord = localMetaForUpdate('people', otherParentId, currentLocalRecords, now);
+  localRecordUpdates[localRecordKey('people', otherParentId)] = otherParentRecord;
+
+  const otherParent: Person = {
+    id: otherParentId,
+    user_id: userId,
+    case_id: caseId,
+    display_name: otherName,
+    role: otherParentRole(input.userRole),
+    relationship: 'parent',
+    email: existingOtherParent?.email ?? null,
+    phone: existingOtherParent?.phone ?? null,
+    is_primary_client: false,
+    notes: existingOtherParent?.notes ?? null,
+    created_at: existingOtherParent?.created_at ?? now,
+    updated_at: now,
+    deleted_at: null,
+  };
+
+  const existingHearing = findLocalSetupHearing(currentSnapshot, currentLocalRecords, caseId);
+  const hearingId = existingHearing?.id ?? `local-key-date-${Crypto.randomUUID()}`;
+  const hearingRecord = hearingDate
+    ? localMetaForUpdate('key_dates', hearingId, currentLocalRecords, now)
+    : null;
+  if (hearingRecord) {
+    localRecordUpdates[localRecordKey('key_dates', hearingId)] = hearingRecord;
+  }
+
+  const hearing: KeyDate | null = hearingDate
+    ? {
+        id: hearingId,
+        user_id: userId,
+        case_id: caseId,
+        date_type: 'hearing',
+        event_date: hearingDate,
+        event_time: '09:00:00',
+        title: existingHearing?.title ?? 'Next hearing',
+        description: 'Recorded during local case setup.',
+        is_completed: false,
+        related_filing_package_id: null,
+        related_court_order_id: null,
+        created_at: existingHearing?.created_at ?? now,
+        updated_at: now,
+        deleted_at: null,
+      }
+    : null;
+
+  const previousCaseId = existingLocalCase?.id ?? previousActiveCase?.id ?? null;
+  const shouldMoveLocalRows = previousCaseId !== null && previousCaseId !== caseId;
+  const movedEntryIds = new Set<string>();
+
+  const entries = currentSnapshot.entries.map((entry) => {
+    if (shouldMoveLocalRows && entry.case_id === previousCaseId && hasLocalEntryState(entry, currentLocalRecords)) {
+      const movedRecord = localMetaForUpdate('entries', entry.id, currentLocalRecords, now);
+      localRecordUpdates[localRecordKey('entries', entry.id)] = movedRecord;
+      movedEntryIds.add(entry.id);
+      return withEntryLocalMeta(
+        {
+          ...entry,
+          case_id: caseId,
+          child_id: child.id,
+          updated_at: now,
+        },
+        movedRecord,
+      );
+    }
+
+    return entry;
+  });
+
+  const evidenceAttachments = currentSnapshot.evidenceAttachments.map((attachment) => {
+    const shouldMoveAttachment =
+      (attachment.entry_id ? movedEntryIds.has(attachment.entry_id) : false) ||
+      (shouldMoveLocalRows &&
+        attachment.case_id === previousCaseId &&
+        hasLocalAttachmentState(attachment, currentLocalRecords));
+
+    if (!shouldMoveAttachment) return attachment;
+
+    const movedRecord = localMetaForUpdate('attachments', attachment.id, currentLocalRecords, now);
+    localRecordUpdates[localRecordKey('attachments', attachment.id)] = movedRecord;
+
+    return withEvidenceAttachmentLocalMeta(
+      {
+        ...attachment,
+        case_id: caseId,
+      },
+      movedRecord,
+    );
+  });
+
+  const cases = [
+    activeCase,
+    ...currentSnapshot.cases
+      .filter((caseRow) => caseRow.id !== caseId)
+      .map((caseRow) => ({
+        ...caseRow,
+        is_active: false,
+        status: caseRow.status === 'active' ? 'inactive' : caseRow.status,
+      })),
+  ];
+  const children = [child, ...currentSnapshot.children.filter((row) => row.id !== child.id)];
+  const people = [
+    primaryPerson,
+    otherParent,
+    ...currentSnapshot.people.filter(
+      (row) => row.id !== primaryPerson.id && row.id !== otherParent.id,
+    ),
+  ];
+  const keyDates = [
+    ...(hearing ? [hearing] : []),
+    ...currentSnapshot.keyDates.filter((row) => row.id !== hearingId),
+  ];
+  const localRecords = {
+    ...currentLocalRecords,
+    ...localRecordUpdates,
+  };
+  if (!hearing && existingHearing) {
+    delete localRecords[localRecordKey('key_dates', existingHearing.id)];
+  }
+
+  return {
+    snapshot: {
+      ...currentSnapshot,
+      cases,
+      children,
+      people,
+      entries,
+      evidenceAttachments,
+      keyDates,
+    },
+    localRecords,
+    activeCase,
   };
 }
 
@@ -563,6 +934,27 @@ function hasLocalAttachmentState(
   return attachment.id.startsWith('local-attachment-');
 }
 
+function mergeLocalRows<T extends { id: string; deleted_at: string | null }>(
+  table: string,
+  loadedRows: T[],
+  localRows: T[],
+  localRecords: Record<string, LocalRecordMeta>,
+) {
+  const loadedIds = new Set(loadedRows.map((row) => row.id));
+  const localById = new Map(localRows.map((row) => [row.id, row]));
+  const localOnlyRows = localRows.filter(
+    (row) => !loadedIds.has(row.id) && hasLocalTableRecord(table, row.id, localRecords),
+  );
+
+  return [
+    ...localOnlyRows,
+    ...loadedRows.map((row) => {
+      const localRow = localById.get(row.id);
+      return localRow && hasLocalTableRecord(table, localRow.id, localRecords) ? localRow : row;
+    }),
+  ];
+}
+
 function mergeLocalFirstSnapshot(
   loadedSnapshot: CaseIntelligenceSnapshot,
   localSnapshot: CaseIntelligenceSnapshot,
@@ -603,8 +995,12 @@ function mergeLocalFirstSnapshot(
 
   return {
     ...loadedSnapshot,
+    cases: mergeLocalRows('cases', loadedSnapshot.cases, localSnapshot.cases, localRecords),
+    children: mergeLocalRows('children', loadedSnapshot.children, localSnapshot.children, localRecords),
+    people: mergeLocalRows('people', loadedSnapshot.people, localSnapshot.people, localRecords),
     entries,
     evidenceAttachments,
+    keyDates: mergeLocalRows('key_dates', loadedSnapshot.keyDates, localSnapshot.keyDates, localRecords),
   };
 }
 
@@ -777,6 +1173,30 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         get,
       );
     }
+  },
+  saveCaseSetup: async (input) => {
+    const current = get();
+    const built = buildCaseSetupSnapshot(input, current.snapshot, current.localRecords);
+
+    set({
+      snapshot: built.snapshot,
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: built.localRecords,
+    });
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+
+    return {
+      case: built.activeCase,
+      source: 'local',
+    };
   },
   createEntry: async (input) => {
     const current = get();
@@ -1019,6 +1439,7 @@ function createHomeModel(
 export function useCaseIntelligenceHome() {
   const snapshot = useCaseIntelligenceStore((state) => state.snapshot);
   const source = useCaseIntelligenceStore((state) => state.source);
+  const localRecords = useCaseIntelligenceStore((state) => state.localRecords);
   const loading = useCaseIntelligenceStore((state) => state.loading);
   const error = useCaseIntelligenceStore((state) => state.error);
   const hasLoaded = useCaseIntelligenceStore((state) => state.hasLoaded);
@@ -1033,10 +1454,73 @@ export function useCaseIntelligenceHome() {
   }, [hasLoaded, load, loading]);
 
   const home = useMemo(() => createHomeModel(snapshot, source), [snapshot, source]);
+  const localCaseSetupExists = useMemo(
+    () => hasLocalCaseSetup(snapshot, localRecords),
+    [snapshot, localRecords],
+  );
+  const userCaseSetupExists = useMemo(
+    () => hasUserCaseSetup(snapshot, localRecords),
+    [snapshot, localRecords],
+  );
+  const demoCase = useMemo(() => isDemoCase(snapshot, localRecords), [snapshot, localRecords]);
 
   return {
     snapshot,
     home,
+    loading,
+    error,
+    hasHydrated,
+    hasLocalCaseSetup: localCaseSetupExists,
+    hasUserCaseSetup: userCaseSetupExists,
+    isDemoCase: demoCase,
+    persistence,
+  };
+}
+
+export function useCaseSetup() {
+  const {
+    snapshot,
+    home,
+    loading,
+    error,
+    hasHydrated,
+    hasLocalCaseSetup: localCaseSetupExists,
+    hasUserCaseSetup: userCaseSetupExists,
+    isDemoCase: demoCase,
+    persistence,
+  } = useCaseIntelligenceHome();
+  const localRecords = useCaseIntelligenceStore((state) => state.localRecords);
+  const saveCaseSetup = useCaseIntelligenceStore((state) => state.saveCaseSetup);
+  const activeCase = home.activeCase;
+  const caseId = activeCase?.id;
+  const children = caseId
+    ? snapshot.children.filter((child) => !child.deleted_at && child.case_id === caseId)
+    : [];
+  const people = caseId
+    ? snapshot.people.filter((person) => !person.deleted_at && person.case_id === caseId)
+    : [];
+  const hearing =
+    caseId
+      ? snapshot.keyDates
+          .filter((date) => !date.deleted_at && date.case_id === caseId && date.date_type === 'hearing')
+          .sort((a, b) => `${a.event_date}T${a.event_time ?? ''}`.localeCompare(`${b.event_date}T${b.event_time ?? ''}`))[0] ??
+        null
+      : null;
+
+  return {
+    snapshot,
+    source: home.source,
+    activeCase,
+    localCase: getLocalSetupCase(snapshot, localRecords),
+    primaryPerson:
+      people.find((person) => person.is_primary_client || person.role === 'petitioner') ?? null,
+    otherParent: people.find((person) => !person.is_primary_client) ?? null,
+    child: children[0] ?? null,
+    hearing,
+    hasLocalCaseSetup: localCaseSetupExists,
+    hasUserCaseSetup: userCaseSetupExists,
+    isDemoCase: demoCase,
+    saveCaseSetup,
     loading,
     error,
     hasHydrated,
@@ -1078,13 +1562,26 @@ export function useAdvisorConversation() {
 }
 
 export function useCaseMap() {
-  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
+  const {
+    snapshot,
+    home,
+    loading,
+    error,
+    hasHydrated,
+    hasLocalCaseSetup: localCaseSetupExists,
+    hasUserCaseSetup: userCaseSetupExists,
+    isDemoCase: demoCase,
+    persistence,
+  } = useCaseIntelligenceHome();
   const caseId = home.activeCase?.id;
 
   return {
     snapshot,
     source: home.source,
     activeCase: home.activeCase,
+    hasLocalCaseSetup: localCaseSetupExists,
+    hasUserCaseSetup: userCaseSetupExists,
+    isDemoCase: demoCase,
     children: caseId
       ? snapshot.children.filter((child) => !child.deleted_at && child.case_id === caseId)
       : [],
