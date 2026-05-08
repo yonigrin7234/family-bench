@@ -44,14 +44,17 @@ import {
 function ChromeButton({
   icon,
   label,
+  onPress,
 }: {
   icon: IconName;
   label: string;
+  onPress?: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      onPress={onPress}
       style={({ pressed }) => [styles.chromeButton, pressed && styles.pressed]}
     >
       <Icon name={icon} size={18} color={fbColors.ink} />
@@ -73,7 +76,11 @@ function TopChrome() {
         <Icon name="caretDown" size={13} color={fbColors.inkMute} />
       </Pressable>
 
-      <ChromeButton icon="folder" label="Open evidence folder" />
+      <ChromeButton
+        icon="folder"
+        label="Open evidence folder"
+        onPress={() => router.push('/evidence' as never)}
+      />
     </View>
   );
 }

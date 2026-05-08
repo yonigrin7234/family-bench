@@ -9,6 +9,7 @@ export {
   useCaseMap,
   useCaseSetup,
   useCaseIntelligenceHome,
+  useCaseEvidence,
   useCaseIntelligenceTimeline,
   useCreatePlaceholderAttachment,
   useCreateLocalAttachment,

@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/', icon: 'home', label: 'Home' },
   { href: '/capture', icon: 'plus', label: 'Capture' },
   { href: '/timeline', icon: 'clock', label: 'Timeline' },
+  { href: '/evidence', icon: 'folder', label: 'Evidence' },
   { href: '/reports', icon: 'doc', label: 'Reports' },
   { href: '/case-map', icon: 'scales', label: 'Case Map' },
 ] as const;
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: fbColors.inkMute,
-    fontSize: 10.5,
+    fontSize: 10,
     lineHeight: 12,
     fontFamily: fbFonts.sansSemi,
     fontWeight: fbWeights.semi,

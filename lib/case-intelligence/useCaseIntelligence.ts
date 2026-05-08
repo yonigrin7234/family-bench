@@ -1677,6 +1677,56 @@ export function useCaseIntelligenceTimeline() {
   };
 }
 
+export function useCaseEvidence() {
+  const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
+  const caseId = home.activeCase?.id;
+  const entries = useMemo(() => {
+    if (!caseId) return [];
+
+    return snapshot.entries
+      .filter((entry) => !entry.deleted_at && entry.case_id === caseId)
+      .sort((a, b) =>
+        `${b.event_date}T${b.event_time ?? '00:00:00'}`.localeCompare(
+          `${a.event_date}T${a.event_time ?? '00:00:00'}`,
+        ),
+      );
+  }, [caseId, snapshot.entries]);
+  const entryIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
+  const attachments = useMemo(() => {
+    if (!caseId) return [];
+
+    return snapshot.evidenceAttachments
+      .filter((attachment) => !attachment.deleted_at)
+      .filter(
+        (attachment) =>
+          attachment.case_id === caseId || Boolean(attachment.entry_id && entryIds.has(attachment.entry_id)),
+      )
+      .sort((a, b) =>
+        (b.captured_at ?? b.created_at).localeCompare(a.captured_at ?? a.created_at),
+      );
+  }, [caseId, entryIds, snapshot.evidenceAttachments]);
+  const children = useMemo(() => {
+    if (!caseId) return [];
+
+    return snapshot.children
+      .filter((child) => !child.deleted_at && child.case_id === caseId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [caseId, snapshot.children]);
+
+  return {
+    snapshot,
+    source: home.source,
+    activeCase: home.activeCase,
+    entries,
+    attachments,
+    children,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  };
+}
+
 export function useAdvisorConversation() {
   const { snapshot, home, loading, error, hasHydrated, persistence } = useCaseIntelligenceHome();
 
