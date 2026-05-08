@@ -160,6 +160,17 @@ export type CreatePlaceholderAttachmentInput = {
   sourceLabel?: string | null;
 };
 
+export type CreateLocalAttachmentInput = {
+  entryId: string;
+  kind: AttachmentKind;
+  filename: string;
+  mimeType?: string | null;
+  fileSizeBytes?: number | null;
+  localUri?: string | null;
+  localReference?: string | null;
+  sourceLabel?: string | null;
+};
+
 type SaveAttachmentResult = {
   attachment: EvidenceAttachment;
   source: 'local';
@@ -212,6 +223,7 @@ type CaseIntelligenceState = {
   createPlaceholderAttachment: (
     input: CreatePlaceholderAttachmentInput,
   ) => Promise<SaveAttachmentResult>;
+  createLocalAttachment: (input: CreateLocalAttachmentInput) => Promise<SaveAttachmentResult>;
   sendAdvisorMessage: (input: SendAdvisorMessageInput) => void;
   setReportPreviewState: (patch: Partial<ReportPreviewState>) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
@@ -416,6 +428,24 @@ function compactTimestamp(value: string) {
   return value.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z').replace('T', '-');
 }
 
+function safeFilename(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return 'local-attachment';
+  return trimmed.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'local-attachment';
+}
+
+function mimeTypeForKind(kind: AttachmentKind, mimeType?: string | null) {
+  const normalized = nullIfBlank(mimeType);
+  if (normalized) return normalized;
+  if (kind === 'photo' || kind === 'screenshot') return 'image/jpeg';
+  if (kind === 'voice_memo') return 'audio/m4a';
+  return 'application/octet-stream';
+}
+
+function fileTypeForKind(kind: AttachmentKind) {
+  return kind === 'screenshot' ? 'screenshot' : kind;
+}
+
 function buildPlaceholderAttachment(
   input: CreatePlaceholderAttachmentInput,
   snapshot: CaseIntelligenceSnapshot,
@@ -461,6 +491,66 @@ function buildPlaceholderAttachment(
       derived_previews_pending: true,
       file_size_placeholder: true,
       hash_status: 'placeholder_not_content_hash',
+    },
+    created_at: now,
+    deleted_at: null,
+  };
+}
+
+function buildLocalAttachment(
+  input: CreateLocalAttachmentInput,
+  snapshot: CaseIntelligenceSnapshot,
+  userId: string,
+): EvidenceAttachment {
+  const entry = snapshot.entries.find(
+    (candidate) => candidate.id === input.entryId && !candidate.deleted_at,
+  );
+  if (!entry) {
+    throw new Error('Open a saved entry before adding attachment metadata.');
+  }
+
+  const now = new Date().toISOString();
+  const id = `local-attachment-${Crypto.randomUUID()}`;
+  const fileName = safeFilename(input.filename);
+  const mimeType = mimeTypeForKind(input.kind, input.mimeType);
+  const sourceLabel = nullIfBlank(input.sourceLabel) ?? 'Family Bench local file selection';
+  const caseId = entry.case_id ?? getActiveCase(snapshot)?.id ?? null;
+  const storagePath = `local-only/selected/${caseId ?? 'case'}/${entry.id}/${id}/${fileName}`;
+
+  return {
+    id,
+    user_id: userId,
+    case_id: caseId,
+    entry_id: entry.id,
+    file_name: fileName,
+    file_type: fileTypeForKind(input.kind),
+    mime_type: mimeType,
+    file_size_bytes:
+      typeof input.fileSizeBytes === 'number' && Number.isFinite(input.fileSizeBytes)
+        ? input.fileSizeBytes
+        : null,
+    storage_bucket: 'evidence-originals',
+    storage_path: storagePath,
+    thumbnail_path: null,
+    description:
+      'Local attachment metadata record. Original evidence reference is preserved locally; uploads and derived previews come later.',
+    is_receipt: false,
+    file_hash: `placeholder:${id}`,
+    hash_algorithm: 'sha256-placeholder',
+    captured_at: now,
+    source_device: sourceLabel,
+    exif: {
+      attachment_kind: input.kind,
+      source_label: sourceLabel,
+      storage_status: 'local_only_no_upload',
+      original_evidence_preserved: true,
+      derived_previews_pending: true,
+      file_size_placeholder: input.fileSizeBytes == null,
+      hash_status: 'placeholder_not_content_hash',
+      local_uri: nullIfBlank(input.localUri),
+      local_reference: nullIfBlank(input.localReference),
+      selected_at: now,
+      selection_source: 'local_picker',
     },
     created_at: now,
     deleted_at: null,
@@ -1344,6 +1434,44 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       warning: 'Attachment metadata was saved locally. Uploads and remote storage sync are not enabled in this PR.',
     };
   },
+  createLocalAttachment: async (input) => {
+    const current = get();
+    const activeCase = getActiveCase(current.snapshot);
+    const userId = activeCase?.user_id || '';
+    const attachment = buildLocalAttachment(input, current.snapshot, userId);
+    const recordKey = localRecordKey('attachments', attachment.id);
+    const localRecord = createLocalRecordMeta({
+      table: 'attachments',
+      id: attachment.id,
+      status: 'local_pending',
+    });
+    const localAttachment = withEvidenceAttachmentLocalMeta(attachment, localRecord);
+
+    set((state) => ({
+      snapshot: appendAttachment(state.snapshot, localAttachment),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [recordKey]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+
+    return {
+      attachment: localAttachment,
+      source: 'local',
+      warning:
+        'Attachment metadata was saved locally. Original evidence stays on this device; remote storage uploads are disabled.',
+    };
+  },
   sendAdvisorMessage: (input) => {
     const prompt = input.prompt.trim();
     if (!prompt) return;
@@ -1625,6 +1753,10 @@ export function useUpdateEntryReview() {
 
 export function useCreatePlaceholderAttachment() {
   return useCaseIntelligenceStore((state) => state.createPlaceholderAttachment);
+}
+
+export function useCreateLocalAttachment() {
+  return useCaseIntelligenceStore((state) => state.createLocalAttachment);
 }
 
 export function useReportPreviewState() {

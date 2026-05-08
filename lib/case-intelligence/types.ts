@@ -18,7 +18,7 @@ export type AIOutput = Tables<'ai_outputs'>;
 export type AdvisorThread = Tables<'advisor_threads'>;
 
 export type CaseIntelligenceSource = 'supabase' | 'fallback' | 'local';
-export type LocalSyncStatus = 'pending' | 'error' | 'synced';
+export type LocalSyncStatus = 'pending' | 'local_pending' | 'error' | 'synced';
 
 export type LocalRecordMeta = {
   table: string;

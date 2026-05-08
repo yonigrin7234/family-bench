@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
   Chip,
@@ -29,10 +30,12 @@ import {
   getEntryMetadata,
   getEntryTypeOption,
   isEntryReviewed,
+  useCreateLocalAttachment,
   useCreatePlaceholderAttachment,
   useEntryDetail,
   useUpdateEntryReview,
   type AttachmentKind,
+  type CreateLocalAttachmentInput,
   type EvidenceAttachment,
 } from '@/lib/case-intelligence';
 
@@ -96,6 +99,8 @@ const ATTACHMENT_OPTIONS: Array<{
   { kind: 'screenshot', label: 'Add screenshot placeholder', icon: 'camera' },
 ];
 
+type LocalAttachmentPick = Omit<CreateLocalAttachmentInput, 'entryId'>;
+
 function attachmentMeta(attachment: EvidenceAttachment): Record<string, unknown> {
   const exif = attachment.exif;
   if (!exif || typeof exif !== 'object' || Array.isArray(exif)) return {};
@@ -104,6 +109,10 @@ function attachmentMeta(attachment: EvidenceAttachment): Record<string, unknown>
 
 function stringMeta(value: unknown) {
   return typeof value === 'string' ? value : null;
+}
+
+function numberMeta(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function attachmentKindLabel(attachment: EvidenceAttachment) {
@@ -118,16 +127,133 @@ function attachmentKindLabel(attachment: EvidenceAttachment) {
 function attachmentIconName(attachment: EvidenceAttachment): IconName {
   if (attachment.file_type === 'voice_memo') return 'mic';
   if (attachment.file_type === 'document') return 'doc';
+  if (attachment.file_type === 'photo' || attachment.file_type === 'screenshot') return 'camera';
   return 'paperclip';
+}
+
+function formatFileSize(bytes?: number | null) {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes)) return 'Not available';
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function filenameFromUri(uri: string, fallback: string) {
+  const cleaned = uri.split('?')[0]?.split('#')[0] ?? '';
+  const name = cleaned.split('/').filter(Boolean).pop();
+  return name || fallback;
+}
+
+function kindFromMime(mimeType?: string | null): AttachmentKind {
+  if (mimeType?.startsWith('image/')) return 'photo';
+  return 'document';
+}
+
+async function pickImageAttachment(): Promise<LocalAttachmentPick | null> {
+  if (Platform.OS !== 'web') {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error('Photo library permission is required to select an image.');
+    }
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: false,
+    quality: 1,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  const mimeType = asset.mimeType ?? (asset.fileName?.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+  const filename = asset.fileName ?? filenameFromUri(asset.uri, `photo-${Date.now()}.jpg`);
+
+  return {
+    kind: filename.toLowerCase().includes('screenshot') ? 'screenshot' : 'photo',
+    filename,
+    mimeType,
+    fileSizeBytes: asset.fileSize ?? asset.file?.size ?? null,
+    localUri: asset.uri,
+    localReference:
+      asset.assetId ??
+      (asset.file ? `web-image:${asset.file.name}:${asset.file.size}:${asset.file.lastModified}` : asset.uri),
+    sourceLabel: 'Photo library selection',
+  };
+}
+
+async function pickWebDocumentAttachment(): Promise<LocalAttachmentPick | null> {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    throw new Error('Document selection is available in the web preview for this PR.');
+  }
+
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    let settled = false;
+    const settle = (value: LocalAttachmentPick | null) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(value);
+    };
+    input.type = 'file';
+    input.accept = [
+      'application/pdf',
+      'image/*',
+      'text/plain',
+      'text/csv',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ].join(',');
+    input.style.display = 'none';
+    input.addEventListener('cancel', () => settle(null), { once: true });
+    input.onchange = () => {
+      const file = input.files?.[0] ?? null;
+
+      if (!file) {
+        settle(null);
+        return;
+      }
+
+      const localUri = URL.createObjectURL(file);
+
+      settle({
+        kind: kindFromMime(file.type),
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        fileSizeBytes: file.size,
+        localUri,
+        localReference: `web-file:${file.name}:${file.size}:${file.lastModified}`,
+        sourceLabel: 'Local file selection',
+      });
+    };
+    document.body.appendChild(input);
+    input.click();
+  });
 }
 
 function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
   const exif = attachmentMeta(attachment);
   const syncStatus = stringMeta(exif.sync_status) ?? 'pending';
   const sourceLabel = stringMeta(exif.source_label) ?? attachment.source_device;
+  const localUri = stringMeta(exif.local_uri);
+  const localReference = stringMeta(exif.local_reference);
+  const selectedAt = stringMeta(exif.selected_at);
+  const isLocalSelection = stringMeta(exif.selection_source) === 'local_picker';
+  const canPreviewImage = Boolean(localUri && attachment.mime_type?.startsWith('image/'));
 
   return (
     <View style={styles.attachmentRecord}>
+      {canPreviewImage && localUri ? (
+        <Image source={{ uri: localUri }} resizeMode="cover" style={styles.attachmentPreview} />
+      ) : (
+        <View style={styles.attachmentFilePreview}>
+          <Icon name={attachmentIconName(attachment)} size={20} color={fbColors.ink} />
+          <Text style={styles.attachmentFilePreviewText}>
+            {attachment.mime_type?.startsWith('image/') ? 'Image metadata' : 'File metadata'}
+          </Text>
+        </View>
+      )}
       <View style={styles.attachmentHeader}>
         <View style={styles.attachmentTitleRow}>
           <View style={styles.attachmentIcon}>
@@ -150,15 +276,25 @@ function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
         </Chip>
       </View>
       <Text style={styles.attachmentBody}>
-        Original evidence is preserved. Uploads, previews, and derived files come later.
+        {isLocalSelection
+          ? 'Original evidence reference is preserved locally. Cloud uploads, OCR, AI extraction, and derived files come later.'
+          : 'Original evidence is preserved. Uploads, previews, and derived files come later.'}
       </Text>
       <View style={styles.attachmentDetails}>
         <DetailRow label="MIME type" value={attachment.mime_type} />
-        <DetailRow label="File size" value={`${attachment.file_size_bytes ?? 0} bytes placeholder`} />
+        <DetailRow
+          label="File size"
+          value={
+            numberMeta(attachment.file_size_bytes) === null && !isLocalSelection
+              ? '0 bytes placeholder'
+              : formatFileSize(attachment.file_size_bytes)
+          }
+        />
+        <DetailRow label="Local reference" value={localReference || localUri} />
         <DetailRow label="Storage bucket" value={attachment.storage_bucket || 'Not assigned'} />
         <DetailRow label="Storage path" value={attachment.storage_path} />
         <DetailRow label="Hash" value={attachment.file_hash} />
-        <DetailRow label="Captured" value={attachment.captured_at} />
+        <DetailRow label="Captured" value={attachment.captured_at ?? selectedAt} />
         <DetailRow label="Source label" value={sourceLabel} />
       </View>
     </View>
@@ -170,11 +306,13 @@ export default function EntryDetail() {
   const entryId = getParam(params.id);
   const updateEntryReview = useUpdateEntryReview();
   const createPlaceholderAttachment = useCreatePlaceholderAttachment();
+  const createLocalAttachment = useCreateLocalAttachment();
   const { entry, child, attachments, loading } = useEntryDetail(entryId);
   const [mode, setMode] = useState<'read' | 'edit'>('read');
   const [bodyDraft, setBodyDraft] = useState('');
   const [visibility, setVisibility] = useState<ReviewVisibility>('court_ready');
   const [addingAttachmentKind, setAddingAttachmentKind] = useState<AttachmentKind | null>(null);
+  const [pickingAttachment, setPickingAttachment] = useState<'photo' | 'document' | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const option = getEntryTypeOption(entry?.entry_type);
   const metadata = entry ? getEntryMetadata(entry) : {};
@@ -213,7 +351,7 @@ export default function EntryDetail() {
   }
 
   async function addAttachmentPlaceholder(kind: AttachmentKind) {
-    if (!entry || addingAttachmentKind) return;
+    if (!entry || addingAttachmentKind || pickingAttachment) return;
     setAddingAttachmentKind(kind);
     setAttachmentNotice(null);
 
@@ -230,6 +368,33 @@ export default function EntryDetail() {
       );
     } finally {
       setAddingAttachmentKind(null);
+    }
+  }
+
+  async function addSelectedAttachment(source: 'photo' | 'document') {
+    if (!entry || addingAttachmentKind || pickingAttachment) return;
+    setPickingAttachment(source);
+    setAttachmentNotice(null);
+
+    try {
+      const selected =
+        source === 'photo' ? await pickImageAttachment() : await pickWebDocumentAttachment();
+      if (!selected) {
+        setAttachmentNotice('No attachment was selected.');
+        return;
+      }
+
+      const result = await createLocalAttachment({
+        entryId: entry.id,
+        ...selected,
+      });
+      setAttachmentNotice(result.warning);
+    } catch (err) {
+      setAttachmentNotice(
+        err instanceof Error ? err.message : 'Unable to save selected attachment metadata locally.',
+      );
+    } finally {
+      setPickingAttachment(null);
     }
   }
 
@@ -395,13 +560,43 @@ export default function EntryDetail() {
         <Text style={styles.sectionBody}>
           {attachments.length
             ? `${attachments.length} local attachment metadata records are linked to this entry.`
-            : 'No evidence metadata is attached yet. Add a local placeholder record now; file uploads will be added after storage policy review.'}
+            : 'No evidence metadata is attached yet. Select a local file or image to save metadata on this device.'}
         </Text>
         <Text style={styles.sectionBody}>
-          Placeholder records describe original evidence. The original file, previews, OCR, and
-          derived files are not created in this PR.
+          Original evidence stays local. Cloud uploads, OCR, AI extraction, and derived files are
+          not created in this PR.
         </Text>
         <View style={styles.attachmentActionGrid}>
+          <PillButton
+            tone="primary"
+            size="md"
+            icon="camera"
+            full
+            disabled={Boolean(addingAttachmentKind || pickingAttachment)}
+            onPress={() => addSelectedAttachment('photo')}
+          >
+            {pickingAttachment === 'photo' ? 'Opening picker' : 'Select photo or image'}
+          </PillButton>
+          <PillButton
+            tone="soft"
+            size="md"
+            icon="doc"
+            full
+            disabled={Platform.OS !== 'web' || Boolean(addingAttachmentKind || pickingAttachment)}
+            onPress={() => addSelectedAttachment('document')}
+          >
+            {pickingAttachment === 'document'
+              ? 'Opening picker'
+              : Platform.OS === 'web'
+                ? 'Select file or document'
+                : 'Document picker coming later'}
+          </PillButton>
+        </View>
+        <View style={styles.placeholderBlock}>
+          <Text style={styles.sourceLabel}>PLACEHOLDER METADATA</Text>
+          <Text style={styles.sectionBody}>
+            Use placeholders only when the original evidence is not ready to select yet.
+          </Text>
           {ATTACHMENT_OPTIONS.map((option) => (
             <PillButton
               key={option.kind}
@@ -409,7 +604,7 @@ export default function EntryDetail() {
               size="md"
               icon={option.icon}
               full
-              disabled={Boolean(addingAttachmentKind)}
+              disabled={Boolean(addingAttachmentKind || pickingAttachment)}
               onPress={() => addAttachmentPlaceholder(option.kind)}
             >
               {addingAttachmentKind === option.kind ? 'Saving metadata' : option.label}
@@ -426,7 +621,7 @@ export default function EntryDetail() {
         ) : null}
         <Rule />
         <View style={styles.attachmentActionGrid}>
-          <ComingLaterButton icon="upload">Upload file</ComingLaterButton>
+          <ComingLaterButton icon="upload">Upload to storage</ComingLaterButton>
           <ComingLaterButton icon="camera">Capture photo</ComingLaterButton>
           <ComingLaterButton icon="mic">Record voice memo</ComingLaterButton>
         </View>
@@ -581,6 +776,10 @@ const styles = StyleSheet.create({
   attachmentActionGrid: {
     gap: fbSpacing.x2,
   },
+  placeholderBlock: {
+    gap: fbSpacing.x2,
+    paddingTop: fbSpacing.x2,
+  },
   attachmentNotice: {
     color: fbColors.inkMute,
     fontSize: fbType.small,
@@ -597,6 +796,27 @@ const styles = StyleSheet.create({
     borderWidth: fbBorder.hairline,
     borderColor: fbColors.ruleSoft,
     backgroundColor: fbColors.paperDeep,
+  },
+  attachmentPreview: {
+    width: '100%',
+    height: 156,
+    borderRadius: fbRadii.md - 2,
+    backgroundColor: fbColors.surface,
+  },
+  attachmentFilePreview: {
+    minHeight: 72,
+    borderRadius: fbRadii.md - 2,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: fbSpacing.x2,
+  },
+  attachmentFilePreviewText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansRegular,
   },
   attachmentHeader: {
     minHeight: fbTouch.min,
