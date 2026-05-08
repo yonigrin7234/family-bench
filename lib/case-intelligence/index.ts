@@ -3,6 +3,7 @@ export * from './types';
 export * from './entryTypes';
 export * from './review';
 export * from './persistence';
+export * from './patterns';
 export {
   useAdvisorConversation,
   useCaptureEntry,
@@ -11,6 +12,7 @@ export {
   useCaseIntelligenceHome,
   useCaseEvidence,
   useCaseIntelligenceTimeline,
+  useCasePatterns,
   useCreatePlaceholderAttachment,
   useCreateLocalAttachment,
   useEntryDetail,

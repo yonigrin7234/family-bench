@@ -73,6 +73,35 @@ export type FilingBuilderState = {
   updatedAt: string | null;
 };
 
+export type DetectedPatternKind =
+  | 'late_exchanges'
+  | 'denied_visits'
+  | 'flagged_incidents'
+  | 'medical_entries'
+  | 'communication_non_response'
+  | 'filing_linked_entries';
+
+export type PatternStatus = 'new' | 'acknowledged' | 'dismissed';
+
+export type PatternReviewState = {
+  acknowledgedPatternIds: string[];
+  dismissedPatternIds: string[];
+  updatedAt: string | null;
+};
+
+export type DetectedCasePattern = {
+  id: string;
+  kind: DetectedPatternKind;
+  title: string;
+  explanation: string;
+  entryCount: number;
+  firstSeenOn: string | null;
+  lastSeenOn: string | null;
+  sourceEntries: Entry[];
+  relatedFilingPackages: FilingPackage[];
+  status: PatternStatus;
+};
+
 export type AdvisorMessageRole = 'advisor' | 'user';
 
 export type AdvisorMessage = {

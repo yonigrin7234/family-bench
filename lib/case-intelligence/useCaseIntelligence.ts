@@ -9,6 +9,7 @@ import {
   DEFAULT_ADVISOR_STATE,
   DEFAULT_FILING_BUILDER_STATE,
   DEFAULT_FILING_CHECKLIST_STATE,
+  DEFAULT_PATTERN_REVIEW_STATE,
   DEFAULT_REPORT_PREVIEW_STATE,
   createLocalRecordMeta,
   getLocalPersistenceAdapter,
@@ -18,6 +19,7 @@ import {
   withEntryLocalMeta,
   writePersistedCaseIntelligence,
 } from './persistence';
+import { buildDetectedCasePatterns } from './patterns';
 import { getEntryMetadata } from './review';
 import { createFallbackCaseIntelligence } from './seed';
 import {
@@ -47,6 +49,7 @@ import type {
   KeyDate,
   LocalPersistenceDiagnostics,
   LocalRecordMeta,
+  PatternReviewState,
   Person,
   ReportPreviewType,
   ReportPreviewState,
@@ -233,6 +236,7 @@ type CaseIntelligenceState = {
   reportPreviewState: ReportPreviewState;
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
+  patternReviewState: PatternReviewState;
   localRecords: Record<string, LocalRecordMeta>;
   persistence: LocalPersistenceDiagnostics;
   loading: boolean;
@@ -254,6 +258,9 @@ type CaseIntelligenceState = {
   toggleFilingPackageAttachment: (packageId: string, attachmentId: string) => void;
   toggleFilingPackageReport: (packageId: string, reportType: ReportPreviewType) => void;
   toggleFilingPackageChecklist: (packageId: string, item: FilingChecklistKey) => void;
+  acknowledgePattern: (patternId: string) => void;
+  dismissPattern: (patternId: string) => void;
+  restorePattern: (patternId: string) => void;
   sendAdvisorMessage: (input: SendAdvisorMessageInput) => void;
   setReportPreviewState: (patch: Partial<ReportPreviewState>) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
@@ -984,6 +991,29 @@ function toggleString(values: string[], value: string) {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+function updatePatternReviewState(
+  patternReviewState: PatternReviewState,
+  patternId: string,
+  status: 'acknowledged' | 'dismissed' | 'new',
+): PatternReviewState {
+  const acknowledgedPatternIds = patternReviewState.acknowledgedPatternIds.filter((id) => id !== patternId);
+  const dismissedPatternIds = patternReviewState.dismissedPatternIds.filter((id) => id !== patternId);
+
+  return {
+    acknowledgedPatternIds:
+      status === 'acknowledged'
+        ? uniqueStrings([...acknowledgedPatternIds, patternId])
+        : acknowledgedPatternIds,
+    dismissedPatternIds:
+      status === 'dismissed' ? uniqueStrings([...dismissedPatternIds, patternId]) : dismissedPatternIds,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function buildFilingPackage(
   input: CreateFilingPackageInput,
   snapshot: CaseIntelligenceSnapshot,
@@ -1319,6 +1349,7 @@ function persistStateSnapshot(
     reportPreviewState,
     advisorState,
     filingBuilderState: get().filingBuilderState,
+    patternReviewState: get().patternReviewState,
     localRecords,
   })
     .then(({ adapter, savedAt }) => {
@@ -1349,6 +1380,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
   reportPreviewState: DEFAULT_REPORT_PREVIEW_STATE,
   advisorState: DEFAULT_ADVISOR_STATE,
   filingBuilderState: DEFAULT_FILING_BUILDER_STATE,
+  patternReviewState: DEFAULT_PATTERN_REVIEW_STATE,
   localRecords: {},
   persistence: createPersistenceDiagnostics(),
   loading: false,
@@ -1365,6 +1397,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
     let hydratedReportPreviewState = get().reportPreviewState;
     let hydratedAdvisorState = get().advisorState;
     let hydratedFilingBuilderState = get().filingBuilderState;
+    let hydratedPatternReviewState = get().patternReviewState;
     let hydratedLocalRecords = get().localRecords;
     let hasPersistedSnapshot = false;
 
@@ -1378,6 +1411,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         hydratedReportPreviewState = localResult.document.reportPreviewState;
         hydratedAdvisorState = localResult.document.advisorState;
         hydratedFilingBuilderState = localResult.document.filingBuilderState;
+        hydratedPatternReviewState = localResult.document.patternReviewState;
         hydratedLocalRecords = localResult.document.localRecords;
         hasPersistedSnapshot = true;
 
@@ -1387,6 +1421,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
           reportPreviewState: hydratedReportPreviewState,
           advisorState: hydratedAdvisorState,
           filingBuilderState: hydratedFilingBuilderState,
+          patternReviewState: hydratedPatternReviewState,
           localRecords: hydratedLocalRecords,
           hasHydrated: true,
           hasPersistedSnapshot: true,
@@ -1939,6 +1974,52 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       get,
     );
   },
+  acknowledgePattern: (patternId) => {
+    set((state) => ({
+      patternReviewState: updatePatternReviewState(
+        state.patternReviewState,
+        patternId,
+        'acknowledged',
+      ),
+      hasPersistedSnapshot: true,
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  dismissPattern: (patternId) => {
+    set((state) => ({
+      patternReviewState: updatePatternReviewState(state.patternReviewState, patternId, 'dismissed'),
+      hasPersistedSnapshot: true,
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  restorePattern: (patternId) => {
+    set((state) => ({
+      patternReviewState: updatePatternReviewState(state.patternReviewState, patternId, 'new'),
+      hasPersistedSnapshot: true,
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
   sendAdvisorMessage: (input) => {
     const prompt = input.prompt.trim();
     if (!prompt) return;
@@ -2236,6 +2317,49 @@ export function useCaseEvidence() {
     attachments,
     children,
     filingEntryLinkCounts,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  };
+}
+
+export function useCasePatterns() {
+  const {
+    snapshot,
+    home,
+    filingBuilderState,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  } = useCaseIntelligenceHome();
+  const patternReviewState = useCaseIntelligenceStore((state) => state.patternReviewState);
+  const acknowledgePattern = useCaseIntelligenceStore((state) => state.acknowledgePattern);
+  const dismissPattern = useCaseIntelligenceStore((state) => state.dismissPattern);
+  const restorePattern = useCaseIntelligenceStore((state) => state.restorePattern);
+  const patterns = useMemo(
+    () =>
+      buildDetectedCasePatterns({
+        snapshot,
+        caseId: home.activeCase?.id,
+        filingBuilderState,
+        patternReviewState,
+      }),
+    [filingBuilderState, home.activeCase?.id, patternReviewState, snapshot],
+  );
+
+  return {
+    snapshot,
+    source: home.source,
+    activeCase: home.activeCase,
+    patterns,
+    activePatterns: patterns.filter((pattern) => pattern.status !== 'dismissed'),
+    dismissedPatterns: patterns.filter((pattern) => pattern.status === 'dismissed'),
+    patternReviewState,
+    acknowledgePattern,
+    dismissPattern,
+    restorePattern,
     loading,
     error,
     hasHydrated,

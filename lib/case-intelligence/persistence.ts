@@ -11,6 +11,7 @@ import type {
   FilingPackageLocalState,
   LocalRecordMeta,
   LocalSyncStatus,
+  PatternReviewState,
   ReportPreviewType,
   ReportPreviewState,
 } from './types';
@@ -46,6 +47,12 @@ export const DEFAULT_FILING_BUILDER_STATE: FilingBuilderState = {
   updatedAt: null,
 };
 
+export const DEFAULT_PATTERN_REVIEW_STATE: PatternReviewState = {
+  acknowledgedPatternIds: [],
+  dismissedPatternIds: [],
+  updatedAt: null,
+};
+
 export type LocalPersistenceAdapter = 'localStorage' | 'fileSystem' | 'memory';
 
 export type PersistedCaseIntelligenceDocument = {
@@ -55,6 +62,7 @@ export type PersistedCaseIntelligenceDocument = {
   reportPreviewState: ReportPreviewState;
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
+  patternReviewState: PatternReviewState;
   localRecords: Record<string, LocalRecordMeta>;
 };
 
@@ -259,6 +267,20 @@ function normalizeFilingBuilderState(value: unknown): FilingBuilderState {
   };
 }
 
+function normalizePatternReviewState(value: unknown): PatternReviewState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return DEFAULT_PATTERN_REVIEW_STATE;
+  }
+
+  const candidate = value as Partial<PatternReviewState>;
+
+  return {
+    acknowledgedPatternIds: stringArray(candidate.acknowledgedPatternIds),
+    dismissedPatternIds: stringArray(candidate.dismissedPatternIds),
+    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : null,
+  };
+}
+
 function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
   const parsed = JSON.parse(raw) as Partial<PersistedCaseIntelligenceDocument>;
   if (parsed.version !== PERSISTENCE_VERSION || !parsed.snapshot) return null;
@@ -270,6 +292,7 @@ function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
     reportPreviewState: normalizeReportPreviewState(parsed.reportPreviewState),
     advisorState: normalizeAdvisorState(parsed.advisorState),
     filingBuilderState: normalizeFilingBuilderState(parsed.filingBuilderState),
+    patternReviewState: normalizePatternReviewState(parsed.patternReviewState),
     localRecords: parsed.localRecords ?? {},
   };
 }
@@ -299,12 +322,14 @@ export async function writePersistedCaseIntelligence({
   reportPreviewState,
   advisorState,
   filingBuilderState,
+  patternReviewState,
   localRecords,
 }: {
   snapshot: CaseIntelligenceSnapshot;
   reportPreviewState: ReportPreviewState;
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
+  patternReviewState: PatternReviewState;
   localRecords: Record<string, LocalRecordMeta>;
 }): Promise<{ adapter: LocalPersistenceAdapter; savedAt: string }> {
   const adapter = getLocalPersistenceAdapter();
@@ -315,6 +340,7 @@ export async function writePersistedCaseIntelligence({
     reportPreviewState,
     advisorState,
     filingBuilderState,
+    patternReviewState,
     localRecords,
   };
   const serialized = JSON.stringify(document);
