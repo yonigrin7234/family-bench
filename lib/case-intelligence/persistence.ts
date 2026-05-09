@@ -395,3 +395,24 @@ export async function writePersistedCaseIntelligence({
   memoryDocument = document;
   return { adapter, savedAt: document.savedAt };
 }
+
+export async function clearPersistedCaseIntelligence(): Promise<{ adapter: LocalPersistenceAdapter; clearedAt: string }> {
+  const adapter = getLocalPersistenceAdapter();
+  const clearedAt = new Date().toISOString();
+
+  if (adapter === 'localStorage') {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return { adapter, clearedAt };
+  }
+
+  if (adapter === 'fileSystem') {
+    const info = await FileSystem.getInfoAsync(FILE_URI);
+    if (info.exists) {
+      await FileSystem.deleteAsync(FILE_URI, { idempotent: true });
+    }
+    return { adapter, clearedAt };
+  }
+
+  memoryDocument = null;
+  return { adapter, clearedAt };
+}

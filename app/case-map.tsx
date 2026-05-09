@@ -920,6 +920,15 @@ function CaseMapContextRail({
         >
           Safety placeholder
         </PillButton>
+        <PillButton
+          tone="ghost"
+          size="md"
+          icon="folder"
+          full
+          onPress={() => router.push('/settings' as never)}
+        >
+          Settings and memory index
+        </PillButton>
       </View>
       <Rule />
       <Text style={styles.railText}>

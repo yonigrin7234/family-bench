@@ -12,6 +12,7 @@ import {
   DEFAULT_PATTERN_REVIEW_STATE,
   DEFAULT_REPORT_PREVIEW_STATE,
   DEFAULT_SAVED_REPORT_VERSIONS,
+  clearPersistedCaseIntelligence,
   createLocalRecordMeta,
   getLocalPersistenceAdapter,
   localRecordKey,
@@ -310,6 +311,7 @@ type CaseIntelligenceState = {
   linkEntryToCourtOrderProvision: (entryId: string, provisionId: string | null) => void;
   createKeyDate: (input: KeyDateInput) => KeyDate;
   updateKeyDate: (keyDateId: string, input: KeyDateInput) => void;
+  clearLocalCaseData: () => Promise<void>;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
 };
 
@@ -1881,6 +1883,30 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       );
     }
   },
+  clearLocalCaseData: async () => {
+    const result = await clearPersistedCaseIntelligence();
+    const resetSnapshot = createFallbackCaseIntelligence();
+
+    set({
+      snapshot: resetSnapshot,
+      source: 'fallback',
+      reportPreviewState: DEFAULT_REPORT_PREVIEW_STATE,
+      savedReportVersions: DEFAULT_SAVED_REPORT_VERSIONS,
+      advisorState: DEFAULT_ADVISOR_STATE,
+      filingBuilderState: DEFAULT_FILING_BUILDER_STATE,
+      patternReviewState: DEFAULT_PATTERN_REVIEW_STATE,
+      localRecords: {},
+      hasPersistedSnapshot: false,
+      hasLoaded: true,
+      hasHydrated: true,
+      persistence: createPersistenceDiagnostics({
+        adapter: result.adapter,
+        hydrationCompleted: true,
+        lastHydratedAt: result.clearedAt,
+        error: null,
+      }),
+    });
+  },
   saveCaseSetup: async (input) => {
     const current = get();
     const built = buildCaseSetupSnapshot(input, current.snapshot, current.localRecords);
@@ -3182,6 +3208,55 @@ export function useReportPreviewState() {
 
 export function useLocalPersistenceDiagnostics() {
   return useCaseIntelligenceStore((state) => state.persistence);
+}
+
+export function useSettingsMemoryIndex() {
+  const {
+    snapshot,
+    home,
+    filingBuilderState,
+    filingEntryLinkCounts,
+    filingReportLinkCounts,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  } = useCaseIntelligenceHome();
+  const savedReportVersions = useCaseIntelligenceStore((state) => state.savedReportVersions);
+  const advisorState = useCaseIntelligenceStore((state) => state.advisorState);
+  const patternReviewState = useCaseIntelligenceStore((state) => state.patternReviewState);
+  const clearLocalCaseData = useCaseIntelligenceStore((state) => state.clearLocalCaseData);
+  const caseId = home.activeCase?.id;
+  const entries = caseId
+    ? snapshot.entries.filter((entry) => !entry.deleted_at && entry.case_id === caseId)
+    : [];
+  const attachments = snapshot.evidenceAttachments.filter((attachment) => !attachment.deleted_at);
+  const audioMemos = attachments.filter((attachment) => attachment.file_type === 'voice_memo');
+  const activePatterns = buildDetectedCasePatterns({
+    snapshot,
+    caseId,
+    filingBuilderState,
+    patternReviewState,
+  }).filter((pattern) => pattern.status !== 'dismissed');
+
+  return {
+    snapshot,
+    activeCase: home.activeCase,
+    entries,
+    attachments,
+    audioMemos,
+    savedReportVersions,
+    advisorState,
+    filingBuilderState,
+    filingEntryLinkCounts,
+    filingReportLinkCounts,
+    activePatterns,
+    clearLocalCaseData,
+    loading,
+    error,
+    hasHydrated,
+    persistence,
+  };
 }
 
 export function useEntryDetail(entryId?: string) {

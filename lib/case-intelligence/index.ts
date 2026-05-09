@@ -19,6 +19,7 @@ export {
   useFilingBuilder,
   useLocalPersistenceDiagnostics,
   useReportPreviewState,
+  useSettingsMemoryIndex,
   useUpdateEntryReview,
   getKeyDateNotes,
   isKeyDatePriority,
