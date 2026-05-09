@@ -35,6 +35,7 @@ import {
   type ReportPreviewFlagFilter,
   type ReportPreviewType,
 } from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 type FlagFilter = ReportPreviewFlagFilter;
 type ReportType = ReportPreviewType;
@@ -308,10 +309,12 @@ function ReportPreviewCard({
   report,
   attachmentCountsByEntryId,
   filingLinkCount,
+  dense,
 }: {
   report: ReportPreview;
   attachmentCountsByEntryId: AttachmentCountsByEntryId;
   filingLinkCount: number;
+  dense?: boolean;
 }) {
   const references = report.entries.slice(0, 6);
   const attachmentCount = report.entries.reduce(
@@ -341,16 +344,16 @@ function ReportPreviewCard({
         ) : null}
       </View>
 
-      <View style={styles.metaGrid}>
-        <View style={styles.metaBox}>
+      <View style={[styles.metaGrid, dense && styles.desktopMetaGrid]}>
+        <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
           <Text style={styles.metaLabel}>DATE RANGE</Text>
           <Text style={styles.metaValue}>{dateRangeLabel(report.entries)}</Text>
         </View>
-        <View style={styles.metaBox}>
+        <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
           <Text style={styles.metaLabel}>INCLUDED ENTRIES</Text>
           <Text style={styles.metaValue}>{report.entries.length} entries</Text>
         </View>
-        <View style={styles.metaBox}>
+        <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
           <Text style={styles.metaLabel}>SOURCE ATTACHMENTS</Text>
           <Text style={styles.metaValue}>
             {attachmentCount
@@ -409,9 +412,39 @@ function ReportPreviewCard({
   );
 }
 
+function ReportsContextRail({
+  report,
+  attachmentCount,
+  filingLinkCount,
+  persistenceActive,
+  sourceLabel,
+}: {
+  report: ReportPreview;
+  attachmentCount: number;
+  filingLinkCount: number;
+  persistenceActive: boolean;
+  sourceLabel: string;
+}) {
+  return (
+    <SoftCard p={14} style={styles.railCard}>
+      <Text style={styles.sectionLabel}>REPORT CONTEXT</Text>
+      <Text style={styles.railValue}>{report.entries.length} entries</Text>
+      <Text style={styles.railText}>{report.title}</Text>
+      <Rule />
+      <Text style={styles.railText}>
+        {attachmentCount} local attachment references · {filingLinkCount ? 'linked to a filing package' : 'not linked to a filing package'}.
+      </Text>
+      <Text style={styles.railText}>
+        Persistence {persistenceActive ? 'active' : 'inactive'}. Source: {sourceLabel}.
+      </Text>
+    </SoftCard>
+  );
+}
+
 export default function Reports() {
   const { snapshot, entries, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
   const { reportPreviewState, setReportPreviewState, filingReportLinkCounts } = useReportPreviewState();
+  const { isMobile } = useResponsive();
   const reportType = reportPreviewState.reportType;
   const typeFilter = reportPreviewState.typeFilter;
   const flagFilter = reportPreviewState.flagFilter;
@@ -433,9 +466,102 @@ export default function Reports() {
       return counts;
     }, {});
   }, [snapshot.evidenceAttachments]);
+  const activeReportAttachmentCount = activeReport.entries.reduce(
+    (total, entry) => total + (attachmentCountsByEntryId[entry.id] ?? 0),
+    0,
+  );
+  const activeReportFilingLinkCount = filingReportLinkCounts[activeReport.id] ?? 0;
+  const sourceLabel =
+    source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data';
+
+  const filterPanel = (
+    <SoftCard p={16} style={[styles.filterCard, !isMobile && styles.desktopPanelCard]}>
+      <View style={styles.filterHeader}>
+        <View style={styles.filterTitleRow}>
+          <Icon name="filter" size={16} color={fbColors.ink} />
+          <Text style={styles.filterTitle}>Preview filters</Text>
+        </View>
+        <Text style={styles.resultCount}>
+          {loading ? 'Loading' : `${filteredEntries.length} entries`}
+        </Text>
+      </View>
+
+      <View style={styles.typeFilters}>
+        {REPORT_TYPES.map((option) => (
+          <ReportTypeChip
+            key={option.value}
+            value={option.value}
+            label={option.label}
+            tone={option.tone}
+            active={reportType === option.value}
+            filingLinkCount={filingReportLinkCounts[option.value] ?? 0}
+            onPress={() => setReportPreviewState({ reportType: option.value })}
+          />
+        ))}
+      </View>
+
+      <Segment<FlagFilter>
+        items={[
+          { v: 'all', label: 'All' },
+          { v: 'flagged', label: 'Flagged' },
+        ]}
+        value={flagFilter}
+        onChange={(value) => setReportPreviewState({ flagFilter: value })}
+      />
+
+      <View style={styles.typeFilters}>
+        <TypeFilterChip
+          value="all"
+          active={typeFilter === 'all'}
+          onPress={() => setReportPreviewState({ typeFilter: 'all' })}
+        />
+        {ENTRY_TYPE_OPTIONS.map((option) => (
+          <TypeFilterChip
+            key={option.value}
+            value={option.value}
+            active={typeFilter === option.value}
+            onPress={() => setReportPreviewState({ typeFilter: option.value })}
+          />
+        ))}
+      </View>
+    </SoftCard>
+  );
+
+  const previewPanel = (
+    <>
+      <InfoCallout title="Report limits" tone="ink">
+        These previews use existing local or synced entries only. They do not generate AI analysis, legal advice, uploads, database changes, or court PDFs. Local persistence is {persistence.active ? 'active' : 'inactive'}.
+      </InfoCallout>
+
+      <View style={[styles.resultsHeader, !isMobile && styles.desktopResultsHeader]}>
+        <Text style={styles.sectionLabel}>REPORT PREVIEW</Text>
+        <Text style={styles.resultCount}>
+          {activeCase?.title || 'Current case'} · {sourceLabel}
+        </Text>
+      </View>
+
+      <ReportPreviewCard
+        report={activeReport}
+        attachmentCountsByEntryId={attachmentCountsByEntryId}
+        filingLinkCount={activeReportFilingLinkCount}
+        dense={!isMobile}
+      />
+    </>
+  );
 
   return (
-    <CaseScreen>
+    <CaseScreen
+      desktopMaxWidth={1120}
+      rightRail={
+        <ReportsContextRail
+          report={activeReport}
+          attachmentCount={activeReportAttachmentCount}
+          filingLinkCount={activeReportFilingLinkCount}
+          persistenceActive={persistence.active}
+          sourceLabel={sourceLabel}
+        />
+      }
+    >
       <View style={styles.header}>
         <Display italic size={32} style={styles.title}>
           Reports
@@ -445,73 +571,17 @@ export default function Reports() {
         </Text>
       </View>
 
-      <SoftCard p={16} style={styles.filterCard}>
-        <View style={styles.filterHeader}>
-          <View style={styles.filterTitleRow}>
-            <Icon name="filter" size={16} color={fbColors.ink} />
-            <Text style={styles.filterTitle}>Preview filters</Text>
-          </View>
-          <Text style={styles.resultCount}>
-            {loading ? 'Loading' : `${filteredEntries.length} entries`}
-          </Text>
+      {isMobile ? (
+        <>
+          {filterPanel}
+          {previewPanel}
+        </>
+      ) : (
+        <View style={styles.desktopReportsGrid}>
+          <View style={styles.desktopFilterColumn}>{filterPanel}</View>
+          <View style={styles.desktopPreviewColumn}>{previewPanel}</View>
         </View>
-
-        <View style={styles.typeFilters}>
-          {REPORT_TYPES.map((option) => (
-            <ReportTypeChip
-              key={option.value}
-              value={option.value}
-              label={option.label}
-              tone={option.tone}
-              active={reportType === option.value}
-              filingLinkCount={filingReportLinkCounts[option.value] ?? 0}
-              onPress={() => setReportPreviewState({ reportType: option.value })}
-            />
-          ))}
-        </View>
-
-        <Segment<FlagFilter>
-          items={[
-            { v: 'all', label: 'All' },
-            { v: 'flagged', label: 'Flagged' },
-          ]}
-          value={flagFilter}
-          onChange={(value) => setReportPreviewState({ flagFilter: value })}
-        />
-
-        <View style={styles.typeFilters}>
-          <TypeFilterChip
-            value="all"
-            active={typeFilter === 'all'}
-            onPress={() => setReportPreviewState({ typeFilter: 'all' })}
-          />
-          {ENTRY_TYPE_OPTIONS.map((option) => (
-            <TypeFilterChip
-              key={option.value}
-              value={option.value}
-              active={typeFilter === option.value}
-              onPress={() => setReportPreviewState({ typeFilter: option.value })}
-            />
-          ))}
-        </View>
-      </SoftCard>
-
-      <InfoCallout title="Report limits" tone="ink">
-        These previews use existing local or synced entries only. They do not generate AI analysis, legal advice, uploads, database changes, or court PDFs. Local persistence is {persistence.active ? 'active' : 'inactive'}.
-      </InfoCallout>
-
-      <View style={styles.resultsHeader}>
-        <Text style={styles.sectionLabel}>REPORT PREVIEW</Text>
-        <Text style={styles.resultCount}>
-          {activeCase?.title || 'Current case'} · {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
-        </Text>
-      </View>
-
-      <ReportPreviewCard
-        report={activeReport}
-        attachmentCountsByEntryId={attachmentCountsByEntryId}
-        filingLinkCount={filingReportLinkCounts[activeReport.id] ?? 0}
-      />
+      )}
     </CaseScreen>
   );
 }
@@ -532,6 +602,22 @@ const styles = StyleSheet.create({
   filterCard: {
     marginTop: fbSpacing.x5,
     gap: fbSpacing.x4,
+  },
+  desktopPanelCard: {
+    marginTop: 0,
+  },
+  desktopReportsGrid: {
+    marginTop: fbSpacing.x5,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x5,
+  },
+  desktopFilterColumn: {
+    width: 320,
+  },
+  desktopPreviewColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   filterHeader: {
     minHeight: fbTouch.min,
@@ -571,6 +657,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: fbSpacing.x3,
+  },
+  desktopResultsHeader: {
+    marginTop: fbSpacing.x4,
   },
   sectionLabel: {
     color: fbColors.ox,
@@ -631,10 +720,16 @@ const styles = StyleSheet.create({
   metaGrid: {
     gap: fbSpacing.x2,
   },
+  desktopMetaGrid: {
+    flexDirection: 'row',
+  },
   metaBox: {
     padding: fbSpacing.x3,
     borderRadius: fbRadii.sm,
     backgroundColor: fbColors.paperDeep,
+  },
+  desktopMetaBox: {
+    flex: 1,
   },
   metaLabel: {
     color: fbColors.inkMute,
@@ -710,6 +805,22 @@ const styles = StyleSheet.create({
     fontFamily: fbFonts.sansRegular,
   },
   emptyText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railCard: {
+    gap: fbSpacing.x3,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 23,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railText: {
     color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,

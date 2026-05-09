@@ -29,6 +29,7 @@ import {
   type DetectedCasePattern,
   type Entry,
 } from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 function dateRangeLabel(pattern: DetectedCasePattern) {
   if (!pattern.firstSeenOn || !pattern.lastSeenOn) return 'Date range not available';
@@ -203,26 +204,56 @@ function PatternStats({
   activeCount,
   dismissedCount,
   acknowledgedCount,
+  compact,
 }: {
   activeCount: number;
   dismissedCount: number;
   acknowledgedCount: number;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.statsGrid}>
-      <SoftCard p={12} style={styles.statCard}>
+    <View style={[styles.statsGrid, compact && styles.desktopStatsGrid]}>
+      <SoftCard p={12} style={[styles.statCard, compact && styles.desktopStatCard]}>
         <Text style={styles.statValue}>{activeCount}</Text>
         <Text style={styles.statLabel}>Active</Text>
       </SoftCard>
-      <SoftCard p={12} style={styles.statCard}>
+      <SoftCard p={12} style={[styles.statCard, compact && styles.desktopStatCard]}>
         <Text style={styles.statValue}>{acknowledgedCount}</Text>
         <Text style={styles.statLabel}>Acknowledged</Text>
       </SoftCard>
-      <SoftCard p={12} style={styles.statCard}>
+      <SoftCard p={12} style={[styles.statCard, compact && styles.desktopStatCard]}>
         <Text style={styles.statValue}>{dismissedCount}</Text>
         <Text style={styles.statLabel}>Dismissed</Text>
       </SoftCard>
     </View>
+  );
+}
+
+function PatternsContextRail({
+  activeCount,
+  dismissedCount,
+  acknowledgedCount,
+  totalCount,
+  sourceLabel,
+}: {
+  activeCount: number;
+  dismissedCount: number;
+  acknowledgedCount: number;
+  totalCount: number;
+  sourceLabel: string;
+}) {
+  return (
+    <SoftCard p={14} style={styles.railCard}>
+      <Text style={styles.sectionLabel}>PATTERN CONTEXT</Text>
+      <Text style={styles.railValue}>{activeCount} active</Text>
+      <Text style={styles.railText}>
+        {totalCount} possible patterns · {acknowledgedCount} acknowledged · {dismissedCount} dismissed.
+      </Text>
+      <Rule />
+      <Text style={styles.railText}>
+        Local rule-based grouping only. Source: {sourceLabel}.
+      </Text>
+    </SoftCard>
   );
 }
 
@@ -239,9 +270,12 @@ export default function Patterns() {
     source,
     persistence,
   } = useCasePatterns();
+  const { isMobile } = useResponsive();
   const [expandedPatternIds, setExpandedPatternIds] = useState<string[]>([]);
   const [hasInitializedExpansion, setHasInitializedExpansion] = useState(false);
   const acknowledgedCount = patterns.filter((pattern) => pattern.status === 'acknowledged').length;
+  const sourceLabel =
+    source === 'local' ? 'Local data' : source === 'supabase' ? 'Supabase read data' : 'Demo data';
 
   useEffect(() => {
     if (!hasInitializedExpansion && activePatterns[0]) {
@@ -267,44 +301,39 @@ export default function Patterns() {
     );
   }
 
-  return (
-    <CaseScreen>
-      <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
-          Patterns
-        </Display>
-        <Text style={styles.subtitle}>
-          Local rule-based grouping for {activeCase?.title || 'the current case'}.{' '}
-          {fbLegalCopy.legalInformationNotAdvice}
-        </Text>
+  const statsPanel = (
+    <PatternStats
+      activeCount={activePatterns.length}
+      dismissedCount={dismissedPatterns.length}
+      acknowledgedCount={acknowledgedCount}
+      compact={!isMobile}
+    />
+  );
+
+  const contextPanel = (
+    <SoftCard p={14} style={styles.contextCard}>
+      <View style={styles.contextTitleRow}>
+        <Icon name="shield" size={15} color={fbColors.ink} />
+        <Text style={styles.contextTitle}>Local pattern detection</Text>
       </View>
+      <Text style={styles.contextBody}>
+        Detection uses only saved local entries, local filing links, and simple text rules. No AI,
+        remote sync, legal conclusions, or predictive claims are used.
+      </Text>
+      <View style={styles.contextChips}>
+        <Chip tone={persistence.active ? 'forest' : 'amber'} outline={false}>
+          Persistence {persistence.active ? 'active' : 'inactive'}
+        </Chip>
+        <Chip tone="sand" outline={false}>
+          {sourceLabel}
+        </Chip>
+      </View>
+    </SoftCard>
+  );
 
-      <PatternStats
-        activeCount={activePatterns.length}
-        dismissedCount={dismissedPatterns.length}
-        acknowledgedCount={acknowledgedCount}
-      />
-
-      <SoftCard p={14} style={styles.contextCard}>
-        <View style={styles.contextTitleRow}>
-          <Icon name="shield" size={15} color={fbColors.ink} />
-          <Text style={styles.contextTitle}>Local pattern detection</Text>
-        </View>
-        <Text style={styles.contextBody}>
-          Detection uses only saved local entries, local filing links, and simple text rules. No AI,
-          remote sync, legal conclusions, or predictive claims are used.
-        </Text>
-        <View style={styles.contextChips}>
-          <Chip tone={persistence.active ? 'forest' : 'amber'} outline={false}>
-            Persistence {persistence.active ? 'active' : 'inactive'}
-          </Chip>
-          <Chip tone="sand" outline={false}>
-            {source === 'local' ? 'Local data' : source === 'supabase' ? 'Supabase read data' : 'Demo data'}
-          </Chip>
-        </View>
-      </SoftCard>
-
-      <View style={styles.resultsHeader}>
+  const activePanel = (
+    <>
+      <View style={[styles.resultsHeader, !isMobile && styles.desktopResultsHeader]}>
         <Text style={styles.sectionLabel}>ACTIVE POSSIBLE PATTERNS</Text>
         <Text style={styles.resultCount}>{loading ? 'Loading' : `${activePatterns.length} shown`}</Text>
       </View>
@@ -341,28 +370,73 @@ export default function Patterns() {
           </PillButton>
         </SoftCard>
       )}
+    </>
+  );
 
-      {dismissedPatterns.length ? (
-        <View style={styles.dismissedSection}>
-          <View style={styles.resultsHeader}>
-            <Text style={styles.sectionLabel}>DISMISSED POSSIBLE PATTERNS</Text>
-            <Text style={styles.resultCount}>{dismissedPatterns.length} saved locally</Text>
+  const dismissedPanel = dismissedPatterns.length ? (
+    <View style={styles.dismissedSection}>
+      <View style={styles.resultsHeader}>
+        <Text style={styles.sectionLabel}>DISMISSED POSSIBLE PATTERNS</Text>
+        <Text style={styles.resultCount}>{dismissedPatterns.length} saved locally</Text>
+      </View>
+      <View style={styles.patternStack}>
+        {dismissedPatterns.map((pattern) => (
+          <PatternCard
+            key={pattern.id}
+            pattern={pattern}
+            expanded={expandedPatternIds.includes(pattern.id)}
+            onToggleExpanded={() => toggleExpanded(pattern.id)}
+            onAcknowledge={() => acknowledgePattern(pattern.id)}
+            onDismiss={() => dismissPattern(pattern.id)}
+            onRestore={() => restorePattern(pattern.id)}
+          />
+        ))}
+      </View>
+    </View>
+  ) : null;
+
+  return (
+    <CaseScreen
+      desktopMaxWidth={1120}
+      rightRail={
+        <PatternsContextRail
+          activeCount={activePatterns.length}
+          dismissedCount={dismissedPatterns.length}
+          acknowledgedCount={acknowledgedCount}
+          totalCount={patterns.length}
+          sourceLabel={sourceLabel}
+        />
+      }
+    >
+      <View style={styles.header}>
+        <Display italic size={32} style={styles.title}>
+          Patterns
+        </Display>
+        <Text style={styles.subtitle}>
+          Local rule-based grouping for {activeCase?.title || 'the current case'}.{' '}
+          {fbLegalCopy.legalInformationNotAdvice}
+        </Text>
+      </View>
+
+      {isMobile ? (
+        <>
+          {statsPanel}
+          {contextPanel}
+          {activePanel}
+          {dismissedPanel}
+        </>
+      ) : (
+        <View style={styles.desktopPatternsGrid}>
+          <View style={styles.desktopContextColumn}>
+            {statsPanel}
+            {contextPanel}
           </View>
-          <View style={styles.patternStack}>
-            {dismissedPatterns.map((pattern) => (
-              <PatternCard
-                key={pattern.id}
-                pattern={pattern}
-                expanded={expandedPatternIds.includes(pattern.id)}
-                onToggleExpanded={() => toggleExpanded(pattern.id)}
-                onAcknowledge={() => acknowledgePattern(pattern.id)}
-                onDismiss={() => dismissPattern(pattern.id)}
-                onRestore={() => restorePattern(pattern.id)}
-              />
-            ))}
+          <View style={styles.desktopPatternsColumn}>
+            {activePanel}
+            {dismissedPanel}
           </View>
         </View>
-      ) : null}
+      )}
 
       <Rule style={styles.bottomRule} />
       <Text style={styles.footerNote}>
@@ -395,9 +469,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: fbSpacing.x2,
   },
+  desktopStatsGrid: {
+    marginTop: 0,
+    flexDirection: 'column',
+  },
   statCard: {
     flex: 1,
     gap: fbSpacing.x1,
+  },
+  desktopStatCard: {
+    flex: 0,
+  },
+  desktopPatternsGrid: {
+    marginTop: fbSpacing.x5,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x5,
+  },
+  desktopContextColumn: {
+    width: 300,
+  },
+  desktopPatternsColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   statValue: {
     color: fbColors.ink,
@@ -443,6 +537,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: fbSpacing.x3,
+  },
+  desktopResultsHeader: {
+    marginTop: 0,
   },
   sectionLabel: {
     color: fbColors.ox,
@@ -613,6 +710,22 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x5,
   },
   footerNote: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railCard: {
+    gap: fbSpacing.x3,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 23,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railText: {
     color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,

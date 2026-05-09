@@ -29,6 +29,7 @@ import {
   type KeyDate,
   type Person,
 } from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 function DetailRow({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -244,6 +245,41 @@ function FilingsSection({ filingPackages }: { filingPackages: FilingPackage[] })
   );
 }
 
+function CaseMapContextRail({
+  caseTitle,
+  childrenCount,
+  peopleCount,
+  datesCount,
+  filingCount,
+  persistenceActive,
+  hydrationCompleted,
+  sourceLabel,
+}: {
+  caseTitle: string;
+  childrenCount: number;
+  peopleCount: number;
+  datesCount: number;
+  filingCount: number;
+  persistenceActive: boolean;
+  hydrationCompleted: boolean;
+  sourceLabel: string;
+}) {
+  return (
+    <SoftCard p={14} style={styles.railCard}>
+      <Text style={styles.sectionLabel}>CASE CONTEXT</Text>
+      <Text style={styles.railValue}>{caseTitle}</Text>
+      <Text style={styles.railText}>
+        {childrenCount} children · {peopleCount} people · {datesCount} key dates · {filingCount} filing packages.
+      </Text>
+      <Rule />
+      <Text style={styles.railText}>
+        Persistence {persistenceActive ? 'active' : 'inactive'} · hydration {hydrationCompleted ? 'complete' : 'pending'}.
+      </Text>
+      <Text style={styles.railText}>Source: {sourceLabel}.</Text>
+    </SoftCard>
+  );
+}
+
 export default function CaseMap() {
   const {
     activeCase,
@@ -258,9 +294,48 @@ export default function CaseMap() {
     isDemoCase,
     persistence,
   } = useCaseMap();
+  const { isMobile } = useResponsive();
+  const sourceLabel =
+    source === 'supabase' ? 'Supabase-backed' : source === 'local' ? 'local persisted' : 'local demo';
+  const childrenSection = <ChildrenSection childrenRows={children} />;
+  const peopleSection = <PeopleSection people={people} />;
+  const courtOrdersSection = (
+    <CourtOrdersSection courtOrders={courtOrders} provisions={courtOrderProvisions} />
+  );
+  const datesSection = <DatesSection keyDates={keyDates} />;
+  const filingsSection = <FilingsSection filingPackages={filingPackages} />;
+  const sourceSection = (
+    <SoftCard p={16} style={styles.section}>
+      <SectionHeader icon="shield" title="Data source" />
+      <Text style={styles.sourceText}>
+        This view is reading the current {sourceLabel} case-intelligence snapshot. No remote writes are made from Case Map.
+      </Text>
+      <Text style={styles.sourceText}>
+        Local persistence: {persistence.active ? 'active' : 'inactive'} · Hydration: {persistence.hydrationCompleted ? 'complete' : 'pending'} · Sync: {persistence.syncMode === 'remote_write_enabled' ? 'remote writes enabled by env' : persistence.syncMode === 'local_first' ? 'local-first, remote writes disabled' : 'disabled demo mode'}
+      </Text>
+      {persistence.error ? <Text style={styles.sourceWarning}>{persistence.error}</Text> : null}
+      <PillButton tone="ghost" size="md" icon="link" disabled full>
+        Link selected entry · coming later
+      </PillButton>
+    </SoftCard>
+  );
 
   return (
-    <CaseScreen>
+    <CaseScreen
+      desktopMaxWidth={1120}
+      rightRail={
+        <CaseMapContextRail
+          caseTitle={activeCase?.title || activeCase?.case_number || 'Current case'}
+          childrenCount={children.length}
+          peopleCount={people.length}
+          datesCount={keyDates.length}
+          filingCount={filingPackages.length}
+          persistenceActive={persistence.active}
+          hydrationCompleted={persistence.hydrationCompleted}
+          sourceLabel={sourceLabel}
+        />
+      }
+    >
       <View style={styles.header}>
         <Display italic size={32} style={styles.title}>
           Case map
@@ -273,8 +348,8 @@ export default function CaseMap() {
       <SoftCard p={16} style={styles.caseSummary}>
         <SectionHeader icon="scales" title="Active case" />
         {activeCase ? (
-          <View style={styles.caseSummaryBody}>
-            <View style={styles.summaryGrid}>
+          <View style={[styles.caseSummaryBody, !isMobile && styles.desktopCaseSummaryBody]}>
+            <View style={[styles.summaryGrid, !isMobile && styles.desktopSummaryGrid]}>
               <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
               <DetailRow label="Court" value={activeCase.court_name} />
               <DetailRow label="County" value={activeCase.county} />
@@ -306,25 +381,29 @@ export default function CaseMap() {
         Entry linking is not active yet. This map establishes the case structure for future links to orders, hearings, deadlines, and filings.
       </InfoCallout>
 
-      <ChildrenSection childrenRows={children} />
-      <PeopleSection people={people} />
-      <CourtOrdersSection courtOrders={courtOrders} provisions={courtOrderProvisions} />
-      <DatesSection keyDates={keyDates} />
-      <FilingsSection filingPackages={filingPackages} />
-
-      <SoftCard p={16} style={styles.section}>
-        <SectionHeader icon="shield" title="Data source" />
-        <Text style={styles.sourceText}>
-          This view is reading the current {source === 'supabase' ? 'Supabase-backed' : source === 'local' ? 'local persisted' : 'local demo'} case-intelligence snapshot. No remote writes are made from Case Map.
-        </Text>
-        <Text style={styles.sourceText}>
-          Local persistence: {persistence.active ? 'active' : 'inactive'} · Hydration: {persistence.hydrationCompleted ? 'complete' : 'pending'} · Sync: {persistence.syncMode === 'remote_write_enabled' ? 'remote writes enabled by env' : persistence.syncMode === 'local_first' ? 'local-first, remote writes disabled' : 'disabled demo mode'}
-        </Text>
-        {persistence.error ? <Text style={styles.sourceWarning}>{persistence.error}</Text> : null}
-        <PillButton tone="ghost" size="md" icon="link" disabled full>
-          Link selected entry · coming later
-        </PillButton>
-      </SoftCard>
+      {isMobile ? (
+        <>
+          {childrenSection}
+          {peopleSection}
+          {courtOrdersSection}
+          {datesSection}
+          {filingsSection}
+          {sourceSection}
+        </>
+      ) : (
+        <View style={styles.desktopMapGrid}>
+          <View style={styles.desktopMapColumn}>
+            {childrenSection}
+            {peopleSection}
+            {datesSection}
+          </View>
+          <View style={styles.desktopMapColumn}>
+            {courtOrdersSection}
+            {filingsSection}
+            {sourceSection}
+          </View>
+        </View>
+      )}
     </CaseScreen>
   );
 }
@@ -370,14 +449,40 @@ const styles = StyleSheet.create({
     fontWeight: fbWeights.semi,
     letterSpacing: -0.14,
   },
+  sectionLabel: {
+    color: fbColors.ox,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 1.05,
+  },
   summaryGrid: {
     gap: fbSpacing.x3,
+  },
+  desktopSummaryGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   caseSummaryBody: {
     gap: fbSpacing.x4,
   },
+  desktopCaseSummaryBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   caseActions: {
     gap: fbSpacing.x3,
+  },
+  desktopMapGrid: {
+    marginTop: fbSpacing.x4,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x4,
+  },
+  desktopMapColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   detailRow: {
     gap: fbSpacing.x1,
@@ -440,6 +545,22 @@ const styles = StyleSheet.create({
   },
   sourceWarning: {
     color: fbColors.oxDeep,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railCard: {
+    gap: fbSpacing.x3,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 23,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railText: {
+    color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,
     fontFamily: fbFonts.sansRegular,

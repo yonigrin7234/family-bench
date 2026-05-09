@@ -37,6 +37,7 @@ import {
   type FilingPackageStatus,
   type ReportPreviewType,
 } from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 type FilingTypeOption = {
   value: string;
@@ -276,6 +277,41 @@ function ExhibitPlaceholders({ packageState }: { packageState: FilingPackageLoca
   );
 }
 
+function FilingContextRail({
+  packageCount,
+  selectedTitle,
+  selectedLinkedCount,
+  linkedEntriesCount,
+  linkedAttachmentsCount,
+  linkedReportsCount,
+  checklistPercent,
+  persistenceActive,
+}: {
+  packageCount: number;
+  selectedTitle?: string;
+  selectedLinkedCount: number;
+  linkedEntriesCount: number;
+  linkedAttachmentsCount: number;
+  linkedReportsCount: number;
+  checklistPercent?: number;
+  persistenceActive: boolean;
+}) {
+  return (
+    <SoftCard p={14} style={styles.railCard}>
+      <Text style={styles.sectionLabel}>FILING CONTEXT</Text>
+      <Text style={styles.railValue}>{packageCount} packages</Text>
+      <Text style={styles.railText}>{selectedTitle || 'No package selected'}</Text>
+      <Rule />
+      <Text style={styles.railText}>
+        {selectedLinkedCount} linked source items: {linkedEntriesCount} entries, {linkedAttachmentsCount} attachments, {linkedReportsCount} report previews.
+      </Text>
+      <Text style={styles.railText}>
+        Checklist {typeof checklistPercent === 'number' ? `${checklistPercent}%` : 'not started'}. Local persistence {persistenceActive ? 'active' : 'inactive'}.
+      </Text>
+    </SoftCard>
+  );
+}
+
 export default function Filings() {
   const params = useLocalSearchParams();
   const packageIdParam = getParam(params.packageId);
@@ -298,6 +334,7 @@ export default function Filings() {
     loading,
     persistence,
   } = useFilingBuilder();
+  const { isMobile } = useResponsive();
   const [title, setTitle] = useState('');
   const [filingType, setFilingType] = useState(FILING_TYPES[0].value);
   const [dueDate, setDueDate] = useState('');
@@ -339,8 +376,27 @@ export default function Filings() {
     }
   }
 
+  const selectedLinkedCount = linkedCount(selectedPackageState);
+  const selectedEntryCount = selectedPackageState?.linkedEntryIds.length ?? 0;
+  const selectedAttachmentCount = selectedPackageState?.linkedAttachmentIds.length ?? 0;
+  const selectedReportCount = selectedPackageState?.linkedReportTypes.length ?? 0;
+
   return (
-    <CaseScreen>
+    <CaseScreen
+      desktopMaxWidth={1180}
+      rightRail={
+        <FilingContextRail
+          packageCount={filingPackages.length}
+          selectedTitle={selectedPackage?.title}
+          selectedLinkedCount={selectedLinkedCount}
+          linkedEntriesCount={selectedEntryCount}
+          linkedAttachmentsCount={selectedAttachmentCount}
+          linkedReportsCount={selectedReportCount}
+          checklistPercent={selectedPackage?.completion_percent}
+          persistenceActive={persistence.active}
+        />
+      }
+    >
       <View style={styles.header}>
         <Display italic size={32} style={styles.title}>
           Filing Builder
@@ -351,7 +407,9 @@ export default function Filings() {
         </Text>
       </View>
 
-      <SoftCard p={16} style={styles.createCard}>
+      <View style={!isMobile ? styles.desktopFilingsGrid : undefined}>
+        <View style={!isMobile ? styles.desktopListColumn : undefined}>
+      <SoftCard p={16} style={[styles.createCard, !isMobile && styles.desktopPanelCard]}>
         <View style={styles.sectionTitleRow}>
           <View style={styles.sectionTitleLeft}>
             <Icon name="folder" size={16} color={fbColors.ink} />
@@ -445,9 +503,11 @@ export default function Filings() {
           </Text>
         </SoftCard>
       )}
+        </View>
 
+        <View style={!isMobile ? styles.desktopDetailColumn : undefined}>
       {selectedPackage && selectedPackageState ? (
-        <View style={styles.detailStack}>
+        <View style={[styles.detailStack, !isMobile && styles.desktopDetailStack]}>
           <SoftCard p={16} style={styles.detailCard}>
             <View style={styles.sectionTitleRow}>
               <View style={styles.sectionTitleLeft}>
@@ -571,7 +631,16 @@ export default function Filings() {
             </PillButton>
           </View>
         </View>
+      ) : !isMobile ? (
+        <SoftCard p={18} style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Select a filing package</Text>
+          <Text style={styles.emptyBody}>
+            Choose a local filing package from the list, or create a draft package to start grouping source records.
+          </Text>
+        </SoftCard>
       ) : null}
+        </View>
+      </View>
 
       <Rule style={styles.bottomRule} />
       <Text style={styles.footerNote}>
@@ -597,6 +666,22 @@ const styles = StyleSheet.create({
   createCard: {
     marginTop: fbSpacing.x5,
     gap: fbSpacing.x4,
+  },
+  desktopPanelCard: {
+    marginTop: 0,
+  },
+  desktopFilingsGrid: {
+    marginTop: fbSpacing.x5,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x5,
+  },
+  desktopListColumn: {
+    width: 340,
+  },
+  desktopDetailColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   sectionTitleRow: {
     minHeight: fbTouch.min,
@@ -732,6 +817,9 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x5,
     gap: fbSpacing.x4,
   },
+  desktopDetailStack: {
+    marginTop: 0,
+  },
   detailCard: {
     gap: fbSpacing.x4,
   },
@@ -829,6 +917,22 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x5,
   },
   footerNote: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railCard: {
+    gap: fbSpacing.x3,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 23,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railText: {
     color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,

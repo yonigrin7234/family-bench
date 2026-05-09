@@ -33,11 +33,13 @@ export function CaseScreen({
   footer,
   contentStyle,
   rightRail,
+  desktopMaxWidth = 860,
 }: {
   children: ReactNode;
   footer?: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
   rightRail?: ReactNode | false;
+  desktopMaxWidth?: number;
 }) {
   const insets = useSafeAreaInsets();
   const { isMobile, width } = useResponsive();
@@ -57,6 +59,7 @@ export function CaseScreen({
             contentContainerStyle={[
               styles.desktopContent,
               {
+                maxWidth: desktopMaxWidth,
                 paddingTop: Math.max(insets.top, fbSpacing.x5) + fbSpacing.x3,
                 paddingBottom: bottomInset + fbSpacing.x8,
               },
@@ -161,7 +164,6 @@ const styles = StyleSheet.create({
   },
   desktopContent: {
     width: '100%',
-    maxWidth: 860,
     alignSelf: 'center',
     paddingHorizontal: fbSpacing.x8,
   },

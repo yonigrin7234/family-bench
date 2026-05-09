@@ -34,6 +34,7 @@ import {
   type EntryTypeFilterValue,
   type EvidenceAttachment,
 } from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 type FlagFilter = 'all' | 'flagged';
 type AttachmentFilter = 'all' | AttachmentKind;
@@ -312,6 +313,35 @@ function EvidenceStats({
   );
 }
 
+function EvidenceContextRail({
+  rowsCount,
+  entriesCount,
+  attachmentsCount,
+  flaggedCount,
+  activeFiltersCount,
+}: {
+  rowsCount: number;
+  entriesCount: number;
+  attachmentsCount: number;
+  flaggedCount: number;
+  activeFiltersCount: number;
+}) {
+  return (
+    <SoftCard p={14} style={styles.railCard}>
+      <Text style={styles.sectionLabel}>EVIDENCE CONTEXT</Text>
+      <Text style={styles.railValue}>{rowsCount} shown</Text>
+      <Text style={styles.railText}>
+        {entriesCount} total entries · {attachmentsCount} visible source attachments · {flaggedCount} flagged records.
+      </Text>
+      <Rule />
+      <Text style={styles.railText}>
+        {activeFiltersCount ? `${activeFiltersCount} filters active` : 'No filters active'}.
+        Search remains local to saved text and filenames.
+      </Text>
+    </SoftCard>
+  );
+}
+
 function AttachmentEvidenceCard({ attachment }: { attachment: EvidenceAttachment }) {
   const meta = attachmentMeta(attachment);
   const kind = getAttachmentKind(attachment);
@@ -399,6 +429,7 @@ export default function Evidence() {
     source,
     loading,
   } = useCaseEvidence();
+  const { isMobile } = useResponsive();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<EntryTypeFilterValue>('all');
   const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
@@ -470,6 +501,14 @@ export default function Evidence() {
     attachmentFilter !== 'all' ||
     childFilter !== 'all' ||
     sortMode !== 'newest';
+  const activeFiltersCount = [
+    query,
+    typeFilter !== 'all',
+    flagFilter !== 'all',
+    attachmentFilter !== 'all',
+    childFilter !== 'all',
+    sortMode !== 'newest',
+  ].filter(Boolean).length;
 
   function clearFilters() {
     setSearch('');
@@ -480,122 +519,107 @@ export default function Evidence() {
     setSortMode('newest');
   }
 
-  return (
-    <CaseScreen>
-      <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
-          Evidence
-        </Display>
-        <Text style={styles.subtitle}>
-          {activeCase?.title || 'Current case'} - {entries.length} entries -{' '}
-          {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
-        </Text>
+  const filterPanel = (
+    <SoftCard p={16} style={[styles.searchCard, !isMobile && styles.desktopPanelCard]}>
+      <View style={styles.filterHeader}>
+        <View style={styles.filterTitleRow}>
+          <Icon name="search" size={16} color={fbColors.ink} />
+          <Text style={styles.filterTitle}>Search and filter</Text>
+        </View>
+        {filtersActive ? (
+          <PillButton tone="ghost" size="sm" icon="x" onPress={clearFilters}>
+            Clear
+          </PillButton>
+        ) : null}
       </View>
 
-      <EvidenceStats
-        entriesCount={rows.length}
-        attachmentsCount={visibleAttachmentCount}
-        voiceMemoCount={voiceMemoCount}
-        flaggedCount={flaggedCount}
+      <TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search body, notes, summaries, or filenames"
+        placeholderTextColor={fbColors.inkFaint}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.searchInput}
       />
 
-      <SoftCard p={16} style={styles.searchCard}>
-        <View style={styles.filterHeader}>
-          <View style={styles.filterTitleRow}>
-            <Icon name="search" size={16} color={fbColors.ink} />
-            <Text style={styles.filterTitle}>Search and filter</Text>
-          </View>
-          {filtersActive ? (
-            <PillButton tone="ghost" size="sm" icon="x" onPress={clearFilters}>
-              Clear
-            </PillButton>
-          ) : null}
-        </View>
-
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search body, notes, summaries, or filenames"
-          placeholderTextColor={fbColors.inkFaint}
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={styles.searchInput}
+      <View style={styles.segmentBlock}>
+        <Text style={styles.label}>Sort</Text>
+        <Segment<SortMode>
+          items={[
+            { v: 'newest', label: 'Newest' },
+            { v: 'oldest', label: 'Oldest' },
+            { v: 'flagged', label: 'Flagged first' },
+          ]}
+          value={sortMode}
+          onChange={setSortMode}
         />
+      </View>
 
-        <View style={styles.segmentBlock}>
-          <Text style={styles.label}>Sort</Text>
-          <Segment<SortMode>
-            items={[
-              { v: 'newest', label: 'Newest' },
-              { v: 'oldest', label: 'Oldest' },
-              { v: 'flagged', label: 'Flagged first' },
-            ]}
-            value={sortMode}
-            onChange={setSortMode}
-          />
+      <View style={styles.segmentBlock}>
+        <Text style={styles.label}>Flags</Text>
+        <Segment<FlagFilter>
+          items={[
+            { v: 'all', label: 'All' },
+            { v: 'flagged', label: 'Flagged' },
+          ]}
+          value={flagFilter}
+          onChange={setFlagFilter}
+        />
+      </View>
+
+      <View style={styles.filterGroup}>
+        <Text style={styles.label}>Entry type</Text>
+        <View style={styles.filterWrap}>
+          <TypeFilterChip value="all" active={typeFilter === 'all'} onPress={() => setTypeFilter('all')} />
+          {ENTRY_TYPE_OPTIONS.map((option) => (
+            <TypeFilterChip
+              key={option.value}
+              value={option.value}
+              active={typeFilter === option.value}
+              onPress={() => setTypeFilter(option.value)}
+            />
+          ))}
         </View>
+      </View>
 
-        <View style={styles.segmentBlock}>
-          <Text style={styles.label}>Flags</Text>
-          <Segment<FlagFilter>
-            items={[
-              { v: 'all', label: 'All' },
-              { v: 'flagged', label: 'Flagged' },
-            ]}
-            value={flagFilter}
-            onChange={setFlagFilter}
-          />
+      <View style={styles.filterGroup}>
+        <Text style={styles.label}>Attachment type</Text>
+        <View style={styles.filterWrap}>
+          {ATTACHMENT_FILTERS.map((option) => (
+            <AttachmentFilterChip
+              key={option.value}
+              value={option.value}
+              label={option.label}
+              tone={option.tone}
+              icon={option.icon}
+              active={attachmentFilter === option.value}
+              onPress={() => setAttachmentFilter(option.value)}
+            />
+          ))}
         </View>
+      </View>
 
-        <View style={styles.filterGroup}>
-          <Text style={styles.label}>Entry type</Text>
-          <View style={styles.filterWrap}>
-            <TypeFilterChip value="all" active={typeFilter === 'all'} onPress={() => setTypeFilter('all')} />
-            {ENTRY_TYPE_OPTIONS.map((option) => (
-              <TypeFilterChip
-                key={option.value}
-                value={option.value}
-                active={typeFilter === option.value}
-                onPress={() => setTypeFilter(option.value)}
-              />
-            ))}
-          </View>
+      <View style={styles.filterGroup}>
+        <Text style={styles.label}>Child</Text>
+        <View style={styles.filterWrap}>
+          <ChildFilterChip child={null} active={childFilter === 'all'} onPress={() => setChildFilter('all')} />
+          {children.map((child) => (
+            <ChildFilterChip
+              key={child.id}
+              child={child}
+              active={childFilter === child.id}
+              onPress={() => setChildFilter(child.id)}
+            />
+          ))}
         </View>
+      </View>
+    </SoftCard>
+  );
 
-        <View style={styles.filterGroup}>
-          <Text style={styles.label}>Attachment type</Text>
-          <View style={styles.filterWrap}>
-            {ATTACHMENT_FILTERS.map((option) => (
-              <AttachmentFilterChip
-                key={option.value}
-                value={option.value}
-                label={option.label}
-                tone={option.tone}
-                icon={option.icon}
-                active={attachmentFilter === option.value}
-                onPress={() => setAttachmentFilter(option.value)}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.filterGroup}>
-          <Text style={styles.label}>Child</Text>
-          <View style={styles.filterWrap}>
-            <ChildFilterChip child={null} active={childFilter === 'all'} onPress={() => setChildFilter('all')} />
-            {children.map((child) => (
-              <ChildFilterChip
-                key={child.id}
-                child={child}
-                active={childFilter === child.id}
-                onPress={() => setChildFilter(child.id)}
-              />
-            ))}
-          </View>
-        </View>
-      </SoftCard>
-
-      <View style={styles.resultsHeader}>
+  const resultsPanel = (
+    <>
+      <View style={[styles.resultsHeader, !isMobile && styles.desktopResultsHeader]}>
         <Text style={styles.sectionLabel}>EVIDENCE RECORDS</Text>
         <Text style={styles.resultCount}>{loading ? 'Loading' : `${rows.length} shown`}</Text>
       </View>
@@ -632,6 +656,50 @@ export default function Evidence() {
             Clear filters
           </PillButton>
         </SoftCard>
+      )}
+    </>
+  );
+
+  return (
+    <CaseScreen
+      desktopMaxWidth={1120}
+      rightRail={
+        <EvidenceContextRail
+          rowsCount={rows.length}
+          entriesCount={entries.length}
+          attachmentsCount={visibleAttachmentCount}
+          flaggedCount={flaggedCount}
+          activeFiltersCount={activeFiltersCount}
+        />
+      }
+    >
+      <View style={styles.header}>
+        <Display italic size={32} style={styles.title}>
+          Evidence
+        </Display>
+        <Text style={styles.subtitle}>
+          {activeCase?.title || 'Current case'} - {entries.length} entries -{' '}
+          {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
+        </Text>
+      </View>
+
+      <EvidenceStats
+        entriesCount={rows.length}
+        attachmentsCount={visibleAttachmentCount}
+        voiceMemoCount={voiceMemoCount}
+        flaggedCount={flaggedCount}
+      />
+
+      {isMobile ? (
+        <>
+          {filterPanel}
+          {resultsPanel}
+        </>
+      ) : (
+        <View style={styles.desktopEvidenceGrid}>
+          <View style={styles.desktopFilterColumn}>{filterPanel}</View>
+          <View style={styles.desktopResultsColumn}>{resultsPanel}</View>
+        </View>
       )}
 
       <Rule style={styles.bottomRule} />
@@ -680,6 +748,22 @@ const styles = StyleSheet.create({
   searchCard: {
     marginTop: fbSpacing.x4,
     gap: fbSpacing.x4,
+  },
+  desktopPanelCard: {
+    marginTop: 0,
+  },
+  desktopEvidenceGrid: {
+    marginTop: fbSpacing.x5,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x5,
+  },
+  desktopFilterColumn: {
+    width: 310,
+  },
+  desktopResultsColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   filterHeader: {
     minHeight: fbTouch.min,
@@ -751,6 +835,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: fbSpacing.x3,
+  },
+  desktopResultsHeader: {
+    marginTop: 0,
   },
   sectionLabel: {
     color: fbColors.ox,
@@ -883,6 +970,22 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x5,
   },
   footerNote: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railCard: {
+    gap: fbSpacing.x3,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 23,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railText: {
     color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,

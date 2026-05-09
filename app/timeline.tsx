@@ -27,6 +27,7 @@ import {
   useCaseIntelligenceTimeline,
   type EntryTypeFilterValue,
 } from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 type FlagFilter = 'all' | 'flagged';
 
@@ -66,9 +67,39 @@ function TypeFilterChip({
   );
 }
 
+function TimelineContextRail({
+  visibleCount,
+  entriesCount,
+  attachmentCount,
+  flaggedCount,
+  activeFiltersCount,
+  sourceLabel,
+}: {
+  visibleCount: number;
+  entriesCount: number;
+  attachmentCount: number;
+  flaggedCount: number;
+  activeFiltersCount: number;
+  sourceLabel: string;
+}) {
+  return (
+    <SoftCard p={14} style={styles.railCard}>
+      <Text style={styles.sectionLabel}>TIMELINE CONTEXT</Text>
+      <Text style={styles.railValue}>{visibleCount} shown</Text>
+      <Text style={styles.railText}>
+        {entriesCount} total entries · {attachmentCount} local source attachments · {flaggedCount} flagged entries.
+      </Text>
+      <Text style={styles.railText}>
+        {activeFiltersCount ? `${activeFiltersCount} filters active` : 'No filters active'}. Source: {sourceLabel}.
+      </Text>
+    </SoftCard>
+  );
+}
+
 export default function Timeline() {
   const { snapshot, entries, activeCase, source, loading, filingEntryLinkCounts } =
     useCaseIntelligenceTimeline();
+  const { isMobile } = useResponsive();
   const [typeFilter, setTypeFilter] = useState<EntryTypeFilterValue>('all');
   const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
 
@@ -80,61 +111,59 @@ export default function Timeline() {
     });
   }, [entries, flagFilter, typeFilter]);
 
-  return (
-    <CaseScreen>
-      <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
-          Timeline
-        </Display>
-        <Text style={styles.subtitle}>
-          {activeCase?.title || 'Current case'} · {entries.length} entries ·{' '}
-          {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
-        </Text>
+  const sourceLabel =
+    source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data';
+  const attachmentCount = snapshot.evidenceAttachments.filter((attachment) => !attachment.deleted_at).length;
+  const flaggedCount = entries.filter((entry) => entry.is_flagged).length;
+  const activeFiltersCount = [typeFilter !== 'all', flagFilter !== 'all'].filter(Boolean).length;
+
+  const filterPanel = (
+    <SoftCard p={16} style={[styles.filterCard, !isMobile && styles.desktopPanelCard]}>
+      <View style={styles.filterHeader}>
+        <View style={styles.filterTitleRow}>
+          <Icon name="filter" size={16} color={fbColors.ink} />
+          <Text style={styles.filterTitle}>Filters</Text>
+        </View>
+        <PillButton
+          tone="accentSoft"
+          size="sm"
+          icon="plus"
+          onPress={() => router.push('/capture' as never)}
+        >
+          New
+        </PillButton>
       </View>
 
-      <SoftCard p={16} style={styles.filterCard}>
-        <View style={styles.filterHeader}>
-          <View style={styles.filterTitleRow}>
-            <Icon name="filter" size={16} color={fbColors.ink} />
-            <Text style={styles.filterTitle}>Filters</Text>
-          </View>
-          <PillButton
-            tone="accentSoft"
-            size="sm"
-            icon="plus"
-            onPress={() => router.push('/capture' as never)}
-          >
-            New
-          </PillButton>
-        </View>
+      <Segment<FlagFilter>
+        items={[
+          { v: 'all', label: 'All' },
+          { v: 'flagged', label: 'Flagged' },
+        ]}
+        value={flagFilter}
+        onChange={setFlagFilter}
+      />
 
-        <Segment<FlagFilter>
-          items={[
-            { v: 'all', label: 'All' },
-            { v: 'flagged', label: 'Flagged' },
-          ]}
-          value={flagFilter}
-          onChange={setFlagFilter}
+      <View style={styles.typeFilters}>
+        <TypeFilterChip
+          value="all"
+          active={typeFilter === 'all'}
+          onPress={() => setTypeFilter('all')}
         />
-
-        <View style={styles.typeFilters}>
+        {ENTRY_TYPE_OPTIONS.map((option) => (
           <TypeFilterChip
-            value="all"
-            active={typeFilter === 'all'}
-            onPress={() => setTypeFilter('all')}
+            key={option.value}
+            value={option.value}
+            active={typeFilter === option.value}
+            onPress={() => setTypeFilter(option.value)}
           />
-          {ENTRY_TYPE_OPTIONS.map((option) => (
-            <TypeFilterChip
-              key={option.value}
-              value={option.value}
-              active={typeFilter === option.value}
-              onPress={() => setTypeFilter(option.value)}
-            />
-          ))}
-        </View>
-      </SoftCard>
+        ))}
+      </View>
+    </SoftCard>
+  );
 
-      <View style={styles.resultsHeader}>
+  const resultsPanel = (
+    <>
+      <View style={[styles.resultsHeader, !isMobile && styles.desktopResultsHeader]}>
         <Text style={styles.sectionLabel}>ENTRIES</Text>
         <Text style={styles.resultCount}>
           {loading ? 'Loading' : `${filteredEntries.length} shown`}
@@ -174,6 +203,43 @@ export default function Timeline() {
           </PillButton>
         </SoftCard>
       )}
+    </>
+  );
+
+  return (
+    <CaseScreen
+      desktopMaxWidth={1040}
+      rightRail={
+        <TimelineContextRail
+          visibleCount={filteredEntries.length}
+          entriesCount={entries.length}
+          attachmentCount={attachmentCount}
+          flaggedCount={flaggedCount}
+          activeFiltersCount={activeFiltersCount}
+          sourceLabel={sourceLabel}
+        />
+      }
+    >
+      <View style={styles.header}>
+        <Display italic size={32} style={styles.title}>
+          Timeline
+        </Display>
+        <Text style={styles.subtitle}>
+          {activeCase?.title || 'Current case'} · {entries.length} entries · {sourceLabel}
+        </Text>
+      </View>
+
+      {isMobile ? (
+        <>
+          {filterPanel}
+          {resultsPanel}
+        </>
+      ) : (
+        <View style={styles.desktopTimelineGrid}>
+          <View style={styles.desktopFilterColumn}>{filterPanel}</View>
+          <View style={styles.desktopResultsColumn}>{resultsPanel}</View>
+        </View>
+      )}
     </CaseScreen>
   );
 }
@@ -194,6 +260,22 @@ const styles = StyleSheet.create({
   filterCard: {
     marginTop: fbSpacing.x5,
     gap: fbSpacing.x4,
+  },
+  desktopPanelCard: {
+    marginTop: 0,
+  },
+  desktopTimelineGrid: {
+    marginTop: fbSpacing.x5,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x5,
+  },
+  desktopFilterColumn: {
+    width: 300,
+  },
+  desktopResultsColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   filterHeader: {
     minHeight: fbTouch.min,
@@ -234,6 +316,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: fbSpacing.x3,
   },
+  desktopResultsHeader: {
+    marginTop: 0,
+  },
   sectionLabel: {
     color: fbColors.ox,
     fontSize: fbType.micro,
@@ -268,6 +353,22 @@ const styles = StyleSheet.create({
   },
   emptyAction: {
     marginTop: fbSpacing.x4,
+  },
+  railCard: {
+    gap: fbSpacing.x3,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 23,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
   },
   pressed: {
     opacity: fbAlpha.pressedSubtle,
