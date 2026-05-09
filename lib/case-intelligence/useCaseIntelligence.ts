@@ -52,6 +52,7 @@ import type {
   FilingPackageStatus,
   HomeCaseIntelligence,
   KeyDate,
+  KeyDateCategory,
   LocalPersistenceDiagnostics,
   LocalRecordMeta,
   PatternReviewState,
@@ -188,6 +189,16 @@ export type CourtOrderProvisionInput = {
   endDate?: string | null;
 };
 
+export type KeyDateInput = {
+  category: KeyDateCategory;
+  title: string;
+  eventDate: string;
+  eventTime?: string | null;
+  priority?: boolean;
+  notes?: string | null;
+  relatedFilingPackageId?: string | null;
+};
+
 export type CreatePlaceholderAttachmentInput = {
   entryId: string;
   kind: AttachmentKind;
@@ -297,6 +308,8 @@ type CaseIntelligenceState = {
   createCourtOrderProvision: (input: CourtOrderProvisionInput) => CourtOrderProvision;
   updateCourtOrderProvision: (provisionId: string, input: CourtOrderProvisionInput) => void;
   linkEntryToCourtOrderProvision: (entryId: string, provisionId: string | null) => void;
+  createKeyDate: (input: KeyDateInput) => KeyDate;
+  updateKeyDate: (keyDateId: string, input: KeyDateInput) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
 };
 
@@ -357,6 +370,35 @@ export function getCourtOrderProvisionStatus(
 ): CourtOrderProvisionStatus {
   if (provision.end_date) return 'superseded';
   return provision.provision_key?.includes(':superseded:') ? 'superseded' : 'active';
+}
+
+const KEY_DATE_PRIORITY_MARKER = '[family-bench-priority:true]';
+
+function buildKeyDateDescription(notes?: string | null, priority = false) {
+  const cleanNotes = nullIfBlank(notes);
+  return [cleanNotes, priority ? KEY_DATE_PRIORITY_MARKER : null].filter(Boolean).join('\n\n') || null;
+}
+
+export function getKeyDateNotes(keyDate: KeyDate) {
+  return keyDate.description?.replace(KEY_DATE_PRIORITY_MARKER, '').trim() || null;
+}
+
+export function isKeyDatePriority(keyDate: KeyDate) {
+  return keyDate.description?.includes(KEY_DATE_PRIORITY_MARKER) ?? false;
+}
+
+export function normalizeKeyDateCategory(value?: string | null): KeyDateCategory {
+  if (
+    value === 'hearing' ||
+    value === 'filing_deadline' ||
+    value === 'service_deadline' ||
+    value === 'mediation' ||
+    value === 'appointment'
+  ) {
+    return value;
+  }
+
+  return 'other';
 }
 
 function isLiveRow(row: { deleted_at: string | null }) {
@@ -711,6 +753,41 @@ function buildCourtOrderProvision(
     body: nullIfBlank(input.body) ?? 'Provision text not recorded yet.',
     effective_date: normalizeDate(input.effectiveDate) ?? order.order_date,
     end_date: status === 'superseded' ? normalizeDate(input.endDate) ?? todayDateString() : null,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+  };
+}
+
+function buildKeyDate(
+  input: KeyDateInput,
+  snapshot: CaseIntelligenceSnapshot,
+  userId: string,
+): KeyDate {
+  const activeCase = getActiveCase(snapshot);
+  if (!activeCase) {
+    throw new Error('Set up a case before adding a key date.');
+  }
+
+  const eventDate = normalizeDate(input.eventDate);
+  if (!eventDate) {
+    throw new Error('Enter a key date in YYYY-MM-DD format.');
+  }
+
+  const now = new Date().toISOString();
+
+  return {
+    id: `local-key-date-${Crypto.randomUUID()}`,
+    user_id: userId,
+    case_id: activeCase.id,
+    date_type: input.category,
+    event_date: eventDate,
+    event_time: normalizeTime(input.eventTime),
+    title: nullIfBlank(input.title) ?? 'Local key date',
+    description: buildKeyDateDescription(input.notes, input.priority),
+    is_completed: false,
+    related_filing_package_id: nullIfBlank(input.relatedFilingPackageId),
+    related_court_order_id: null,
     created_at: now,
     updated_at: now,
     deleted_at: null,
@@ -1371,6 +1448,40 @@ function updateCourtOrderProvisionRow(
             updated_at: now,
           }
         : provision,
+    ),
+  };
+}
+
+function appendKeyDate(snapshot: CaseIntelligenceSnapshot, keyDate: KeyDate): CaseIntelligenceSnapshot {
+  return {
+    ...snapshot,
+    keyDates: [keyDate, ...snapshot.keyDates.filter((existing) => existing.id !== keyDate.id)],
+  };
+}
+
+function updateKeyDateRow(
+  snapshot: CaseIntelligenceSnapshot,
+  keyDateId: string,
+  input: KeyDateInput,
+): CaseIntelligenceSnapshot {
+  const eventDate = normalizeDate(input.eventDate);
+  const now = new Date().toISOString();
+
+  return {
+    ...snapshot,
+    keyDates: snapshot.keyDates.map((keyDate) =>
+      keyDate.id === keyDateId
+        ? {
+            ...keyDate,
+            date_type: input.category,
+            event_date: eventDate ?? keyDate.event_date,
+            event_time: normalizeTime(input.eventTime),
+            title: nullIfBlank(input.title) ?? keyDate.title,
+            description: buildKeyDateDescription(input.notes, input.priority),
+            related_filing_package_id: nullIfBlank(input.relatedFilingPackageId),
+            updated_at: now,
+          }
+        : keyDate,
     ),
   };
 }
@@ -2112,6 +2223,65 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         provisionId,
         localRecord,
       ),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  createKeyDate: (input) => {
+    const current = get();
+    const activeCase = getActiveCase(current.snapshot);
+    const userId = activeCase?.user_id || '';
+    const keyDate = buildKeyDate(input, current.snapshot, userId);
+    const key = localRecordKey('key_dates', keyDate.id);
+    const localRecord = createLocalRecordMeta({
+      table: 'key_dates',
+      id: keyDate.id,
+      status: 'local_pending',
+    });
+
+    set((state) => ({
+      snapshot: appendKeyDate(state.snapshot, keyDate),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+
+    return keyDate;
+  },
+  updateKeyDate: (keyDateId, input) => {
+    const key = localRecordKey('key_dates', keyDateId);
+    const localRecord = createLocalRecordMeta({
+      table: 'key_dates',
+      id: keyDateId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateKeyDateRow(state.snapshot, keyDateId, input),
       source: 'local',
       hasPersistedSnapshot: true,
       localRecords: {
@@ -2880,6 +3050,8 @@ export function useCaseMap() {
     updateCourtOrder: useCaseIntelligenceStore((state) => state.updateCourtOrder),
     createCourtOrderProvision: useCaseIntelligenceStore((state) => state.createCourtOrderProvision),
     updateCourtOrderProvision: useCaseIntelligenceStore((state) => state.updateCourtOrderProvision),
+    createKeyDate: useCaseIntelligenceStore((state) => state.createKeyDate),
+    updateKeyDate: useCaseIntelligenceStore((state) => state.updateKeyDate),
     loading,
     error,
     hasHydrated,
@@ -2953,6 +3125,13 @@ export function useFilingBuilder() {
           (b.captured_at ?? b.created_at).localeCompare(a.captured_at ?? a.created_at),
         )
     : [];
+  const keyDates = caseId
+    ? snapshot.keyDates
+        .filter((keyDate) => !keyDate.deleted_at && keyDate.case_id === caseId)
+        .sort((a, b) =>
+          `${a.event_date}T${a.event_time ?? ''}`.localeCompare(`${b.event_date}T${b.event_time ?? ''}`),
+        )
+    : [];
 
   return {
     snapshot,
@@ -2966,6 +3145,7 @@ export function useFilingBuilder() {
     filingReportLinkCounts,
     entries,
     attachments,
+    keyDates,
     createFilingPackage: useCaseIntelligenceStore((state) => state.createFilingPackage),
     selectFilingPackage: useCaseIntelligenceStore((state) => state.selectFilingPackage),
     updateFilingPackageStatus: useCaseIntelligenceStore((state) => state.updateFilingPackageStatus),

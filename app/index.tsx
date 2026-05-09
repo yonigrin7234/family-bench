@@ -34,6 +34,7 @@ import {
   type EntryTypeValue,
   formatDateLabel,
   getRelativeDueLabel,
+  isKeyDatePriority,
   useCaseIntelligenceHome,
   useCasePatterns,
   type FamilyBenchCase,
@@ -162,12 +163,20 @@ function FilingNextStep({ nextStep }: { nextStep: NextStep }) {
 function HearingStrip({ keyDate }: { keyDate?: KeyDate }) {
   if (!keyDate) return null;
   const dueLabel = getRelativeDueLabel(keyDate.event_date);
+  const priority = isKeyDatePriority(keyDate);
 
   return (
     <SoftCard p={14} style={styles.hearingStrip}>
-      <Text style={styles.hearingValue}>
-        {dueLabel ? `${dueLabel} · ${keyDate.title}` : keyDate.title}
-      </Text>
+      <View style={styles.hearingHeader}>
+        <Text style={styles.hearingValue}>
+          {dueLabel ? `${dueLabel} · ${keyDate.title}` : keyDate.title}
+        </Text>
+        {priority ? (
+          <Chip tone="amber" outline={false}>
+            Priority
+          </Chip>
+        ) : null}
+      </View>
       <Text style={styles.hearingDate}>
         {formatDateLabel(keyDate.event_date, keyDate.event_time)}
       </Text>
@@ -615,7 +624,15 @@ const styles = StyleSheet.create({
     borderRadius: fbRadii.xl,
     backgroundColor: fbColors.paperDeep,
   },
+  hearingHeader: {
+    minHeight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x2,
+  },
   hearingValue: {
+    flex: 1,
     color: fbColors.ink,
     fontSize: 15,
     fontFamily: fbFonts.sansSemi,

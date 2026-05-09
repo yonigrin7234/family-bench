@@ -32,6 +32,17 @@ export const COURT_ORDER_PROVISION_CATEGORIES = [
 export type CourtOrderProvisionCategory = (typeof COURT_ORDER_PROVISION_CATEGORIES)[number];
 export type CourtOrderProvisionStatus = 'active' | 'superseded';
 
+export const KEY_DATE_CATEGORIES = [
+  'hearing',
+  'filing_deadline',
+  'service_deadline',
+  'mediation',
+  'appointment',
+  'other',
+] as const;
+
+export type KeyDateCategory = (typeof KEY_DATE_CATEGORIES)[number];
+
 export type LocalRecordMeta = {
   table: string;
   id: string;

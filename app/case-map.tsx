@@ -25,9 +25,13 @@ import {
 } from '@/components/ui/fb';
 import {
   COURT_ORDER_PROVISION_CATEGORIES,
+  KEY_DATE_CATEGORIES,
   formatDateLabel,
   getCourtOrderProvisionStatus,
+  getKeyDateNotes,
   getRelativeDueLabel,
+  isKeyDatePriority,
+  normalizeKeyDateCategory,
   useCaseMap,
   type Child,
   type CourtOrder,
@@ -39,6 +43,8 @@ import {
   type FamilyBenchCase,
   type FilingPackage,
   type KeyDate,
+  type KeyDateCategory,
+  type KeyDateInput,
   type Person,
 } from '@/lib/case-intelligence';
 import { useResponsive } from '@/lib/hooks/useResponsive';
@@ -167,6 +173,15 @@ function provisionCategoryLabel(category: CourtOrderProvisionCategory | string |
   if (category === 'medical') return 'Medical';
   if (category === 'communication') return 'Communication';
   if (category === 'exchange') return 'Exchange';
+  return 'Other';
+}
+
+function keyDateCategoryLabel(category: KeyDateCategory | string | null) {
+  if (category === 'hearing') return 'Hearing';
+  if (category === 'filing_deadline') return 'Filing deadline';
+  if (category === 'service_deadline') return 'Service deadline';
+  if (category === 'mediation') return 'Mediation';
+  if (category === 'appointment') return 'Appointment';
   return 'Other';
 }
 
@@ -474,7 +489,62 @@ function CourtOrdersSection({
   );
 }
 
-function DatesSection({ keyDates }: { keyDates: KeyDate[] }) {
+function DatesSection({
+  keyDates,
+  createKeyDate,
+  updateKeyDate,
+}: {
+  keyDates: KeyDate[];
+  createKeyDate: (input: KeyDateInput) => KeyDate;
+  updateKeyDate: (keyDateId: string, input: KeyDateInput) => void;
+}) {
+  const [editingKeyDateId, setEditingKeyDateId] = useState<string | null>(null);
+  const [category, setCategory] = useState<KeyDateCategory>('hearing');
+  const [title, setTitle] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventTime, setEventTime] = useState('');
+  const [priority, setPriority] = useState(false);
+  const [notes, setNotes] = useState('');
+
+  function resetDraft() {
+    setEditingKeyDateId(null);
+    setCategory('hearing');
+    setTitle('');
+    setEventDate('');
+    setEventTime('');
+    setPriority(false);
+    setNotes('');
+  }
+
+  function editKeyDate(keyDate: KeyDate) {
+    setEditingKeyDateId(keyDate.id);
+    setCategory(normalizeKeyDateCategory(keyDate.date_type));
+    setTitle(keyDate.title);
+    setEventDate(keyDate.event_date);
+    setEventTime(keyDate.event_time ?? '');
+    setPriority(isKeyDatePriority(keyDate));
+    setNotes(getKeyDateNotes(keyDate) ?? '');
+  }
+
+  function saveKeyDate() {
+    const input: KeyDateInput = {
+      category,
+      title,
+      eventDate,
+      eventTime,
+      priority,
+      notes,
+    };
+
+    if (editingKeyDateId) {
+      updateKeyDate(editingKeyDateId, input);
+    } else {
+      createKeyDate(input);
+    }
+
+    resetDraft();
+  }
+
   return (
     <SoftCard p={16} style={styles.section}>
       <SectionHeader icon="clock" title="Key dates and deadlines" count={keyDates.length} />
@@ -482,20 +552,106 @@ function DatesSection({ keyDates }: { keyDates: KeyDate[] }) {
         <View style={styles.recordStack}>
           {keyDates.map((date) => {
             const relative = getRelativeDueLabel(date.event_date);
+            const isPriority = isKeyDatePriority(date);
             return (
-              <SmallRecord
-                key={date.id}
-                title={date.title}
-                subtitle={formatDateLabel(date.event_date, date.event_time)}
-                tone={relative === 'Past due' ? 'ox' : 'amber'}
-                meta={date.is_completed ? 'Complete' : relative}
-              />
+              <View key={date.id} style={styles.orderRecord}>
+                <SmallRecord
+                  title={date.title}
+                  subtitle={[
+                    formatDateLabel(date.event_date, date.event_time),
+                    keyDateCategoryLabel(normalizeKeyDateCategory(date.date_type)),
+                    getKeyDateNotes(date),
+                  ].filter(Boolean).join(' · ')}
+                  tone={relative === 'Past due' ? 'ox' : isPriority ? 'amber' : 'sand'}
+                  meta={date.is_completed ? 'Complete' : isPriority ? `Priority · ${relative}` : relative}
+                />
+                <View style={styles.inlineActions}>
+                  <PillButton tone="ghost" size="sm" icon="doc" onPress={() => editKeyDate(date)}>
+                    Edit
+                  </PillButton>
+                </View>
+              </View>
             );
           })}
         </View>
       ) : (
         <EmptyState>No hearings or deadlines are recorded yet.</EmptyState>
       )}
+
+      <View style={styles.formPanel}>
+        <Text style={styles.formTitle}>
+          {editingKeyDateId ? 'Edit local key date' : 'Add local key date'}
+        </Text>
+        <View style={styles.categoryGrid}>
+          {KEY_DATE_CATEGORIES.map((item) => (
+            <PillButton
+              key={item}
+              tone={category === item ? 'primary' : 'ghost'}
+              size="sm"
+              icon="clock"
+              onPress={() => setCategory(item)}
+            >
+              {keyDateCategoryLabel(item)}
+            </PillButton>
+          ))}
+        </View>
+        <TextInput
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Date title"
+          placeholderTextColor={fbColors.inkFaint}
+          style={styles.textInput}
+        />
+        <View style={styles.formGrid}>
+          <TextInput
+            value={eventDate}
+            onChangeText={setEventDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+          <TextInput
+            value={eventTime}
+            onChangeText={setEventTime}
+            placeholder="HH:MM optional"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+        </View>
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Notes"
+          placeholderTextColor={fbColors.inkFaint}
+          multiline
+          textAlignVertical="top"
+          style={[styles.textInput, styles.textArea]}
+        />
+        <View style={styles.inlineActions}>
+          <PillButton
+            tone={priority ? 'primary' : 'ghost'}
+            size="md"
+            icon="clock"
+            onPress={() => setPriority((current) => !current)}
+          >
+            {priority ? 'Priority on' : 'Priority off'}
+          </PillButton>
+          <PillButton
+            tone="primary"
+            size="md"
+            icon="check"
+            disabled={!title.trim() || !eventDate.trim()}
+            onPress={saveKeyDate}
+          >
+            {editingKeyDateId ? 'Update date' : 'Save date'}
+          </PillButton>
+          {editingKeyDateId ? (
+            <PillButton tone="ghost" size="md" icon="x" onPress={resetDraft}>
+              Cancel
+            </PillButton>
+          ) : null}
+        </View>
+      </View>
     </SoftCard>
   );
 }
@@ -770,6 +926,8 @@ export default function CaseMap() {
     updateCourtOrder,
     createCourtOrderProvision,
     updateCourtOrderProvision,
+    createKeyDate,
+    updateKeyDate,
     source,
     hasLocalCaseSetup,
     isDemoCase,
@@ -790,7 +948,13 @@ export default function CaseMap() {
       updateCourtOrderProvision={updateCourtOrderProvision}
     />
   );
-  const datesSection = <DatesSection keyDates={keyDates} />;
+  const datesSection = (
+    <DatesSection
+      keyDates={keyDates}
+      createKeyDate={createKeyDate}
+      updateKeyDate={updateKeyDate}
+    />
+  );
   const filingsSection = (
     <FilingsSection
       filingPackages={filingPackages}

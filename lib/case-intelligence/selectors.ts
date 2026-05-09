@@ -30,6 +30,10 @@ function daysUntil(date: string, today = new Date()) {
   return Math.ceil((target.getTime() - base.getTime()) / 86_400_000);
 }
 
+function keyDateDescription(value?: string | null) {
+  return value?.replace('[family-bench-priority:true]', '').trim() || null;
+}
+
 export function formatDateLabel(date: string, time?: string | null) {
   const parsed = new Date(`${date}T${time ?? '12:00:00'}`);
   const dateLabel = new Intl.DateTimeFormat(undefined, {
@@ -183,7 +187,7 @@ export function getNextStepForCase(
   if (nextDate) {
     return {
       title: nextDate.title,
-      body: nextDate.description ?? 'Review the case record before this date.',
+      body: keyDateDescription(nextDate.description) ?? 'Review the case record before this date.',
       primaryLabel: 'Review date',
       secondaryLabel: 'Not now',
       dueLabel: getRelativeDueLabel(nextDate.event_date, today),

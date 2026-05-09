@@ -29,12 +29,14 @@ import {
 import {
   formatDateLabel,
   getEntryTypeOption,
+  getRelativeDueLabel,
   useFilingBuilder,
   type EvidenceAttachment,
   type FilingChecklistKey,
   type FilingPackage,
   type FilingPackageLocalState,
   type FilingPackageStatus,
+  type KeyDate,
   type ReportPreviewType,
 } from '@/lib/case-intelligence';
 import { useResponsive } from '@/lib/hooks/useResponsive';
@@ -296,6 +298,7 @@ function FilingWorkstationRail({
   linkedEntriesCount,
   linkedAttachmentsCount,
   linkedReportsCount,
+  nextKeyDate,
   checklistPercent,
   persistenceActive,
   onToggleChecklist,
@@ -308,6 +311,7 @@ function FilingWorkstationRail({
   linkedEntriesCount: number;
   linkedAttachmentsCount: number;
   linkedReportsCount: number;
+  nextKeyDate: KeyDate | null;
   checklistPercent?: number;
   persistenceActive: boolean;
   onToggleChecklist: (item: FilingChecklistKey) => void;
@@ -354,6 +358,15 @@ function FilingWorkstationRail({
         </Text>
       </View>
       <Rule />
+      <View style={styles.railSection}>
+        <Text style={styles.railSectionTitle}>Date context</Text>
+        <Text style={styles.railText}>
+          {nextKeyDate
+            ? `${nextKeyDate.title} · ${formatDateLabel(nextKeyDate.event_date, nextKeyDate.event_time)} · ${getRelativeDueLabel(nextKeyDate.event_date)}`
+            : 'No upcoming key date is recorded for this case.'}
+        </Text>
+      </View>
+      <Rule />
       <View style={styles.warningBox}>
         <Text style={styles.warningTitle}>Organization aid</Text>
         <Text style={styles.warningText}>This is an organization aid, not a filed document.</Text>
@@ -380,6 +393,7 @@ export default function Filings() {
     filingBuilderState,
     entries,
     attachments,
+    keyDates,
     filingEntryLinkCounts,
     createFilingPackage,
     selectFilingPackage,
@@ -437,6 +451,7 @@ export default function Filings() {
   const selectedEntryCount = selectedPackageState?.linkedEntryIds.length ?? 0;
   const selectedAttachmentCount = selectedPackageState?.linkedAttachmentIds.length ?? 0;
   const selectedReportCount = selectedPackageState?.linkedReportTypes.length ?? 0;
+  const nextKeyDate = keyDates.find((keyDate) => !keyDate.is_completed) ?? null;
   const showDesktopRail = !isMobile && width >= 1280;
 
   return (
@@ -454,6 +469,7 @@ export default function Filings() {
             linkedEntriesCount={selectedEntryCount}
             linkedAttachmentsCount={selectedAttachmentCount}
             linkedReportsCount={selectedReportCount}
+            nextKeyDate={nextKeyDate}
             checklistPercent={checklistProgress(selectedPackageState)}
             persistenceActive={persistence.active}
             onToggleChecklist={(item) => {

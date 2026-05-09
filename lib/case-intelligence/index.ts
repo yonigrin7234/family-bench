@@ -20,6 +20,9 @@ export {
   useLocalPersistenceDiagnostics,
   useReportPreviewState,
   useUpdateEntryReview,
+  getKeyDateNotes,
+  isKeyDatePriority,
+  normalizeKeyDateCategory,
   type CaptureEntryInput,
   type CaseSetupInput,
   type CaseSetupUserRole,
@@ -29,6 +32,7 @@ export {
   type CourtOrderInput,
   type CourtOrderProvisionInput,
   type EntryReviewPatch,
+  type KeyDateInput,
   type SendAdvisorMessageInput,
   getCourtOrderProvisionStatus,
 } from './useCaseIntelligence';
