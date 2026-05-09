@@ -27,9 +27,23 @@ import {
   getEntryTypeOption,
   useCasePatterns,
   type DetectedCasePattern,
+  type DetectedPatternKind,
   type Entry,
 } from '@/lib/case-intelligence';
 import { useResponsive } from '@/lib/hooks/useResponsive';
+
+type PatternKindFilter = 'all' | DetectedPatternKind;
+type PatternStatusFilter = 'active' | 'acknowledged' | 'dismissed' | 'all';
+type PatternFilingFilter = 'all' | 'related';
+
+const PATTERN_KIND_LABELS: Record<DetectedPatternKind, string> = {
+  late_exchanges: 'Late exchanges',
+  denied_visits: 'Denied visits',
+  flagged_incidents: 'Flagged entries',
+  medical_entries: 'Medical',
+  communication_non_response: 'Communication',
+  filing_linked_entries: 'Filing-linked',
+};
 
 function dateRangeLabel(pattern: DetectedCasePattern) {
   if (!pattern.firstSeenOn || !pattern.lastSeenOn) return 'Date range not available';
@@ -76,6 +90,10 @@ function SourceEntryRow({ entry }: { entry: Entry }) {
       <Icon name="chevR" size={14} color={fbColors.inkMute} />
     </Pressable>
   );
+}
+
+function attachmentCountForEntry(snapshot: ReturnType<typeof useCasePatterns>['snapshot'], entryId: string) {
+  return snapshot.evidenceAttachments.filter((attachment) => !attachment.deleted_at && attachment.entry_id === entryId).length;
 }
 
 function RelatedFilingLine({ pattern }: { pattern: DetectedCasePattern }) {
@@ -230,18 +248,63 @@ function PatternStats({
 }
 
 function PatternsContextRail({
+  selectedPattern,
+  snapshot,
+  onOpenEntry,
   activeCount,
   dismissedCount,
   acknowledgedCount,
   totalCount,
   sourceLabel,
 }: {
+  selectedPattern: DetectedCasePattern | null;
+  snapshot: ReturnType<typeof useCasePatterns>['snapshot'];
+  onOpenEntry: (entryId: string) => void;
   activeCount: number;
   dismissedCount: number;
   acknowledgedCount: number;
   totalCount: number;
   sourceLabel: string;
 }) {
+  if (selectedPattern) {
+    return (
+      <SoftCard p={14} style={styles.railCard}>
+        <Text style={styles.sectionLabel}>PATTERN EVIDENCE</Text>
+        <Text style={styles.railValue}>{selectedPattern.entryCount} entries</Text>
+        <Text style={styles.railText}>{selectedPattern.title}</Text>
+        <Rule />
+        <Text style={styles.railText}>{selectedPattern.explanation}</Text>
+        <Rule />
+        <View style={styles.railSection}>
+          <Text style={styles.railSectionTitle}>Supporting entries</Text>
+          {selectedPattern.sourceEntries.slice(0, 5).map((entry) => (
+            <Pressable
+              key={entry.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Open source entry ${entry.title || getEntryTypeOption(entry.entry_type).defaultTitle}`}
+              onPress={() => onOpenEntry(entry.id)}
+              style={({ pressed }) => [styles.railEntryRow, pressed && styles.pressed]}
+            >
+              <Text style={styles.railEntryTitle} numberOfLines={1}>
+                {entry.title || getEntryTypeOption(entry.entry_type).defaultTitle}
+              </Text>
+              <Text style={styles.railEntryMeta}>
+                {formatDateLabel(entry.event_date, entry.event_time)} · {attachmentCountForEntry(snapshot, entry.id)} attachments
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Rule />
+        <Text style={styles.railText}>
+          Related filing: {selectedPattern.relatedFilingPackages.map((pkg) => pkg.title).join(', ') || 'none'}.
+        </Text>
+        <PillButton tone="ghost" size="sm" icon="folder" disabled>
+          Add/link to filing coming later
+        </PillButton>
+      </SoftCard>
+    );
+  }
+
   return (
     <SoftCard p={14} style={styles.railCard}>
       <Text style={styles.sectionLabel}>PATTERN CONTEXT</Text>
@@ -257,8 +320,45 @@ function PatternsContextRail({
   );
 }
 
+function DesktopPatternRow({
+  pattern,
+  selected,
+  onSelect,
+}: {
+  pattern: DetectedCasePattern;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`Select ${pattern.title}`}
+      onPress={onSelect}
+      style={({ pressed }) => [
+        styles.desktopPatternRow,
+        selected && styles.desktopPatternRowSelected,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={styles.desktopPatternMain}>
+        <Text style={styles.desktopPatternTitle}>{pattern.title}</Text>
+        <Text style={styles.desktopPatternBody} numberOfLines={2}>{pattern.explanation}</Text>
+      </View>
+      <View style={styles.desktopPatternMeta}>
+        <Text style={styles.desktopPatternCount}>{pattern.entryCount}</Text>
+        <Text style={styles.desktopPatternMetaText}>{dateRangeLabel(pattern)}</Text>
+      </View>
+      <Chip tone={statusTone(pattern)} outline={false}>
+        {statusLabel(pattern)}
+      </Chip>
+    </Pressable>
+  );
+}
+
 export default function Patterns() {
   const {
+    snapshot,
     activeCase,
     patterns,
     activePatterns,
@@ -270,12 +370,31 @@ export default function Patterns() {
     source,
     persistence,
   } = useCasePatterns();
-  const { isMobile } = useResponsive();
+  const { isMobile, width } = useResponsive();
   const [expandedPatternIds, setExpandedPatternIds] = useState<string[]>([]);
   const [hasInitializedExpansion, setHasInitializedExpansion] = useState(false);
+  const [kindFilter, setKindFilter] = useState<PatternKindFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<PatternStatusFilter>('active');
+  const [filingFilter, setFilingFilter] = useState<PatternFilingFilter>('all');
+  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const acknowledgedCount = patterns.filter((pattern) => pattern.status === 'acknowledged').length;
   const sourceLabel =
     source === 'local' ? 'Local data' : source === 'supabase' ? 'Supabase read data' : 'Demo data';
+  const filteredPatterns = useMemo(
+    () =>
+      patterns.filter((pattern) => {
+        if (kindFilter !== 'all' && pattern.kind !== kindFilter) return false;
+        if (statusFilter === 'active' && pattern.status === 'dismissed') return false;
+        if (statusFilter === 'acknowledged' && pattern.status !== 'acknowledged') return false;
+        if (statusFilter === 'dismissed' && pattern.status !== 'dismissed') return false;
+        if (filingFilter === 'related' && !pattern.relatedFilingPackages.length) return false;
+        return true;
+      }),
+    [filingFilter, kindFilter, patterns, statusFilter],
+  );
+  const selectedPattern =
+    filteredPatterns.find((pattern) => pattern.id === selectedPatternId) ?? filteredPatterns[0] ?? null;
+  const showDesktopRail = !isMobile && width >= 1280;
 
   useEffect(() => {
     if (!hasInitializedExpansion && activePatterns[0]) {
@@ -327,6 +446,56 @@ export default function Patterns() {
         <Chip tone="sand" outline={false}>
           {sourceLabel}
         </Chip>
+      </View>
+    </SoftCard>
+  );
+
+  const desktopFilterPanel = (
+    <SoftCard p={14} style={styles.desktopFilterCard}>
+      <Text style={styles.sectionLabel}>PATTERN FILTERS</Text>
+      <View style={styles.placeholderBox}>
+        <Text style={styles.placeholderTitle}>Date range</Text>
+        <Text style={styles.placeholderBody}>Date range selector coming later. Current list uses all local pattern dates.</Text>
+      </View>
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>Status</Text>
+        {(['active', 'acknowledged', 'dismissed', 'all'] as PatternStatusFilter[]).map((status) => (
+          <PillButton
+            key={status}
+            tone={statusFilter === status ? 'primary' : 'ghost'}
+            size="sm"
+            icon={statusFilter === status ? 'check' : 'filter'}
+            onPress={() => setStatusFilter(status)}
+          >
+            {status === 'all' ? 'All' : statusLabel({ status } as DetectedCasePattern)}
+          </PillButton>
+        ))}
+      </View>
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>Pattern type</Text>
+        <PillButton tone={kindFilter === 'all' ? 'primary' : 'ghost'} size="sm" icon="filter" onPress={() => setKindFilter('all')}>
+          All types
+        </PillButton>
+        {(Object.keys(PATTERN_KIND_LABELS) as DetectedPatternKind[]).map((kind) => (
+          <PillButton
+            key={kind}
+            tone={kindFilter === kind ? 'primary' : 'ghost'}
+            size="sm"
+            icon={kindFilter === kind ? 'check' : 'filter'}
+            onPress={() => setKindFilter(kind)}
+          >
+            {PATTERN_KIND_LABELS[kind]}
+          </PillButton>
+        ))}
+      </View>
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>Related filing</Text>
+        <PillButton tone={filingFilter === 'all' ? 'primary' : 'ghost'} size="sm" icon="folder" onPress={() => setFilingFilter('all')}>
+          All possible patterns
+        </PillButton>
+        <PillButton tone={filingFilter === 'related' ? 'primary' : 'ghost'} size="sm" icon="link" onPress={() => setFilingFilter('related')}>
+          Related filing only
+        </PillButton>
       </View>
     </SoftCard>
   );
@@ -395,17 +564,51 @@ export default function Patterns() {
     </View>
   ) : null;
 
+  const desktopPatternList = (
+    <>
+      <View style={[styles.resultsHeader, styles.desktopResultsHeader]}>
+        <Text style={styles.sectionLabel}>POSSIBLE PATTERNS</Text>
+        <Text style={styles.resultCount}>{loading ? 'Loading' : `${filteredPatterns.length} shown`}</Text>
+      </View>
+      {filteredPatterns.length ? (
+        <SoftCard p={0} style={styles.desktopPatternTable}>
+          {filteredPatterns.map((pattern) => (
+            <DesktopPatternRow
+              key={pattern.id}
+              pattern={pattern}
+              selected={selectedPattern?.id === pattern.id}
+              onSelect={() => setSelectedPatternId(pattern.id)}
+            />
+          ))}
+        </SoftCard>
+      ) : (
+        <SoftCard p={18} style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No possible patterns match these filters</Text>
+          <Text style={styles.emptyBody}>Adjust the filters or capture additional local entries.</Text>
+        </SoftCard>
+      )}
+    </>
+  );
+
   return (
     <CaseScreen
       desktopMaxWidth={1120}
+      contentStyle={!isMobile ? styles.patternsDesktopContent : undefined}
       rightRail={
-        <PatternsContextRail
-          activeCount={activePatterns.length}
-          dismissedCount={dismissedPatterns.length}
-          acknowledgedCount={acknowledgedCount}
-          totalCount={patterns.length}
-          sourceLabel={sourceLabel}
-        />
+        showDesktopRail ? (
+          <PatternsContextRail
+            selectedPattern={selectedPattern}
+            snapshot={snapshot}
+            onOpenEntry={openEntry}
+            activeCount={activePatterns.length}
+            dismissedCount={dismissedPatterns.length}
+            acknowledgedCount={acknowledgedCount}
+            totalCount={patterns.length}
+            sourceLabel={sourceLabel}
+          />
+        ) : (
+          false
+        )
       }
     >
       <View style={styles.header}>
@@ -430,10 +633,10 @@ export default function Patterns() {
           <View style={styles.desktopContextColumn}>
             {statsPanel}
             {contextPanel}
+            {desktopFilterPanel}
           </View>
           <View style={styles.desktopPatternsColumn}>
-            {activePanel}
-            {dismissedPanel}
+            {desktopPatternList}
           </View>
         </View>
       )}
@@ -464,6 +667,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontFamily: fbFonts.sansRegular,
   },
+  patternsDesktopContent: {
+    paddingHorizontal: fbSpacing.x4,
+  },
   statsGrid: {
     marginTop: fbSpacing.x5,
     flexDirection: 'row',
@@ -484,10 +690,10 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x5,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: fbSpacing.x5,
+    gap: fbSpacing.x3,
   },
   desktopContextColumn: {
-    width: 300,
+    width: 250,
   },
   desktopPatternsColumn: {
     flex: 1,
@@ -531,6 +737,42 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: fbSpacing.x2,
   },
+  desktopFilterCard: {
+    marginTop: fbSpacing.x4,
+    gap: fbSpacing.x3,
+  },
+  placeholderBox: {
+    gap: fbSpacing.x1,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.paperDeep,
+  },
+  placeholderTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  placeholderBody: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  filterGroup: {
+    gap: fbSpacing.x2,
+  },
+  filterLabel: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.84,
+    textTransform: 'uppercase',
+  },
   resultsHeader: {
     marginTop: fbSpacing.x5,
     flexDirection: 'row',
@@ -556,6 +798,61 @@ const styles = StyleSheet.create({
   patternStack: {
     marginTop: fbSpacing.x3,
     gap: fbSpacing.x3,
+  },
+  desktopPatternTable: {
+    marginTop: fbSpacing.x3,
+    overflow: 'hidden',
+  },
+  desktopPatternRow: {
+    minHeight: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x3,
+    paddingHorizontal: fbSpacing.x3,
+    paddingVertical: fbSpacing.x3,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.surface,
+  },
+  desktopPatternRowSelected: {
+    backgroundColor: fbColors.oxWash,
+    borderLeftWidth: fbBorder.focus,
+    borderLeftColor: fbColors.ox,
+  },
+  desktopPatternMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: fbSpacing.x1,
+  },
+  desktopPatternTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 20,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  desktopPatternBody: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  desktopPatternMeta: {
+    width: 116,
+    gap: fbSpacing.x1,
+  },
+  desktopPatternCount: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 22,
+    fontFamily: fbFonts.monoMedium,
+    fontWeight: fbWeights.medium,
+  },
+  desktopPatternMetaText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    lineHeight: 14,
+    fontFamily: fbFonts.sansRegular,
   },
   patternCard: {
     gap: fbSpacing.x3,
@@ -717,6 +1014,35 @@ const styles = StyleSheet.create({
   },
   railCard: {
     gap: fbSpacing.x3,
+  },
+  railSection: {
+    gap: fbSpacing.x2,
+  },
+  railSectionTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railEntryRow: {
+    gap: fbSpacing.x1,
+    paddingVertical: fbSpacing.x2,
+    borderTopWidth: fbBorder.hairline,
+    borderTopColor: fbColors.ruleSoft,
+  },
+  railEntryTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railEntryMeta: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    lineHeight: 14,
+    fontFamily: fbFonts.sansRegular,
   },
   railValue: {
     color: fbColors.ink,
