@@ -27,6 +27,7 @@ import {
   ENTRY_TYPE_OPTIONS,
   formatDateLabel,
   getEntryTypeOption,
+  isEntryReviewed,
   useCaseEvidence,
   type AttachmentKind,
   type Child,
@@ -42,6 +43,7 @@ type SortMode = 'newest' | 'oldest' | 'flagged';
 type EvidenceRow = {
   entry: Entry;
   attachments: EvidenceAttachment[];
+  allAttachments: EvidenceAttachment[];
   attachmentCount: number;
   filingLinkCount: number;
 };
@@ -113,6 +115,19 @@ function attachmentIcon(kind: AttachmentKind): IconName {
 
 function entryTimestamp(entry: Entry) {
   return `${entry.event_date}T${entry.event_time ?? '00:00:00'}`;
+}
+
+function compactText(value: string | null | undefined, fallback = 'No body text recorded') {
+  const normalized = value?.replace(/\s+/g, ' ').trim();
+  return normalized || fallback;
+}
+
+function formatSourceType(entry: Entry) {
+  if (entry.capture_method) {
+    return entry.capture_method.replace(/_/g, ' ');
+  }
+  if (entry.voice_transcript) return 'voice transcript';
+  return 'manual entry';
 }
 
 function attachmentTimestamp(attachment: EvidenceAttachment) {
@@ -313,30 +328,151 @@ function EvidenceStats({
   );
 }
 
-function EvidenceContextRail({
+function EvidenceInspector({
+  selectedRow,
   rowsCount,
   entriesCount,
   attachmentsCount,
   flaggedCount,
   activeFiltersCount,
+  childrenById,
 }: {
+  selectedRow: EvidenceRow | null;
   rowsCount: number;
   entriesCount: number;
   attachmentsCount: number;
   flaggedCount: number;
   activeFiltersCount: number;
+  childrenById: Record<string, Child>;
 }) {
+  if (!selectedRow) {
+    return (
+      <SoftCard p={14} style={styles.railCard}>
+        <Text style={styles.sectionLabel}>EVIDENCE INSPECTOR</Text>
+        <Text style={styles.railValue}>No record selected</Text>
+        <Text style={styles.railText}>
+          {entriesCount} entries are available. Select a row in the evidence list to review source details without leaving this screen.
+        </Text>
+        <Rule />
+        <Text style={styles.railText}>
+          {activeFiltersCount ? `${activeFiltersCount} filters active` : 'No filters active'}.
+          Search remains local to saved text and filenames.
+        </Text>
+      </SoftCard>
+    );
+  }
+
+  const { entry, allAttachments, filingLinkCount } = selectedRow;
+  const option = getEntryTypeOption(entry.entry_type);
+  const reviewed = isEntryReviewed(entry);
+  const childName = entry.child_id ? childrenById[entry.child_id]?.name : null;
+  const sourceType = formatSourceType(entry);
+  const hasCourtReadySummary = Boolean(entry.court_ready_summary?.trim());
+  const hasPrivateNotes = Boolean(entry.private_notes?.trim());
+
   return (
     <SoftCard p={14} style={styles.railCard}>
-      <Text style={styles.sectionLabel}>EVIDENCE CONTEXT</Text>
-      <Text style={styles.railValue}>{rowsCount} shown</Text>
+      <Text style={styles.sectionLabel}>EVIDENCE INSPECTOR</Text>
+      <View style={styles.inspectorTitleBlock}>
+        <Chip tone={option.tone as ChipTone} outline={false}>
+          {option.shortLabel}
+        </Chip>
+        {entry.is_flagged ? (
+          <Chip tone="ox" outline={false}>
+            {entry.flag_severity || 'Flagged'}
+          </Chip>
+        ) : null}
+      </View>
+      <Text style={styles.railValue} numberOfLines={3}>
+        {entry.title || compactText(entry.body)}
+      </Text>
       <Text style={styles.railText}>
-        {entriesCount} total entries · {attachmentsCount} visible source attachments · {flaggedCount} flagged records.
+        {formatDateLabel(entry.event_date, entry.event_time)}
+        {childName ? ` · ${childName}` : ''}
       </Text>
       <Rule />
+
+      <View style={styles.inspectorMetaStack}>
+        <View style={styles.inspectorMetaRow}>
+          <Text style={styles.inspectorMetaLabel}>Source</Text>
+          <Text style={styles.inspectorMetaValue}>{sourceType}</Text>
+        </View>
+        <View style={styles.inspectorMetaRow}>
+          <Text style={styles.inspectorMetaLabel}>Attachments</Text>
+          <Text style={styles.inspectorMetaValue}>{allAttachments.length}</Text>
+        </View>
+        <View style={styles.inspectorMetaRow}>
+          <Text style={styles.inspectorMetaLabel}>Review</Text>
+          <Text style={styles.inspectorMetaValue}>{reviewed ? 'Reviewed' : 'Needs review'}</Text>
+        </View>
+        <View style={styles.inspectorMetaRow}>
+          <Text style={styles.inspectorMetaLabel}>Court-ready</Text>
+          <Text style={styles.inspectorMetaValue}>{hasCourtReadySummary ? 'Summary saved' : 'No summary'}</Text>
+        </View>
+        <View style={styles.inspectorMetaRow}>
+          <Text style={styles.inspectorMetaLabel}>Private notes</Text>
+          <Text style={styles.inspectorMetaValue}>{hasPrivateNotes ? 'Notes saved' : 'No notes'}</Text>
+        </View>
+        <View style={styles.inspectorMetaRow}>
+          <Text style={styles.inspectorMetaLabel}>Filing links</Text>
+          <Text style={styles.inspectorMetaValue}>{filingLinkCount || 'None'}</Text>
+        </View>
+      </View>
+
+      <Rule />
+
+      <View style={styles.inspectorSection}>
+        <Text style={styles.inspectorSectionTitle}>Source entry</Text>
+        <Text style={styles.inspectorBody} numberOfLines={6}>
+          {compactText(entry.body)}
+        </Text>
+      </View>
+
+      <View style={styles.inspectorSection}>
+        <Text style={styles.inspectorSectionTitle}>Attachments</Text>
+        {allAttachments.length ? (
+          <View style={styles.inspectorAttachmentStack}>
+            {allAttachments.slice(0, 4).map((attachment) => {
+              const kind = getAttachmentKind(attachment);
+              return (
+                <View key={attachment.id} style={styles.inspectorAttachmentRow}>
+                  <View style={styles.inspectorAttachmentIcon}>
+                    <Icon name={attachmentIcon(kind)} size={13} color={fbColors.ink} />
+                  </View>
+                  <View style={styles.inspectorAttachmentCopy}>
+                    <Text style={styles.inspectorAttachmentName} numberOfLines={1}>
+                      {attachment.file_name}
+                    </Text>
+                    <Text style={styles.inspectorAttachmentMeta} numberOfLines={1}>
+                      {attachmentKindLabel(kind)} · {formatFileSize(attachment.file_size_bytes)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+            {allAttachments.length > 4 ? (
+              <Text style={styles.railText}>{allAttachments.length - 4} more attachments on full entry.</Text>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={styles.railText}>No attachment metadata linked to this entry.</Text>
+        )}
+      </View>
+
+      <View style={styles.inspectorSection}>
+        <Text style={styles.inspectorSectionTitle}>Related work</Text>
+        <Text style={styles.railText}>
+          Filing and possible-pattern references are local placeholders here. Open the full entry to review or attach this record in the filing builder.
+        </Text>
+      </View>
+
+      <PillButton tone="primary" size="sm" icon="eye" onPress={() => openEntry(entry.id)}>
+        Open full entry
+      </PillButton>
+
+      <Rule />
       <Text style={styles.railText}>
-        {activeFiltersCount ? `${activeFiltersCount} filters active` : 'No filters active'}.
-        Search remains local to saved text and filenames.
+        {rowsCount} rows shown · {attachmentsCount} visible attachments · {flaggedCount} flagged.
       </Text>
     </SoftCard>
   );
@@ -419,6 +555,82 @@ function EvidenceResult({ row }: { row: EvidenceRow }) {
   );
 }
 
+function DesktopEvidenceRow({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: EvidenceRow;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const option = getEntryTypeOption(row.entry.entry_type);
+  const reviewed = isEntryReviewed(row.entry);
+  const sourceType = formatSourceType(row.entry);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`Select evidence record ${option.shortLabel} from ${formatDateLabel(row.entry.event_date, row.entry.event_time)}`}
+      onPress={onSelect}
+      style={({ pressed }) => [
+        styles.desktopRow,
+        selected && styles.desktopRowSelected,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.desktopCell, styles.desktopTypeCell]}>
+        <Chip tone={option.tone as ChipTone} outline={!selected}>
+          {option.shortLabel}
+        </Chip>
+        <Text style={styles.desktopCellSubtext} numberOfLines={1}>
+          {reviewed ? 'Reviewed' : 'Needs review'}
+        </Text>
+      </View>
+
+      <View style={[styles.desktopCell, styles.desktopDateCell]}>
+        <Text style={styles.desktopDateText}>{formatDateLabel(row.entry.event_date, row.entry.event_time)}</Text>
+      </View>
+
+      <View style={[styles.desktopCell, styles.desktopSummaryCell]}>
+        <Text style={styles.desktopSummaryText} numberOfLines={2}>
+          {row.entry.title || compactText(row.entry.body)}
+        </Text>
+        <Text style={styles.desktopCellSubtext} numberOfLines={1}>
+          {row.entry.court_ready_summary ? 'Court-ready summary saved' : row.entry.private_notes ? 'Private notes saved' : 'Source entry'}
+        </Text>
+      </View>
+
+      <View style={[styles.desktopCell, styles.desktopFlagCell]}>
+        {row.entry.is_flagged ? (
+          <Chip tone="ox" outline={false}>
+            {row.entry.flag_severity || 'Flag'}
+          </Chip>
+        ) : (
+          <Text style={styles.desktopMutedText}>No flag</Text>
+        )}
+      </View>
+
+      <View style={[styles.desktopCell, styles.desktopCountCell]}>
+        <Text style={styles.desktopCountText}>{row.attachmentCount}</Text>
+        <Text style={styles.desktopCellSubtext}>files</Text>
+      </View>
+
+      <View style={[styles.desktopCell, styles.desktopCountCell]}>
+        <Text style={styles.desktopCountText}>{row.filingLinkCount}</Text>
+        <Text style={styles.desktopCellSubtext}>links</Text>
+      </View>
+
+      <View style={[styles.desktopCell, styles.desktopSourceCell]}>
+        <Text style={styles.desktopSourceText} numberOfLines={2}>
+          {sourceType}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 export default function Evidence() {
   const {
     activeCase,
@@ -429,14 +641,23 @@ export default function Evidence() {
     source,
     loading,
   } = useCaseEvidence();
-  const { isMobile } = useResponsive();
+  const { isMobile, width } = useResponsive();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<EntryTypeFilterValue>('all');
   const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
   const [attachmentFilter, setAttachmentFilter] = useState<AttachmentFilter>('all');
   const [childFilter, setChildFilter] = useState<string>('all');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const attachmentsByEntryId = useMemo(() => buildAttachmentsByEntryId(attachments), [attachments]);
+  const childrenById = useMemo(
+    () =>
+      children.reduce<Record<string, Child>>((acc, child) => {
+        acc[child.id] = child;
+        return acc;
+      }, {}),
+    [children],
+  );
   const query = normalizeSearch(search);
 
   const rows = useMemo(() => {
@@ -470,6 +691,7 @@ export default function Evidence() {
       .map(({ entry, attachments: visibleAttachments }) => ({
         entry,
         attachments: visibleAttachments,
+        allAttachments: attachmentsByEntryId[entry.id] ?? [],
         attachmentCount: attachmentsByEntryId[entry.id]?.length ?? 0,
         filingLinkCount: filingEntryLinkCounts[entry.id] ?? 0,
       }));
@@ -509,6 +731,8 @@ export default function Evidence() {
     childFilter !== 'all',
     sortMode !== 'newest',
   ].filter(Boolean).length;
+  const selectedRow = rows.find((row) => row.entry.id === selectedEntryId) ?? rows[0] ?? null;
+  const showDesktopInspector = !isMobile && width >= 1280;
 
   function clearFilters() {
     setSearch('');
@@ -660,17 +884,84 @@ export default function Evidence() {
     </>
   );
 
+  const desktopResultsPanel = (
+    <>
+      <View style={[styles.resultsHeader, styles.desktopResultsHeader]}>
+        <View>
+          <Text style={styles.sectionLabel}>EVIDENCE TABLE</Text>
+          <Text style={styles.desktopHeaderHint}>Select a row to inspect details without leaving this route.</Text>
+        </View>
+        <Text style={styles.resultCount}>{loading ? 'Loading' : `${rows.length} shown`}</Text>
+      </View>
+
+      {entries.length === 0 ? (
+        <SoftCard p={18} style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No evidence records yet</Text>
+          <Text style={styles.emptyBody}>
+            Capture entries first. Local attachments and voice memos will appear here after they are linked to an entry.
+          </Text>
+          <PillButton
+            tone="primary"
+            size="md"
+            icon="plus"
+            onPress={() => router.push('/capture' as never)}
+            style={styles.emptyAction}
+          >
+            Capture entry
+          </PillButton>
+        </SoftCard>
+      ) : rows.length ? (
+        <SoftCard p={0} style={styles.desktopTable}>
+          <View style={styles.desktopTableHeader}>
+            <Text style={[styles.desktopHeaderCell, styles.desktopTypeCell]}>Type</Text>
+            <Text style={[styles.desktopHeaderCell, styles.desktopDateCell]}>Date</Text>
+            <Text style={[styles.desktopHeaderCell, styles.desktopSummaryCell]}>Summary</Text>
+            <Text style={[styles.desktopHeaderCell, styles.desktopFlagCell]}>Flags</Text>
+            <Text style={[styles.desktopHeaderCell, styles.desktopCountCell]}>Att.</Text>
+            <Text style={[styles.desktopHeaderCell, styles.desktopCountCell]}>Filing</Text>
+            <Text style={[styles.desktopHeaderCell, styles.desktopSourceCell]}>Source</Text>
+          </View>
+          {rows.map((row) => (
+            <DesktopEvidenceRow
+              key={row.entry.id}
+              row={row}
+              selected={selectedRow?.entry.id === row.entry.id}
+              onSelect={() => setSelectedEntryId(row.entry.id)}
+            />
+          ))}
+        </SoftCard>
+      ) : (
+        <SoftCard p={18} style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No evidence matches</Text>
+          <Text style={styles.emptyBody}>
+            Adjust the search term or filters. This search only uses local entry text, private notes, court-ready summaries, and filenames.
+          </Text>
+          <PillButton tone="soft" size="md" icon="x" onPress={clearFilters} style={styles.emptyAction}>
+            Clear filters
+          </PillButton>
+        </SoftCard>
+      )}
+    </>
+  );
+
   return (
     <CaseScreen
       desktopMaxWidth={1120}
+      contentStyle={!isMobile ? styles.evidenceDesktopContent : undefined}
       rightRail={
-        <EvidenceContextRail
-          rowsCount={rows.length}
-          entriesCount={entries.length}
-          attachmentsCount={visibleAttachmentCount}
-          flaggedCount={flaggedCount}
-          activeFiltersCount={activeFiltersCount}
-        />
+        showDesktopInspector ? (
+          <EvidenceInspector
+            selectedRow={selectedRow}
+            rowsCount={rows.length}
+            entriesCount={entries.length}
+            attachmentsCount={visibleAttachmentCount}
+            flaggedCount={flaggedCount}
+            activeFiltersCount={activeFiltersCount}
+            childrenById={childrenById}
+          />
+        ) : (
+          false
+        )
       }
     >
       <View style={styles.header}>
@@ -698,7 +989,7 @@ export default function Evidence() {
       ) : (
         <View style={styles.desktopEvidenceGrid}>
           <View style={styles.desktopFilterColumn}>{filterPanel}</View>
-          <View style={styles.desktopResultsColumn}>{resultsPanel}</View>
+          <View style={styles.desktopResultsColumn}>{desktopResultsPanel}</View>
         </View>
       )}
 
@@ -722,6 +1013,9 @@ const styles = StyleSheet.create({
     fontSize: fbType.body,
     lineHeight: 21,
     fontFamily: fbFonts.sansRegular,
+  },
+  evidenceDesktopContent: {
+    paddingHorizontal: fbSpacing.x4,
   },
   statsGrid: {
     marginTop: fbSpacing.x5,
@@ -756,10 +1050,10 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x5,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: fbSpacing.x5,
+    gap: fbSpacing.x3,
   },
   desktopFilterColumn: {
-    width: 310,
+    width: 230,
   },
   desktopResultsColumn: {
     flex: 1,
@@ -839,6 +1133,13 @@ const styles = StyleSheet.create({
   desktopResultsHeader: {
     marginTop: 0,
   },
+  desktopHeaderHint: {
+    marginTop: fbSpacing.x1,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
   sectionLabel: {
     color: fbColors.ox,
     fontSize: fbType.micro,
@@ -857,6 +1158,107 @@ const styles = StyleSheet.create({
   },
   resultBlock: {
     gap: fbSpacing.x2,
+  },
+  desktopTable: {
+    marginTop: fbSpacing.x3,
+    overflow: 'hidden',
+  },
+  desktopTableHeader: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x1,
+    paddingHorizontal: fbSpacing.x2,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.rule,
+    backgroundColor: fbColors.paperDeep,
+  },
+  desktopHeaderCell: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.84,
+    textTransform: 'uppercase',
+  },
+  desktopRow: {
+    minHeight: 74,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x1,
+    paddingHorizontal: fbSpacing.x2,
+    paddingVertical: fbSpacing.x3,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.surface,
+  },
+  desktopRowSelected: {
+    backgroundColor: fbColors.oxWash,
+    borderLeftWidth: fbBorder.focus,
+    borderLeftColor: fbColors.ox,
+  },
+  desktopCell: {
+    minWidth: 0,
+    gap: fbSpacing.x1,
+  },
+  desktopTypeCell: {
+    width: 72,
+  },
+  desktopDateCell: {
+    width: 82,
+  },
+  desktopSummaryCell: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopFlagCell: {
+    width: 54,
+  },
+  desktopCountCell: {
+    width: 36,
+    alignItems: 'flex-start',
+  },
+  desktopSourceCell: {
+    width: 54,
+  },
+  desktopDateText: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 17,
+    fontFamily: fbFonts.monoMedium,
+    fontWeight: fbWeights.medium,
+  },
+  desktopSummaryText: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 19,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  desktopCellSubtext: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    lineHeight: 14,
+    fontFamily: fbFonts.sansRegular,
+  },
+  desktopMutedText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansRegular,
+  },
+  desktopCountText: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 18,
+    fontFamily: fbFonts.monoMedium,
+    fontWeight: fbWeights.medium,
+  },
+  desktopSourceText: {
+    color: fbColors.inkSoft,
+    fontSize: fbType.small,
+    lineHeight: 17,
+    fontFamily: fbFonts.sansRegular,
+    textTransform: 'capitalize',
   },
   attachmentStack: {
     marginLeft: fbSpacing.x4,
@@ -978,6 +1380,11 @@ const styles = StyleSheet.create({
   railCard: {
     gap: fbSpacing.x3,
   },
+  inspectorTitleBlock: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: fbSpacing.x2,
+  },
   railValue: {
     color: fbColors.ink,
     fontSize: fbType.h2,
@@ -989,6 +1396,82 @@ const styles = StyleSheet.create({
     color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  inspectorMetaStack: {
+    gap: fbSpacing.x2,
+  },
+  inspectorMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  inspectorMetaLabel: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  inspectorMetaValue: {
+    flexShrink: 1,
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    textAlign: 'right',
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    textTransform: 'capitalize',
+  },
+  inspectorSection: {
+    gap: fbSpacing.x2,
+  },
+  inspectorSectionTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  inspectorBody: {
+    color: fbColors.inkSoft,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  inspectorAttachmentStack: {
+    gap: fbSpacing.x2,
+  },
+  inspectorAttachmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+    padding: fbSpacing.x2,
+    borderRadius: fbRadii.sm,
+    backgroundColor: fbColors.paperDeep,
+  },
+  inspectorAttachmentIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fbColors.surface,
+  },
+  inspectorAttachmentCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  inspectorAttachmentName: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 17,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  inspectorAttachmentMeta: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    lineHeight: 14,
     fontFamily: fbFonts.sansRegular,
   },
   pressed: {
