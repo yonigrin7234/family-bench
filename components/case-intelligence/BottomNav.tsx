@@ -10,35 +10,11 @@ import {
   fbSpacing,
   fbTouch,
   fbWeights,
-  type IconName,
 } from '@/components/ui/fb';
+import { getSurfaceNavRoutes, isSurfaceRouteActive } from '@/lib/surface/surfaceRegistry';
 
-const BOTTOM_NAV_ITEMS = [
-  { href: '/', icon: 'home', label: 'Home' },
-  { href: '/capture', icon: 'plus', label: 'Capture' },
-  { href: '/timeline', icon: 'clock', label: 'Timeline' },
-  { href: '/evidence', icon: 'folder', label: 'Evidence' },
-  { href: '/reports', icon: 'doc', label: 'Reports' },
-  { href: '/case-map', icon: 'scales', label: 'Case Map' },
-] as const;
-
-const DESKTOP_NAV_ITEMS = [
-  { href: '/', icon: 'home', label: 'Home' },
-  { href: '/capture', icon: 'plus', label: 'Capture' },
-  { href: '/voice-capture', icon: 'mic', label: 'Voice Capture' },
-  { href: '/timeline', icon: 'clock', label: 'Timeline' },
-  { href: '/evidence', icon: 'folder', label: 'Evidence' },
-  { href: '/case-map', icon: 'scales', label: 'Case Map' },
-  { href: '/reports', icon: 'doc', label: 'Reports' },
-  { href: '/advisor', icon: 'chat', label: 'Advisor' },
-  { href: '/filings', icon: 'folder', label: 'Filings' },
-  { href: '/patterns', icon: 'filter', label: 'Patterns' },
-] as const;
-
-function isActive(pathname: string, href: string) {
-  if (href === '/capture' && pathname === '/voice-capture') return true;
-  return href === '/' ? pathname === '/' : pathname.startsWith(href);
-}
+const BOTTOM_NAV_ITEMS = getSurfaceNavRoutes('mobile');
+const DESKTOP_NAV_ITEMS = getSurfaceNavRoutes('desktop');
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -46,21 +22,21 @@ export function BottomNav() {
   return (
     <View style={styles.nav}>
       {BOTTOM_NAV_ITEMS.map((item) => {
-        const active = isActive(pathname, item.href);
+        const active = isSurfaceRouteActive(pathname, item, 'mobile');
 
         return (
           <Pressable
-            key={item.href}
+            key={item.id}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={item.label}
             onPress={() => {
-              if (!active) router.push(item.href as never);
+              if (!active) router.push(item.path as never);
             }}
             style={({ pressed }) => [styles.item, pressed && styles.pressed]}
           >
             <Icon
-              name={item.icon as IconName}
+              name={item.icon}
               size={18}
               color={active ? fbColors.ink : fbColors.inkMute}
             />
@@ -89,16 +65,16 @@ export function DesktopSidebar() {
 
       <View style={styles.sidebarNav}>
         {DESKTOP_NAV_ITEMS.map((item) => {
-          const active = isActive(pathname, item.href);
+          const active = isSurfaceRouteActive(pathname, item, 'desktop');
 
           return (
             <Pressable
-              key={item.href}
+              key={item.id}
               accessibilityRole="link"
               accessibilityState={{ selected: active }}
               accessibilityLabel={item.label}
               onPress={() => {
-                if (!active) router.push(item.href as never);
+                if (!active) router.push(item.path as never);
               }}
               style={({ pressed }) => [
                 styles.sidebarItem,
@@ -107,7 +83,7 @@ export function DesktopSidebar() {
               ]}
             >
               <Icon
-                name={item.icon as IconName}
+                name={item.icon}
                 size={17}
                 color={active ? fbColors.ink : fbColors.inkMute}
               />
