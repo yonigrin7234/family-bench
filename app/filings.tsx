@@ -131,6 +131,12 @@ function linkedCount(state: FilingPackageLocalState | null) {
   return state.linkedEntryIds.length + state.linkedAttachmentIds.length + state.linkedReportTypes.length;
 }
 
+function checklistProgress(state: FilingPackageLocalState | null) {
+  if (!state) return 0;
+  const completed = CHECKLIST_ITEMS.filter((item) => state.checklist[item.value]).length;
+  return Math.round((completed / CHECKLIST_ITEMS.length) * 100);
+}
+
 function PackageCard({
   filingPackage,
   packageState,
@@ -164,7 +170,11 @@ function PackageCard({
           </Chip>
         </View>
         <ProgressBar pct={filingPackage.completion_percent} label="Checklist progress" />
-        <Text style={styles.packageMeta}>{linkedCount(packageState)} linked source items</Text>
+        <View style={styles.packageMetricRow}>
+          <Text style={styles.packageMeta}>{packageState?.linkedEntryIds.length ?? 0} entries</Text>
+          <Text style={styles.packageMeta}>{packageState?.linkedReportTypes.length ?? 0} reports</Text>
+          <Text style={styles.packageMeta}>{linkedCount(packageState)} total links</Text>
+        </View>
       </SoftCard>
     </Pressable>
   );
@@ -277,30 +287,77 @@ function ExhibitPlaceholders({ packageState }: { packageState: FilingPackageLoca
   );
 }
 
-function FilingContextRail({
+function FilingWorkstationRail({
   packageCount,
   selectedTitle,
+  selectedPackage,
+  selectedPackageState,
   selectedLinkedCount,
   linkedEntriesCount,
   linkedAttachmentsCount,
   linkedReportsCount,
   checklistPercent,
   persistenceActive,
+  onToggleChecklist,
 }: {
   packageCount: number;
   selectedTitle?: string;
+  selectedPackage: FilingPackage | null;
+  selectedPackageState: FilingPackageLocalState | null;
   selectedLinkedCount: number;
   linkedEntriesCount: number;
   linkedAttachmentsCount: number;
   linkedReportsCount: number;
   checklistPercent?: number;
   persistenceActive: boolean;
+  onToggleChecklist: (item: FilingChecklistKey) => void;
 }) {
   return (
     <SoftCard p={14} style={styles.railCard}>
-      <Text style={styles.sectionLabel}>FILING CONTEXT</Text>
+      <Text style={styles.sectionLabel}>WORKSTATION RAIL</Text>
       <Text style={styles.railValue}>{packageCount} packages</Text>
       <Text style={styles.railText}>{selectedTitle || 'No package selected'}</Text>
+      <Rule />
+      {selectedPackage && selectedPackageState ? (
+        <View style={styles.railSection}>
+          <Text style={styles.railSectionTitle}>Checklist</Text>
+          {CHECKLIST_ITEMS.map((item) => (
+            <Pressable
+              key={item.value}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: selectedPackageState.checklist[item.value] }}
+              accessibilityLabel={`${item.label} checklist item`}
+              onPress={() => onToggleChecklist(item.value)}
+              style={({ pressed }) => [styles.railChecklistRow, pressed && styles.pressed]}
+            >
+              <View style={[styles.railCheckbox, selectedPackageState.checklist[item.value] && styles.checkboxActive]}>
+                {selectedPackageState.checklist[item.value] ? (
+                  <Icon name="check" size={12} color={fbColors.paper} />
+                ) : null}
+              </View>
+              <Text style={styles.railChecklistText}>{item.label}</Text>
+            </Pressable>
+          ))}
+          <View style={styles.railChecklistRow}>
+            <View style={styles.railCheckbox} />
+            <Text style={styles.railChecklistText}>Review placeholder</Text>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.railText}>Select a package to review checklist and exhibit context.</Text>
+      )}
+      <Rule />
+      <View style={styles.railSection}>
+        <Text style={styles.railSectionTitle}>Exhibit context</Text>
+        <Text style={styles.railText}>
+          Exhibit groups are local placeholders. Drag ordering, final labels, court PDFs, and e-filing come later.
+        </Text>
+      </View>
+      <Rule />
+      <View style={styles.warningBox}>
+        <Text style={styles.warningTitle}>Organization aid</Text>
+        <Text style={styles.warningText}>This is an organization aid, not a filed document.</Text>
+      </View>
       <Rule />
       <Text style={styles.railText}>
         {selectedLinkedCount} linked source items: {linkedEntriesCount} entries, {linkedAttachmentsCount} attachments, {linkedReportsCount} report previews.
@@ -334,7 +391,7 @@ export default function Filings() {
     loading,
     persistence,
   } = useFilingBuilder();
-  const { isMobile } = useResponsive();
+  const { isMobile, width } = useResponsive();
   const [title, setTitle] = useState('');
   const [filingType, setFilingType] = useState(FILING_TYPES[0].value);
   const [dueDate, setDueDate] = useState('');
@@ -380,21 +437,32 @@ export default function Filings() {
   const selectedEntryCount = selectedPackageState?.linkedEntryIds.length ?? 0;
   const selectedAttachmentCount = selectedPackageState?.linkedAttachmentIds.length ?? 0;
   const selectedReportCount = selectedPackageState?.linkedReportTypes.length ?? 0;
+  const showDesktopRail = !isMobile && width >= 1280;
 
   return (
     <CaseScreen
       desktopMaxWidth={1180}
+      contentStyle={!isMobile ? styles.filingDesktopContent : undefined}
       rightRail={
-        <FilingContextRail
-          packageCount={filingPackages.length}
-          selectedTitle={selectedPackage?.title}
-          selectedLinkedCount={selectedLinkedCount}
-          linkedEntriesCount={selectedEntryCount}
-          linkedAttachmentsCount={selectedAttachmentCount}
-          linkedReportsCount={selectedReportCount}
-          checklistPercent={selectedPackage?.completion_percent}
-          persistenceActive={persistence.active}
-        />
+        showDesktopRail ? (
+          <FilingWorkstationRail
+            packageCount={filingPackages.length}
+            selectedTitle={selectedPackage?.title}
+            selectedPackage={selectedPackage}
+            selectedPackageState={selectedPackageState}
+            selectedLinkedCount={selectedLinkedCount}
+            linkedEntriesCount={selectedEntryCount}
+            linkedAttachmentsCount={selectedAttachmentCount}
+            linkedReportsCount={selectedReportCount}
+            checklistPercent={checklistProgress(selectedPackageState)}
+            persistenceActive={persistence.active}
+            onToggleChecklist={(item) => {
+              if (selectedPackage) toggleFilingPackageChecklist(selectedPackage.id, item);
+            }}
+          />
+        ) : (
+          false
+        )
       }
     >
       <View style={styles.header}>
@@ -534,17 +602,19 @@ export default function Filings() {
             <ProgressBar pct={selectedPackage.completion_percent} label="Checklist progress" />
           </SoftCard>
 
-          <SoftCard p={16} style={styles.detailCard}>
-            <Text style={styles.sectionLabel}>CHECKLIST PLACEHOLDER</Text>
-            {CHECKLIST_ITEMS.map((item) => (
-              <ChecklistRow
-                key={item.value}
-                item={item}
-                completed={selectedPackageState.checklist[item.value]}
-                onToggle={() => toggleFilingPackageChecklist(selectedPackage.id, item.value)}
-              />
-            ))}
-          </SoftCard>
+          {isMobile ? (
+            <SoftCard p={16} style={styles.detailCard}>
+              <Text style={styles.sectionLabel}>CHECKLIST PLACEHOLDER</Text>
+              {CHECKLIST_ITEMS.map((item) => (
+                <ChecklistRow
+                  key={item.value}
+                  item={item}
+                  completed={selectedPackageState.checklist[item.value]}
+                  onToggle={() => toggleFilingPackageChecklist(selectedPackage.id, item.value)}
+                />
+              ))}
+            </SoftCard>
+          ) : null}
 
           <SoftCard p={16} style={styles.detailCard}>
             <Text style={styles.sectionLabel}>LINK ENTRIES</Text>
@@ -662,6 +732,9 @@ const styles = StyleSheet.create({
     fontSize: fbType.body,
     lineHeight: 21,
     fontFamily: fbFonts.sansRegular,
+  },
+  filingDesktopContent: {
+    paddingHorizontal: fbSpacing.x4,
   },
   createCard: {
     marginTop: fbSpacing.x5,
@@ -798,6 +871,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
   },
+  packageMetricRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: fbSpacing.x2,
+  },
   emptyCard: {
     marginTop: fbSpacing.x3,
   },
@@ -924,6 +1002,60 @@ const styles = StyleSheet.create({
   },
   railCard: {
     gap: fbSpacing.x3,
+  },
+  railSection: {
+    gap: fbSpacing.x2,
+  },
+  railSectionTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railChecklistRow: {
+    minHeight: fbTouch.min,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+  },
+  railCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: fbRadii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: fbBorder.selected,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+  },
+  railChecklistText: {
+    flex: 1,
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  warningBox: {
+    gap: fbSpacing.x1,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.sandDeep,
+    backgroundColor: fbColors.sandWash,
+  },
+  warningTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  warningText: {
+    color: fbColors.inkSoft,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
   },
   railValue: {
     color: fbColors.ink,
