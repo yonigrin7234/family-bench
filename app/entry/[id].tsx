@@ -31,6 +31,7 @@ import {
 import {
   formatDateLabel,
   getCapturedBody,
+  getCourtOrderProvisionStatus,
   getEntryMetadata,
   getEntryTypeOption,
   isEntryReviewed,
@@ -159,6 +160,15 @@ function filenameFromUri(uri: string, fallback: string) {
 function kindFromMime(mimeType?: string | null): AttachmentKind {
   if (mimeType?.startsWith('image/')) return 'photo';
   return 'document';
+}
+
+function provisionCategoryLabel(category?: string | null) {
+  if (category === 'custody') return 'Custody';
+  if (category === 'support') return 'Support';
+  if (category === 'medical') return 'Medical';
+  if (category === 'communication') return 'Communication';
+  if (category === 'exchange') return 'Exchange';
+  return 'Other';
 }
 
 async function pickImageAttachment(): Promise<LocalAttachmentPick | null> {
@@ -321,7 +331,17 @@ export default function EntryDetail() {
   const updateEntryReview = useUpdateEntryReview();
   const createPlaceholderAttachment = useCreatePlaceholderAttachment();
   const createLocalAttachment = useCreateLocalAttachment();
-  const { entry, child, attachments, filingLinkCount, loading } = useEntryDetail(entryId);
+  const {
+    entry,
+    child,
+    attachments,
+    filingLinkCount,
+    courtOrderProvisionOptions,
+    linkedCourtOrderProvision,
+    linkedCourtOrder,
+    linkEntryToCourtOrderProvision,
+    loading,
+  } = useEntryDetail(entryId);
   const [mode, setMode] = useState<'read' | 'edit'>('read');
   const [bodyDraft, setBodyDraft] = useState('');
   const [visibility, setVisibility] = useState<ReviewVisibility>('court_ready');
@@ -671,9 +691,70 @@ export default function EntryDetail() {
 
       <SoftCard p={16} style={styles.section}>
         <SectionTitle icon="link" title="Court order link" />
-        <Text style={styles.sectionBody}>
-          No court-order provision is linked yet. This will connect entries to specific order language later.
-        </Text>
+        {linkedCourtOrderProvision ? (
+          <View style={styles.linkedProvisionCard}>
+            <View style={styles.attachmentHeader}>
+              <View style={styles.attachmentCopy}>
+                <Text style={styles.attachmentTitle}>{linkedCourtOrderProvision.label}</Text>
+                <Text style={styles.attachmentMeta}>
+                  {linkedCourtOrder?.order_title ?? 'Court order'} ·{' '}
+                  {provisionCategoryLabel(linkedCourtOrderProvision.category)} ·{' '}
+                  {getCourtOrderProvisionStatus(linkedCourtOrderProvision)}
+                </Text>
+              </View>
+              <Chip tone="forest" outline={false}>
+                Linked locally
+              </Chip>
+            </View>
+            <Text style={styles.sectionBody}>{linkedCourtOrderProvision.body}</Text>
+            <InfoCallout title="Provision compliance placeholder" tone="ink">
+              This entry is linked to an order provision for organization only. Compliance review is not assessed in this MVP.
+            </InfoCallout>
+            <PillButton
+              tone="ghost"
+              size="md"
+              icon="x"
+              full
+              onPress={() => linkEntryToCourtOrderProvision(entry.id, null)}
+            >
+              Remove local provision link
+            </PillButton>
+          </View>
+        ) : (
+          <Text style={styles.sectionBody}>
+            No court-order provision is linked yet. Select a local provision below to connect this entry to specific order language.
+          </Text>
+        )}
+        {courtOrderProvisionOptions.length ? (
+          <View style={styles.provisionOptionStack}>
+            {courtOrderProvisionOptions.map((provision) => {
+              const selected = linkedCourtOrderProvision?.id === provision.id;
+              return (
+                <View key={provision.id} style={styles.provisionOption}>
+                  <View style={styles.attachmentCopy}>
+                    <Text style={styles.attachmentTitle}>{provision.label}</Text>
+                    <Text style={styles.attachmentMeta}>
+                      {provisionCategoryLabel(provision.category)} · {getCourtOrderProvisionStatus(provision)}
+                    </Text>
+                  </View>
+                  <PillButton
+                    tone={selected ? 'soft' : 'primary'}
+                    size="sm"
+                    icon="link"
+                    disabled={selected}
+                    onPress={() => linkEntryToCourtOrderProvision(entry.id, provision.id)}
+                  >
+                    {selected ? 'Linked' : 'Link'}
+                  </PillButton>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={styles.sectionBody}>
+            No local provisions are available yet. Add a court order and provision from Case Map first.
+          </Text>
+        )}
         <PillButton
           tone="primary"
           size="md"
@@ -683,7 +764,6 @@ export default function EntryDetail() {
         >
           Open Case Map
         </PillButton>
-        <ComingLaterButton icon="link">Link to court order</ComingLaterButton>
       </SoftCard>
 
       <InfoCallout title="Future AI interpretation" tone="ink">
@@ -906,6 +986,29 @@ const styles = StyleSheet.create({
   },
   attachmentDetails: {
     gap: fbSpacing.x2,
+  },
+  linkedProvisionCard: {
+    gap: fbSpacing.x3,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.paperDeep,
+  },
+  provisionOptionStack: {
+    gap: fbSpacing.x2,
+  },
+  provisionOption: {
+    minHeight: fbTouch.min,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.surface,
   },
   reviewActions: {
     marginTop: fbSpacing.x4,

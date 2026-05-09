@@ -26,6 +26,9 @@ export {
   type CreateFilingPackageInput,
   type CreateLocalAttachmentInput,
   type CreatePlaceholderAttachmentInput,
+  type CourtOrderInput,
+  type CourtOrderProvisionInput,
   type EntryReviewPatch,
   type SendAdvisorMessageInput,
+  getCourtOrderProvisionStatus,
 } from './useCaseIntelligence';

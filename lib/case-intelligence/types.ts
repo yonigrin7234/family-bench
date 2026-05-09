@@ -20,6 +20,18 @@ export type AdvisorThread = Tables<'advisor_threads'>;
 export type CaseIntelligenceSource = 'supabase' | 'fallback' | 'local';
 export type LocalSyncStatus = 'pending' | 'local_pending' | 'error' | 'synced';
 
+export const COURT_ORDER_PROVISION_CATEGORIES = [
+  'custody',
+  'support',
+  'medical',
+  'communication',
+  'exchange',
+  'other',
+] as const;
+
+export type CourtOrderProvisionCategory = (typeof COURT_ORDER_PROVISION_CATEGORIES)[number];
+export type CourtOrderProvisionStatus = 'active' | 'superseded';
+
 export type LocalRecordMeta = {
   table: string;
   id: string;

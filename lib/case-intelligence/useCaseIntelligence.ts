@@ -37,6 +37,10 @@ import type {
   Child,
   CaseIntelligenceSnapshot,
   CaseIntelligenceSource,
+  CourtOrder,
+  CourtOrderProvision,
+  CourtOrderProvisionCategory,
+  CourtOrderProvisionStatus,
   Entry,
   EvidenceAttachment,
   FamilyBenchCase,
@@ -168,6 +172,22 @@ export type EntryReviewPatch = {
   reviewVisibility?: 'court_ready' | 'private';
 };
 
+export type CourtOrderInput = {
+  title: string;
+  orderType?: string | null;
+  orderDate?: string | null;
+};
+
+export type CourtOrderProvisionInput = {
+  courtOrderId: string;
+  category: CourtOrderProvisionCategory;
+  status: CourtOrderProvisionStatus;
+  label: string;
+  body: string;
+  effectiveDate?: string | null;
+  endDate?: string | null;
+};
+
 export type CreatePlaceholderAttachmentInput = {
   entryId: string;
   kind: AttachmentKind;
@@ -272,6 +292,11 @@ type CaseIntelligenceState = {
     includedEntryIds: string[];
     filters: SavedReportVersion['filters'];
   }) => SavedReportVersion;
+  createCourtOrder: (input: CourtOrderInput) => CourtOrder;
+  updateCourtOrder: (orderId: string, input: CourtOrderInput) => void;
+  createCourtOrderProvision: (input: CourtOrderProvisionInput) => CourtOrderProvision;
+  updateCourtOrderProvision: (provisionId: string, input: CourtOrderProvisionInput) => void;
+  linkEntryToCourtOrderProvision: (entryId: string, provisionId: string | null) => void;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
 };
 
@@ -310,6 +335,28 @@ function normalizeDate(value?: string | null) {
   const trimmed = value?.trim();
   if (!trimmed) return null;
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+function todayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeProvisionStatus(value?: string | null): CourtOrderProvisionStatus {
+  return value === 'superseded' ? 'superseded' : 'active';
+}
+
+function provisionKeyFor(
+  category: CourtOrderProvisionCategory,
+  status: CourtOrderProvisionStatus,
+) {
+  return `local:${status}:${category}`;
+}
+
+export function getCourtOrderProvisionStatus(
+  provision: CourtOrderProvision,
+): CourtOrderProvisionStatus {
+  if (provision.end_date) return 'superseded';
+  return provision.provision_key?.includes(':superseded:') ? 'superseded' : 'active';
 }
 
 function isLiveRow(row: { deleted_at: string | null }) {
@@ -603,6 +650,69 @@ function buildLocalAttachment(
       selection_source: 'local_picker',
     },
     created_at: now,
+    deleted_at: null,
+  };
+}
+
+function buildCourtOrder(
+  input: CourtOrderInput,
+  snapshot: CaseIntelligenceSnapshot,
+  userId: string,
+): CourtOrder {
+  const activeCase = getActiveCase(snapshot);
+  if (!activeCase) {
+    throw new Error('Set up a case before adding a court order shell.');
+  }
+
+  const now = new Date().toISOString();
+
+  return {
+    id: `local-court-order-${Crypto.randomUUID()}`,
+    user_id: userId,
+    case_id: activeCase.id,
+    order_date: normalizeDate(input.orderDate),
+    order_title: nullIfBlank(input.title) ?? 'Local court order shell',
+    order_type: nullIfBlank(input.orderType) ?? 'manual',
+    source_attachment_id: null,
+    provisions: {
+      source: 'local_manual',
+      intake_status: 'manual_shell',
+      document_intake_status: 'coming_later',
+    },
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+  };
+}
+
+function buildCourtOrderProvision(
+  input: CourtOrderProvisionInput,
+  snapshot: CaseIntelligenceSnapshot,
+  userId: string,
+): CourtOrderProvision {
+  const order = snapshot.courtOrders.find(
+    (candidate) => candidate.id === input.courtOrderId && !candidate.deleted_at,
+  );
+  if (!order) {
+    throw new Error('Create or select a court order before adding a provision.');
+  }
+
+  const now = new Date().toISOString();
+  const status = normalizeProvisionStatus(input.status);
+
+  return {
+    id: `local-court-order-provision-${Crypto.randomUUID()}`,
+    user_id: userId,
+    case_id: order.case_id,
+    court_order_id: order.id,
+    provision_key: provisionKeyFor(input.category, status),
+    category: input.category,
+    label: nullIfBlank(input.label) ?? 'Local provision',
+    body: nullIfBlank(input.body) ?? 'Provision text not recorded yet.',
+    effective_date: normalizeDate(input.effectiveDate) ?? order.order_date,
+    end_date: status === 'superseded' ? normalizeDate(input.endDate) ?? todayDateString() : null,
+    created_at: now,
+    updated_at: now,
     deleted_at: null,
   };
 }
@@ -1187,6 +1297,84 @@ function appendFilingPackage(
   };
 }
 
+function appendCourtOrder(
+  snapshot: CaseIntelligenceSnapshot,
+  courtOrder: CourtOrder,
+): CaseIntelligenceSnapshot {
+  return {
+    ...snapshot,
+    courtOrders: [
+      courtOrder,
+      ...snapshot.courtOrders.filter((existing) => existing.id !== courtOrder.id),
+    ],
+  };
+}
+
+function appendCourtOrderProvision(
+  snapshot: CaseIntelligenceSnapshot,
+  provision: CourtOrderProvision,
+): CaseIntelligenceSnapshot {
+  return {
+    ...snapshot,
+    courtOrderProvisions: [
+      provision,
+      ...snapshot.courtOrderProvisions.filter((existing) => existing.id !== provision.id),
+    ],
+  };
+}
+
+function updateCourtOrderRow(
+  snapshot: CaseIntelligenceSnapshot,
+  orderId: string,
+  input: CourtOrderInput,
+): CaseIntelligenceSnapshot {
+  const now = new Date().toISOString();
+
+  return {
+    ...snapshot,
+    courtOrders: snapshot.courtOrders.map((order) =>
+      order.id === orderId
+        ? {
+            ...order,
+            order_title: nullIfBlank(input.title) ?? order.order_title,
+            order_type: nullIfBlank(input.orderType) ?? order.order_type,
+            order_date: normalizeDate(input.orderDate),
+            updated_at: now,
+          }
+        : order,
+    ),
+  };
+}
+
+function updateCourtOrderProvisionRow(
+  snapshot: CaseIntelligenceSnapshot,
+  provisionId: string,
+  input: CourtOrderProvisionInput,
+): CaseIntelligenceSnapshot {
+  const now = new Date().toISOString();
+  const status = normalizeProvisionStatus(input.status);
+
+  return {
+    ...snapshot,
+    courtOrderProvisions: snapshot.courtOrderProvisions.map((provision) =>
+      provision.id === provisionId
+        ? {
+            ...provision,
+            court_order_id: input.courtOrderId,
+            provision_key: provisionKeyFor(input.category, status),
+            category: input.category,
+            label: nullIfBlank(input.label) ?? provision.label,
+            body: nullIfBlank(input.body) ?? provision.body,
+            effective_date: normalizeDate(input.effectiveDate),
+            end_date:
+              status === 'superseded' ? normalizeDate(input.endDate) ?? todayDateString() : null,
+            updated_at: now,
+          }
+        : provision,
+    ),
+  };
+}
+
 function updateFilingPackageRow(
   snapshot: CaseIntelligenceSnapshot,
   packageId: string,
@@ -1239,6 +1427,46 @@ function updateEntryInSnapshot(
           reviewed_at: reviewedAt,
           reviewed_body_updated_at: hasBodyPatch ? now : currentMetadata.reviewed_body_updated_at,
           review_visibility: patch.reviewVisibility ?? currentMetadata.review_visibility,
+        },
+      };
+
+      return localMeta ? withEntryLocalMeta(updatedEntry, localMeta) : updatedEntry;
+    }),
+  };
+}
+
+function updateEntryProvisionLinkInSnapshot(
+  snapshot: CaseIntelligenceSnapshot,
+  entryId: string,
+  provisionId: string | null,
+  localMeta?: LocalRecordMeta,
+): CaseIntelligenceSnapshot {
+  const now = new Date().toISOString();
+  const provision = provisionId
+    ? snapshot.courtOrderProvisions.find(
+        (candidate) => candidate.id === provisionId && !candidate.deleted_at,
+      ) ?? null
+    : null;
+
+  return {
+    ...snapshot,
+    entries: snapshot.entries.map((entry) => {
+      if (entry.id !== entryId) return entry;
+
+      const currentMetadata = getEntryMetadata(entry);
+      const updatedEntry: Entry = {
+        ...entry,
+        updated_at: now,
+        metadata: {
+          ...currentMetadata,
+          linked_court_order_provision_id: provision?.id ?? null,
+          linked_court_order_provision_label: provision?.label ?? null,
+          linked_court_order_provision_status: provision
+            ? getCourtOrderProvisionStatus(provision)
+            : null,
+          linked_court_order_provision_relevance: provision ? 'local_manual' : null,
+          linked_court_order_provision_updated_at: now,
+          provision_compliance_status: provision ? 'placeholder_not_assessed' : null,
         },
       };
 
@@ -1337,6 +1565,18 @@ function mergeLocalFirstSnapshot(
       'filing_packages',
       loadedSnapshot.filingPackages,
       localSnapshot.filingPackages,
+      localRecords,
+    ),
+    courtOrders: mergeLocalRows(
+      'court_orders',
+      loadedSnapshot.courtOrders,
+      localSnapshot.courtOrders,
+      localRecords,
+    ),
+    courtOrderProvisions: mergeLocalRows(
+      'court_order_provisions',
+      loadedSnapshot.courtOrderProvisions,
+      localSnapshot.courtOrderProvisions,
       localRecords,
     ),
     entries,
@@ -1737,6 +1977,156 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       warning:
         'Attachment metadata was saved locally. Original evidence stays on this device; remote storage uploads are disabled.',
     };
+  },
+  createCourtOrder: (input) => {
+    const current = get();
+    const activeCase = getActiveCase(current.snapshot);
+    const userId = activeCase?.user_id || '';
+    const courtOrder = buildCourtOrder(input, current.snapshot, userId);
+    const key = localRecordKey('court_orders', courtOrder.id);
+    const localRecord = createLocalRecordMeta({
+      table: 'court_orders',
+      id: courtOrder.id,
+      status: 'local_pending',
+    });
+
+    set((state) => ({
+      snapshot: appendCourtOrder(state.snapshot, courtOrder),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+
+    return courtOrder;
+  },
+  updateCourtOrder: (orderId, input) => {
+    const key = localRecordKey('court_orders', orderId);
+    const localRecord = createLocalRecordMeta({
+      table: 'court_orders',
+      id: orderId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateCourtOrderRow(state.snapshot, orderId, input),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  createCourtOrderProvision: (input) => {
+    const current = get();
+    const activeCase = getActiveCase(current.snapshot);
+    const userId = activeCase?.user_id || '';
+    const provision = buildCourtOrderProvision(input, current.snapshot, userId);
+    const key = localRecordKey('court_order_provisions', provision.id);
+    const localRecord = createLocalRecordMeta({
+      table: 'court_order_provisions',
+      id: provision.id,
+      status: 'local_pending',
+    });
+
+    set((state) => ({
+      snapshot: appendCourtOrderProvision(state.snapshot, provision),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+
+    return provision;
+  },
+  updateCourtOrderProvision: (provisionId, input) => {
+    const key = localRecordKey('court_order_provisions', provisionId);
+    const localRecord = createLocalRecordMeta({
+      table: 'court_order_provisions',
+      id: provisionId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateCourtOrderProvisionRow(state.snapshot, provisionId, input),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+  },
+  linkEntryToCourtOrderProvision: (entryId, provisionId) => {
+    const key = localRecordKey('entries', entryId);
+    const localRecord = createLocalRecordMeta({
+      table: 'entries',
+      id: entryId,
+      status: 'local_pending',
+      previous: get().localRecords[key],
+    });
+
+    set((state) => ({
+      snapshot: updateEntryProvisionLinkInSnapshot(
+        state.snapshot,
+        entryId,
+        provisionId,
+        localRecord,
+      ),
+      source: 'local',
+      hasPersistedSnapshot: true,
+      localRecords: {
+        ...state.localRecords,
+        [key]: localRecord,
+      },
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
   },
   createFilingPackage: async (input) => {
     const current = get();
@@ -2486,6 +2876,10 @@ export function useCaseMap() {
           .sort((a, b) => (a.due_date ?? '9999-12-31').localeCompare(b.due_date ?? '9999-12-31'))
       : [],
     filingPackageLinkedEntryCounts,
+    createCourtOrder: useCaseIntelligenceStore((state) => state.createCourtOrder),
+    updateCourtOrder: useCaseIntelligenceStore((state) => state.updateCourtOrder),
+    createCourtOrderProvision: useCaseIntelligenceStore((state) => state.createCourtOrderProvision),
+    updateCourtOrderProvision: useCaseIntelligenceStore((state) => state.updateCourtOrderProvision),
     loading,
     error,
     hasHydrated,
@@ -2625,6 +3019,26 @@ export function useEntryDetail(entryId?: string) {
           (b.captured_at ?? b.created_at).localeCompare(a.captured_at ?? a.created_at),
         )
     : [];
+  const entryMetadata = entry ? getEntryMetadata(entry) : {};
+  const linkedProvisionId =
+    typeof entryMetadata.linked_court_order_provision_id === 'string'
+      ? entryMetadata.linked_court_order_provision_id
+      : null;
+  const linkedCourtOrderProvision = linkedProvisionId
+    ? snapshot.courtOrderProvisions.find(
+        (provision) => provision.id === linkedProvisionId && !provision.deleted_at,
+      ) ?? null
+    : null;
+  const linkedCourtOrder = linkedCourtOrderProvision
+    ? snapshot.courtOrders.find(
+        (order) => order.id === linkedCourtOrderProvision.court_order_id && !order.deleted_at,
+      ) ?? null
+    : null;
+  const courtOrderProvisionOptions = entry?.case_id
+    ? snapshot.courtOrderProvisions
+        .filter((provision) => !provision.deleted_at && provision.case_id === entry.case_id)
+        .sort((a, b) => a.label.localeCompare(b.label))
+    : [];
 
   return {
     snapshot,
@@ -2633,6 +3047,12 @@ export function useEntryDetail(entryId?: string) {
     child,
     attachments,
     filingLinkCount: entry ? filingEntryLinkCounts[entry.id] ?? 0 : 0,
+    courtOrderProvisionOptions,
+    linkedCourtOrderProvision,
+    linkedCourtOrder,
+    linkEntryToCourtOrderProvision: useCaseIntelligenceStore(
+      (state) => state.linkEntryToCourtOrderProvision,
+    ),
     peoplePresent: [],
     loading,
     error,

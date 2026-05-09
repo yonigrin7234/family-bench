@@ -1,5 +1,6 @@
+import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
   Chip,
@@ -8,23 +9,33 @@ import {
   InfoCallout,
   PillButton,
   Rule,
+  Segment,
   SoftCard,
+  fbBorder,
   fbColors,
   fbFonts,
+  fbRadii,
   fbLegalCopy,
   fbSpacing,
+  fbTouch,
   fbType,
   fbWeights,
   type ChipTone,
   type IconName,
 } from '@/components/ui/fb';
 import {
+  COURT_ORDER_PROVISION_CATEGORIES,
   formatDateLabel,
+  getCourtOrderProvisionStatus,
   getRelativeDueLabel,
   useCaseMap,
   type Child,
   type CourtOrder,
+  type CourtOrderInput,
   type CourtOrderProvision,
+  type CourtOrderProvisionCategory,
+  type CourtOrderProvisionInput,
+  type CourtOrderProvisionStatus,
   type FamilyBenchCase,
   type FilingPackage,
   type KeyDate,
@@ -145,54 +156,320 @@ function PeopleSection({ people }: { people: Person[] }) {
   );
 }
 
+const PROVISION_STATUS_OPTIONS: Array<{ v: CourtOrderProvisionStatus; label: string }> = [
+  { v: 'active', label: 'Active' },
+  { v: 'superseded', label: 'Superseded' },
+];
+
+function provisionCategoryLabel(category: CourtOrderProvisionCategory | string | null) {
+  if (category === 'custody') return 'Custody';
+  if (category === 'support') return 'Support';
+  if (category === 'medical') return 'Medical';
+  if (category === 'communication') return 'Communication';
+  if (category === 'exchange') return 'Exchange';
+  return 'Other';
+}
+
 function CourtOrdersSection({
   courtOrders,
   provisions,
+  createCourtOrder,
+  updateCourtOrder,
+  createCourtOrderProvision,
+  updateCourtOrderProvision,
 }: {
   courtOrders: CourtOrder[];
   provisions: CourtOrderProvision[];
+  createCourtOrder: (input: CourtOrderInput) => CourtOrder;
+  updateCourtOrder: (orderId: string, input: CourtOrderInput) => void;
+  createCourtOrderProvision: (input: CourtOrderProvisionInput) => CourtOrderProvision;
+  updateCourtOrderProvision: (provisionId: string, input: CourtOrderProvisionInput) => void;
 }) {
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(courtOrders[0]?.id ?? null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [orderTitle, setOrderTitle] = useState('');
+  const [orderType, setOrderType] = useState('');
+  const [orderDate, setOrderDate] = useState('');
+  const [editingProvisionId, setEditingProvisionId] = useState<string | null>(null);
+  const [provisionCategory, setProvisionCategory] =
+    useState<CourtOrderProvisionCategory>('custody');
+  const [provisionStatus, setProvisionStatus] = useState<CourtOrderProvisionStatus>('active');
+  const [provisionLabel, setProvisionLabel] = useState('');
+  const [provisionBody, setProvisionBody] = useState('');
+  const [provisionEffectiveDate, setProvisionEffectiveDate] = useState('');
+  const [provisionEndDate, setProvisionEndDate] = useState('');
+  const selectedOrder = courtOrders.find((order) => order.id === selectedOrderId) ?? null;
+  const selectedOrderProvisions = useMemo(
+    () =>
+      selectedOrderId
+        ? provisions.filter((provision) => provision.court_order_id === selectedOrderId)
+        : provisions,
+    [provisions, selectedOrderId],
+  );
+
+  useEffect(() => {
+    if (!courtOrders.length) {
+      setSelectedOrderId(null);
+      return;
+    }
+
+    if (!selectedOrderId || !courtOrders.some((order) => order.id === selectedOrderId)) {
+      setSelectedOrderId(courtOrders[0].id);
+    }
+  }, [courtOrders, selectedOrderId]);
+
+  function resetOrderDraft() {
+    setEditingOrderId(null);
+    setOrderTitle('');
+    setOrderType('');
+    setOrderDate('');
+  }
+
+  function resetProvisionDraft() {
+    setEditingProvisionId(null);
+    setProvisionCategory('custody');
+    setProvisionStatus('active');
+    setProvisionLabel('');
+    setProvisionBody('');
+    setProvisionEffectiveDate('');
+    setProvisionEndDate('');
+  }
+
+  function editOrder(order: CourtOrder) {
+    setEditingOrderId(order.id);
+    setOrderTitle(order.order_title);
+    setOrderType(order.order_type ?? '');
+    setOrderDate(order.order_date ?? '');
+    setSelectedOrderId(order.id);
+  }
+
+  function editProvision(provision: CourtOrderProvision) {
+    setEditingProvisionId(provision.id);
+    setSelectedOrderId(provision.court_order_id);
+    setProvisionCategory((provision.category as CourtOrderProvisionCategory | null) ?? 'other');
+    setProvisionStatus(getCourtOrderProvisionStatus(provision));
+    setProvisionLabel(provision.label);
+    setProvisionBody(provision.body);
+    setProvisionEffectiveDate(provision.effective_date ?? '');
+    setProvisionEndDate(provision.end_date ?? '');
+  }
+
+  function saveOrder() {
+    const input: CourtOrderInput = {
+      title: orderTitle,
+      orderType,
+      orderDate,
+    };
+
+    if (editingOrderId) {
+      updateCourtOrder(editingOrderId, input);
+      setSelectedOrderId(editingOrderId);
+    } else {
+      const order = createCourtOrder(input);
+      setSelectedOrderId(order.id);
+    }
+
+    resetOrderDraft();
+  }
+
+  function saveProvision() {
+    if (!selectedOrderId) return;
+
+    const input: CourtOrderProvisionInput = {
+      courtOrderId: selectedOrderId,
+      category: provisionCategory,
+      status: provisionStatus,
+      label: provisionLabel,
+      body: provisionBody,
+      effectiveDate: provisionEffectiveDate,
+      endDate: provisionEndDate,
+    };
+
+    if (editingProvisionId) {
+      updateCourtOrderProvision(editingProvisionId, input);
+    } else {
+      createCourtOrderProvision(input);
+    }
+
+    resetProvisionDraft();
+  }
+
   return (
     <SoftCard p={16} style={styles.section}>
       <SectionHeader icon="scales" title="Court orders" count={courtOrders.length} />
       {courtOrders.length ? (
         <View style={styles.recordStack}>
           {courtOrders.map((order) => (
-            <SmallRecord
-              key={order.id}
-              title={order.order_title}
-              subtitle={order.order_date ? formatDateLabel(order.order_date) : 'Order date not recorded'}
-              tone="ink"
-              meta={order.order_type}
-            />
+            <View key={order.id} style={styles.orderRecord}>
+              <SmallRecord
+                title={order.order_title}
+                subtitle={order.order_date ? formatDateLabel(order.order_date) : 'Order date not recorded'}
+                tone={order.id === selectedOrderId ? 'forest' : 'ink'}
+                meta={order.id === selectedOrderId ? 'Selected' : order.order_type}
+              />
+              <View style={styles.inlineActions}>
+                <PillButton tone="ghost" size="sm" icon="scales" onPress={() => setSelectedOrderId(order.id)}>
+                  Select
+                </PillButton>
+                <PillButton tone="ghost" size="sm" icon="doc" onPress={() => editOrder(order)}>
+                  Edit
+                </PillButton>
+              </View>
+            </View>
           ))}
         </View>
       ) : (
         <EmptyState>
-          No court orders have been added yet. Uploads and provision extraction come later.
+          No court orders have been added yet. Add a local manual shell; uploads and extraction come later.
         </EmptyState>
       )}
+
+      <View style={styles.formPanel}>
+        <Text style={styles.formTitle}>
+          {editingOrderId ? 'Edit local court order shell' : 'Add local court order shell'}
+        </Text>
+        <TextInput
+          value={orderTitle}
+          onChangeText={setOrderTitle}
+          placeholder="Order title"
+          placeholderTextColor={fbColors.inkFaint}
+          style={styles.textInput}
+        />
+        <View style={styles.formGrid}>
+          <TextInput
+            value={orderType}
+            onChangeText={setOrderType}
+            placeholder="Order type"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+          <TextInput
+            value={orderDate}
+            onChangeText={setOrderDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+        </View>
+        <View style={styles.inlineActions}>
+          <PillButton tone="primary" size="md" icon="check" disabled={!orderTitle.trim()} onPress={saveOrder}>
+            {editingOrderId ? 'Update order' : 'Save order'}
+          </PillButton>
+          {editingOrderId ? (
+            <PillButton tone="ghost" size="md" icon="x" onPress={resetOrderDraft}>
+              Cancel
+            </PillButton>
+          ) : null}
+        </View>
+      </View>
 
       <Rule />
 
       <SectionHeader icon="link" title="Order provisions" count={provisions.length} />
-      {provisions.length ? (
+      <InfoCallout title="Provision compliance placeholder" tone="ink">
+        Provisions can be linked to entries locally. Compliance assessment remains a placeholder and does not make a legal conclusion.
+      </InfoCallout>
+      {selectedOrder ? (
+        <Text style={styles.sourceText}>Selected order: {selectedOrder.order_title}</Text>
+      ) : null}
+      {selectedOrderProvisions.length ? (
         <View style={styles.recordStack}>
-          {provisions.map((provision) => (
-            <SmallRecord
-              key={provision.id}
-              title={provision.label}
-              subtitle={provision.body}
-              tone="sand"
-              meta={provision.category}
-            />
-          ))}
+          {selectedOrderProvisions.map((provision) => {
+            const status = getCourtOrderProvisionStatus(provision);
+            return (
+              <View key={provision.id} style={styles.orderRecord}>
+                <SmallRecord
+                  title={provision.label}
+                  subtitle={provision.body}
+                  tone={status === 'superseded' ? 'mute' : 'sand'}
+                  meta={`${provisionCategoryLabel(provision.category)} · ${status}`}
+                />
+                <View style={styles.inlineActions}>
+                  <PillButton tone="ghost" size="sm" icon="doc" onPress={() => editProvision(provision)}>
+                    Edit
+                  </PillButton>
+                </View>
+              </View>
+            );
+          })}
         </View>
       ) : (
         <EmptyState>
-          No provisions are mapped yet. Future entries will link to specific order language here.
+          No provisions are mapped for the selected order yet. Add a local provision shell below.
         </EmptyState>
       )}
+
+      <View style={styles.formPanel}>
+        <Text style={styles.formTitle}>
+          {editingProvisionId ? 'Edit local provision' : 'Add local provision'}
+        </Text>
+        <View style={styles.categoryGrid}>
+          {COURT_ORDER_PROVISION_CATEGORIES.map((category) => (
+            <PillButton
+              key={category}
+              tone={provisionCategory === category ? 'primary' : 'ghost'}
+              size="sm"
+              icon="link"
+              onPress={() => setProvisionCategory(category)}
+            >
+              {provisionCategoryLabel(category)}
+            </PillButton>
+          ))}
+        </View>
+        <Segment<CourtOrderProvisionStatus>
+          items={PROVISION_STATUS_OPTIONS}
+          value={provisionStatus}
+          onChange={setProvisionStatus}
+        />
+        <TextInput
+          value={provisionLabel}
+          onChangeText={setProvisionLabel}
+          placeholder="Provision label"
+          placeholderTextColor={fbColors.inkFaint}
+          style={styles.textInput}
+        />
+        <TextInput
+          value={provisionBody}
+          onChangeText={setProvisionBody}
+          placeholder="Provision text or factual summary"
+          placeholderTextColor={fbColors.inkFaint}
+          multiline
+          textAlignVertical="top"
+          style={[styles.textInput, styles.textArea]}
+        />
+        <View style={styles.formGrid}>
+          <TextInput
+            value={provisionEffectiveDate}
+            onChangeText={setProvisionEffectiveDate}
+            placeholder="Effective YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+          <TextInput
+            value={provisionEndDate}
+            onChangeText={setProvisionEndDate}
+            placeholder="End YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+        </View>
+        <View style={styles.inlineActions}>
+          <PillButton
+            tone="primary"
+            size="md"
+            icon="check"
+            disabled={!selectedOrderId || !provisionLabel.trim() || !provisionBody.trim()}
+            onPress={saveProvision}
+          >
+            {editingProvisionId ? 'Update provision' : 'Save provision'}
+          </PillButton>
+          {editingProvisionId ? (
+            <PillButton tone="ghost" size="md" icon="x" onPress={resetProvisionDraft}>
+              Cancel
+            </PillButton>
+          ) : null}
+        </View>
+      </View>
     </SoftCard>
   );
 }
@@ -489,6 +766,10 @@ export default function CaseMap() {
     keyDates,
     filingPackages,
     filingPackageLinkedEntryCounts,
+    createCourtOrder,
+    updateCourtOrder,
+    createCourtOrderProvision,
+    updateCourtOrderProvision,
     source,
     hasLocalCaseSetup,
     isDemoCase,
@@ -500,7 +781,14 @@ export default function CaseMap() {
   const childrenSection = <ChildrenSection childrenRows={children} />;
   const peopleSection = <PeopleSection people={people} />;
   const courtOrdersSection = (
-    <CourtOrdersSection courtOrders={courtOrders} provisions={courtOrderProvisions} />
+    <CourtOrdersSection
+      courtOrders={courtOrders}
+      provisions={courtOrderProvisions}
+      createCourtOrder={createCourtOrder}
+      updateCourtOrder={updateCourtOrder}
+      createCourtOrderProvision={createCourtOrderProvision}
+      updateCourtOrderProvision={updateCourtOrderProvision}
+    />
   );
   const datesSection = <DatesSection keyDates={keyDates} />;
   const filingsSection = (
@@ -750,6 +1038,11 @@ const styles = StyleSheet.create({
   recordStack: {
     gap: fbSpacing.x2,
   },
+  orderRecord: {
+    paddingVertical: fbSpacing.x2,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.ruleSoft,
+  },
   record: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -794,6 +1087,53 @@ const styles = StyleSheet.create({
     fontSize: fbType.small,
     lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
+  },
+  formPanel: {
+    gap: fbSpacing.x3,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.paperDeep,
+  },
+  formTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  formGrid: {
+    flexDirection: 'row',
+    gap: fbSpacing.x2,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: fbSpacing.x2,
+  },
+  inlineActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+  },
+  textInput: {
+    minHeight: fbTouch.min,
+    flex: 1,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+    paddingHorizontal: fbSpacing.x3,
+    paddingVertical: fbSpacing.x2,
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  textArea: {
+    minHeight: 96,
   },
   railCard: {
     gap: fbSpacing.x3,
