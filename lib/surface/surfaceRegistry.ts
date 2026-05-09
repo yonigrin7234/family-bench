@@ -14,7 +14,11 @@ export type SurfaceRouteId =
   | 'advisor'
   | 'filings'
   | 'patterns'
-  | 'onboarding';
+  | 'onboarding'
+  | 'exportPrep'
+  | 'practitioners'
+  | 'safety'
+  | 'settings';
 
 export type SurfaceRouteDefinition = {
   id: SurfaceRouteId;
@@ -233,6 +237,69 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     appearsInMobileNav: false,
     appearsInDesktopNav: false,
     futureNotes: ['Account onboarding can be layered later without replacing local case setup.'],
+  },
+  {
+    id: 'exportPrep',
+    path: '/export-prep',
+    label: 'Export Prep',
+    icon: 'doc',
+    mobileRole: 'Preview local export structures when reached from entries, reports, or settings.',
+    desktopRole: 'Inspect local JSON preview structures before export tooling exists.',
+    mobileComplexity: 'medium',
+    desktopComplexity: 'medium',
+    mobileBehavior: ['Keep entry, case, and report export previews stacked.'],
+    desktopBehavior: ['Show preview controls and JSON structures in the shared shell.'],
+    appearsInMobileNav: false,
+    appearsInDesktopNav: false,
+    futureNotes: ['Actual downloads, print output, and PDFs remain future work.'],
+  },
+  {
+    id: 'practitioners',
+    path: '/practitioners',
+    label: 'Practitioners',
+    icon: 'chat',
+    mobileRole: 'Review local sharing placeholders when needed.',
+    desktopRole: 'Plan practitioner access scopes without granting remote permissions.',
+    mobileComplexity: 'medium',
+    desktopComplexity: 'medium',
+    mobileBehavior: ['Keep invite placeholders and access notes stacked.'],
+    desktopBehavior: ['Use side-by-side placeholder invite, scope, list, and audit sections.'],
+    appearsInMobileNav: false,
+    appearsInDesktopNav: true,
+    desktopNavOrder: 110,
+    futureNotes: ['Real invites, permissions, and practitioner comments require a later backend pass.'],
+  },
+  {
+    id: 'safety',
+    path: '/safety',
+    label: 'Safety',
+    icon: 'shield',
+    mobileRole: 'Read calm safety placeholders and reminders.',
+    desktopRole: 'Review safety-resource and preservation placeholders in the case workspace.',
+    mobileComplexity: 'low',
+    desktopComplexity: 'medium',
+    mobileBehavior: ['Keep resource placeholders and coming-later notes stacked.'],
+    desktopBehavior: ['Show safety placeholders and evidence preservation copy in wider panels.'],
+    appearsInMobileNav: false,
+    appearsInDesktopNav: true,
+    desktopNavOrder: 120,
+    futureNotes: ['Panic, stealth, emergency notification, and backup automations remain future work.'],
+  },
+  {
+    id: 'settings',
+    path: '/settings',
+    label: 'Settings',
+    icon: 'folder',
+    mobileRole: 'Review local data status and memory counts when needed.',
+    desktopRole: 'Inspect local persistence, memory index, and reset/export placeholders.',
+    mobileComplexity: 'medium',
+    desktopComplexity: 'medium',
+    mobileBehavior: ['Keep status, memory index, and reset confirmation stacked.'],
+    desktopBehavior: ['Use wider status cards and memory index rows in the shared shell.'],
+    appearsInMobileNav: false,
+    appearsInDesktopNav: true,
+    desktopNavOrder: 130,
+    futureNotes: ['Full privacy controls, account deletion, and billing settings remain future work.'],
   },
 ] as const;
 

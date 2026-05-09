@@ -133,8 +133,11 @@ Desktop navigation exposes more of the case workspace:
 - Advisor
 - Filings
 - Patterns
+- Practitioners
+- Safety
+- Settings
 
-Entry Detail and Onboarding are reachable workflow routes, not persistent navigation destinations.
+Entry Detail, Export Prep, and Onboarding are reachable workflow routes, not persistent navigation destinations.
 
 ## Route Capability Matrix
 
@@ -152,6 +155,10 @@ Entry Detail and Onboarding are reachable workflow routes, not persistent naviga
 | Filings | `/filings` | Limited filing-package visibility and simple linking when needed. | Primary filing-package organization workspace. | High | High | Package list and detail sections stack without side-by-side density. | List/detail columns for package creation, selection, checklist, and source linking. | No | Yes | AI drafting, final PDFs, and e-filing remain future work. |
 | Patterns | `/patterns` | Review possible local patterns when prompted. | Rule-based pattern review and acknowledgement workspace. | Medium | High | Stats, context, and possible pattern cards stay stacked. | Context and pattern columns support denser review with neutral language. | No | Yes | Pattern detection must stay factual and avoid legal conclusions. |
 | Onboarding | `/onboarding` | First-run local case setup and quick case edits. | Local case setup and basic case details editing. | Medium | Medium | Setup fields remain stacked and touch-friendly. | Shared setup route inside the desktop shell when reached from Case Map. | No | No | Account onboarding can layer later without replacing local case setup. |
+| Export Prep | `/export-prep` | Preview local export structures from workflow links. | Inspect JSON preview structures before export tooling exists. | Medium | Medium | Entry, case, and report export previews stack. | Preview controls and JSON structures use the shared shell. | No | No | Downloads, print output, and PDFs remain future work. |
+| Practitioners | `/practitioners` | Review local sharing placeholders when needed. | Plan practitioner access scopes without granting remote permissions. | Medium | Medium | Invite placeholders and access notes stack. | Side-by-side placeholder invite, scope, list, and audit sections. | No | Yes | Real invites, permissions, and comments need a later backend pass. |
+| Safety | `/safety` | Read calm safety placeholders and reminders. | Review safety-resource and preservation placeholders in the case workspace. | Low | Medium | Resource placeholders and coming-later notes stack. | Safety placeholders and preservation copy use wider panels. | No | Yes | Panic, stealth, emergency notification, and backup automations remain future work. |
+| Settings | `/settings` | Review local data status and memory counts when needed. | Inspect local persistence, memory index, and reset/export placeholders. | Medium | Medium | Status, memory index, and reset confirmation stack. | Wider status cards and memory index rows use the shared shell. | No | Yes | Full privacy controls, account deletion, and billing settings remain future work. |
 
 ## Current Implementation
 
@@ -162,7 +169,7 @@ The responsive shell and route capability map currently provide:
 - Desktop gets a left sidebar, wider main content area, and optional right context rail.
 - Desktop-heavy routes can request wider content through `desktopMaxWidth`.
 - Navigation items are derived from `lib/surface/surfaceRegistry.ts`.
-- Home, Capture, Voice Capture, Timeline, Entry Detail, Evidence, Case Map, Reports, Advisor, Filings, Patterns, and Onboarding remain shared route modules.
+- Home, Capture, Voice Capture, Timeline, Entry Detail, Evidence, Case Map, Reports, Advisor, Filings, Patterns, Onboarding, Export Prep, Practitioners, Safety, and Settings remain shared route modules.
 
 ## Guardrails
 

@@ -896,12 +896,9 @@ function CaseMapContextRail({
         <PillButton tone="ghost" size="md" icon="link" disabled full>
           Court-order extraction coming later
         </PillButton>
-        <PillButton tone="ghost" size="md" icon="scales" disabled full>
-          Add court order shell coming later
-        </PillButton>
-        <PillButton tone="ghost" size="md" icon="clock" disabled full>
-          Add key date shell coming later
-        </PillButton>
+        <Text style={styles.railText}>
+          Court order shells, provisions, and key dates are managed in the center panels on this page.
+        </Text>
         <PillButton
           tone="ghost"
           size="md"
