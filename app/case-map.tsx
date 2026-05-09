@@ -983,6 +983,15 @@ export default function CaseMap() {
       <PillButton tone="ghost" size="md" icon="link" disabled full>
         Link selected entry · coming later
       </PillButton>
+      <PillButton
+        tone="soft"
+        size="md"
+        icon="doc"
+        full
+        onPress={() => router.push({ pathname: '/export-prep', params: { mode: 'case' } } as never)}
+      >
+        Preview case archive JSON
+      </PillButton>
     </SoftCard>
   );
 

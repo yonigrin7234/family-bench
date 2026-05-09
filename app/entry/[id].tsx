@@ -777,6 +777,15 @@ export default function EntryDetail() {
         <DetailRow label="Content hash" value={entry.content_hash} />
         <DetailRow label="Created" value={entry.created_at} />
         <DetailRow label="Updated" value={entry.updated_at} />
+        <PillButton
+          tone="ghost"
+          size="md"
+          icon="doc"
+          full
+          onPress={() => router.push({ pathname: '/export-prep', params: { entryId: entry.id } } as never)}
+        >
+          Preview entry JSON export
+        </PillButton>
       </SoftCard>
 
       <View style={styles.reviewActions}>

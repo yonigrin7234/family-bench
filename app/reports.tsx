@@ -521,6 +521,15 @@ function ReportPreviewCard({
       <PillButton tone="ghost" size="md" icon="doc" disabled full>
         Export PDF coming later
       </PillButton>
+      <PillButton
+        tone="soft"
+        size="md"
+        icon="doc"
+        full
+        onPress={() => router.push({ pathname: '/export-prep', params: { mode: 'report' } } as never)}
+      >
+        Preview report export data
+      </PillButton>
     </SoftCard>
   );
 }
