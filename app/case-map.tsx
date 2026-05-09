@@ -911,6 +911,15 @@ function CaseMapContextRail({
         >
           Practitioner sharing placeholder
         </PillButton>
+        <PillButton
+          tone="ghost"
+          size="md"
+          icon="shield"
+          full
+          onPress={() => router.push('/safety' as never)}
+        >
+          Safety placeholder
+        </PillButton>
       </View>
       <Rule />
       <Text style={styles.railText}>
