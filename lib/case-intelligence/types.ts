@@ -46,6 +46,22 @@ export type ReportPreviewState = {
   flagFilter: ReportPreviewFlagFilter;
 };
 
+export type SavedReportVersion = {
+  id: string;
+  reportType: ReportPreviewType;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  includedEntryIds: string[];
+  filters: {
+    typeFilter: EntryTypeFilterValue;
+    flagFilter: ReportPreviewFlagFilter;
+    childFilter: string | null;
+    dateRangeLabel: string;
+  };
+  linkedFilingPackageIds: string[];
+};
+
 export type FilingPackageStatus = 'draft' | 'in_progress' | 'ready_for_review';
 
 export type FilingChecklistKey = 'forms' | 'exhibits' | 'declarations' | 'service';

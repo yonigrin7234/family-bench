@@ -14,6 +14,7 @@ import type {
   PatternReviewState,
   ReportPreviewType,
   ReportPreviewState,
+  SavedReportVersion,
 } from './types';
 
 const PERSISTENCE_VERSION = 1;
@@ -26,6 +27,8 @@ export const DEFAULT_REPORT_PREVIEW_STATE: ReportPreviewState = {
   typeFilter: 'all',
   flagFilter: 'all',
 };
+
+export const DEFAULT_SAVED_REPORT_VERSIONS: SavedReportVersion[] = [];
 
 export const DEFAULT_ADVISOR_STATE: AdvisorConversationState = {
   threadId: 'local-advisor-thread',
@@ -60,6 +63,7 @@ export type PersistedCaseIntelligenceDocument = {
   savedAt: string;
   snapshot: CaseIntelligenceSnapshot;
   reportPreviewState: ReportPreviewState;
+  savedReportVersions: SavedReportVersion[];
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
   patternReviewState: PatternReviewState;
@@ -153,6 +157,34 @@ function normalizeReportPreviewState(value: unknown): ReportPreviewState {
     typeFilter,
     flagFilter,
   };
+}
+
+function normalizeSavedReportVersions(value: unknown): SavedReportVersion[] {
+  if (!Array.isArray(value)) return DEFAULT_SAVED_REPORT_VERSIONS;
+
+  return value
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => item as Partial<SavedReportVersion>)
+    .filter((item) => typeof item.id === 'string' && typeof item.reportType === 'string')
+    .map((item) => ({
+      id: item.id as string,
+      reportType: item.reportType as ReportPreviewType,
+      title: typeof item.title === 'string' ? item.title : 'Saved report',
+      createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+      updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date().toISOString(),
+      includedEntryIds: stringArray(item.includedEntryIds),
+      filters: {
+        typeFilter: item.filters?.typeFilter ?? DEFAULT_REPORT_PREVIEW_STATE.typeFilter,
+        flagFilter: item.filters?.flagFilter ?? DEFAULT_REPORT_PREVIEW_STATE.flagFilter,
+        childFilter: typeof item.filters?.childFilter === 'string' ? item.filters.childFilter : null,
+        dateRangeLabel:
+          typeof item.filters?.dateRangeLabel === 'string'
+            ? item.filters.dateRangeLabel
+            : 'Date range placeholder',
+      },
+      linkedFilingPackageIds: stringArray(item.linkedFilingPackageIds),
+    }))
+    .filter((item) => REPORT_TYPES.includes(item.reportType));
 }
 
 function normalizeAdvisorState(value: unknown): AdvisorConversationState {
@@ -290,6 +322,7 @@ function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
     savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString(),
     snapshot: parsed.snapshot,
     reportPreviewState: normalizeReportPreviewState(parsed.reportPreviewState),
+    savedReportVersions: normalizeSavedReportVersions(parsed.savedReportVersions),
     advisorState: normalizeAdvisorState(parsed.advisorState),
     filingBuilderState: normalizeFilingBuilderState(parsed.filingBuilderState),
     patternReviewState: normalizePatternReviewState(parsed.patternReviewState),
@@ -320,6 +353,7 @@ export async function readPersistedCaseIntelligence(): Promise<{
 export async function writePersistedCaseIntelligence({
   snapshot,
   reportPreviewState,
+  savedReportVersions,
   advisorState,
   filingBuilderState,
   patternReviewState,
@@ -327,6 +361,7 @@ export async function writePersistedCaseIntelligence({
 }: {
   snapshot: CaseIntelligenceSnapshot;
   reportPreviewState: ReportPreviewState;
+  savedReportVersions: SavedReportVersion[];
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
   patternReviewState: PatternReviewState;
@@ -338,6 +373,7 @@ export async function writePersistedCaseIntelligence({
     savedAt: new Date().toISOString(),
     snapshot,
     reportPreviewState,
+    savedReportVersions,
     advisorState,
     filingBuilderState,
     patternReviewState,

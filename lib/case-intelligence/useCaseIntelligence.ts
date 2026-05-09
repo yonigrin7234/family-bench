@@ -11,6 +11,7 @@ import {
   DEFAULT_FILING_CHECKLIST_STATE,
   DEFAULT_PATTERN_REVIEW_STATE,
   DEFAULT_REPORT_PREVIEW_STATE,
+  DEFAULT_SAVED_REPORT_VERSIONS,
   createLocalRecordMeta,
   getLocalPersistenceAdapter,
   localRecordKey,
@@ -53,6 +54,7 @@ import type {
   Person,
   ReportPreviewType,
   ReportPreviewState,
+  SavedReportVersion,
   AttachmentKind,
 } from './types';
 
@@ -234,6 +236,7 @@ type CaseIntelligenceState = {
   snapshot: CaseIntelligenceSnapshot;
   source: CaseIntelligenceSource;
   reportPreviewState: ReportPreviewState;
+  savedReportVersions: SavedReportVersion[];
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
   patternReviewState: PatternReviewState;
@@ -263,6 +266,12 @@ type CaseIntelligenceState = {
   restorePattern: (patternId: string) => void;
   sendAdvisorMessage: (input: SendAdvisorMessageInput) => void;
   setReportPreviewState: (patch: Partial<ReportPreviewState>) => void;
+  saveReportVersion: (input: {
+    reportType: ReportPreviewType;
+    title: string;
+    includedEntryIds: string[];
+    filters: SavedReportVersion['filters'];
+  }) => SavedReportVersion;
   updateEntryReview: (entryId: string, patch: EntryReviewPatch) => void;
 };
 
@@ -1347,6 +1356,7 @@ function persistStateSnapshot(
   void writePersistedCaseIntelligence({
     snapshot,
     reportPreviewState,
+    savedReportVersions: get().savedReportVersions,
     advisorState,
     filingBuilderState: get().filingBuilderState,
     patternReviewState: get().patternReviewState,
@@ -1378,6 +1388,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
   snapshot: createFallbackCaseIntelligence(),
   source: 'fallback',
   reportPreviewState: DEFAULT_REPORT_PREVIEW_STATE,
+  savedReportVersions: DEFAULT_SAVED_REPORT_VERSIONS,
   advisorState: DEFAULT_ADVISOR_STATE,
   filingBuilderState: DEFAULT_FILING_BUILDER_STATE,
   patternReviewState: DEFAULT_PATTERN_REVIEW_STATE,
@@ -1395,6 +1406,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
     let hydratedSnapshot = get().snapshot;
     let hydratedSource: CaseIntelligenceSource = get().source;
     let hydratedReportPreviewState = get().reportPreviewState;
+    let hydratedSavedReportVersions = get().savedReportVersions;
     let hydratedAdvisorState = get().advisorState;
     let hydratedFilingBuilderState = get().filingBuilderState;
     let hydratedPatternReviewState = get().patternReviewState;
@@ -1409,6 +1421,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
         hydratedSnapshot = localResult.document.snapshot;
         hydratedSource = 'local';
         hydratedReportPreviewState = localResult.document.reportPreviewState;
+        hydratedSavedReportVersions = localResult.document.savedReportVersions;
         hydratedAdvisorState = localResult.document.advisorState;
         hydratedFilingBuilderState = localResult.document.filingBuilderState;
         hydratedPatternReviewState = localResult.document.patternReviewState;
@@ -1419,6 +1432,7 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
           snapshot: hydratedSnapshot,
           source: hydratedSource,
           reportPreviewState: hydratedReportPreviewState,
+          savedReportVersions: hydratedSavedReportVersions,
           advisorState: hydratedAdvisorState,
           filingBuilderState: hydratedFilingBuilderState,
           patternReviewState: hydratedPatternReviewState,
@@ -2057,6 +2071,34 @@ const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get) => ({
       get,
     );
   },
+  saveReportVersion: (input) => {
+    const now = new Date().toISOString();
+    const version: SavedReportVersion = {
+      id: `local-report-${Crypto.randomUUID()}`,
+      reportType: input.reportType,
+      title: input.title,
+      createdAt: now,
+      updatedAt: now,
+      includedEntryIds: input.includedEntryIds,
+      filters: input.filters,
+      linkedFilingPackageIds: [],
+    };
+
+    set((state) => ({
+      savedReportVersions: [version, ...state.savedReportVersions].slice(0, 20),
+      hasPersistedSnapshot: true,
+    }));
+    persistStateSnapshot(
+      get().snapshot,
+      get().reportPreviewState,
+      get().advisorState,
+      get().localRecords,
+      set,
+      get,
+    );
+
+    return version;
+  },
   updateEntryReview: (entryId, patch) => {
     const key = localRecordKey('entries', entryId);
     const localRecord = createLocalRecordMeta({
@@ -2533,10 +2575,20 @@ export function useFilingBuilder() {
 
 export function useReportPreviewState() {
   const filingBuilderState = useCaseIntelligenceStore((state) => state.filingBuilderState);
+  const snapshot = useCaseIntelligenceStore((state) => state.snapshot);
+  const activeCase = getActiveCase(snapshot);
 
   return {
     reportPreviewState: useCaseIntelligenceStore((state) => state.reportPreviewState),
+    savedReportVersions: useCaseIntelligenceStore((state) => state.savedReportVersions),
+    filingPackages: activeCase
+      ? snapshot.filingPackages
+          .filter((filingPackage) => !filingPackage.deleted_at && filingPackage.case_id === activeCase.id)
+          .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      : [],
     setReportPreviewState: useCaseIntelligenceStore((state) => state.setReportPreviewState),
+    saveReportVersion: useCaseIntelligenceStore((state) => state.saveReportVersion),
+    toggleFilingPackageReport: useCaseIntelligenceStore((state) => state.toggleFilingPackageReport),
     filingReportLinkCounts: getFilingReportLinkCounts(filingBuilderState),
   };
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
@@ -32,8 +32,10 @@ import {
   useReportPreviewState,
   type Entry,
   type EntryTypeFilterValue,
+  type FilingPackage,
   type ReportPreviewFlagFilter,
   type ReportPreviewType,
+  type SavedReportVersion,
 } from '@/lib/case-intelligence';
 import { useResponsive } from '@/lib/hooks/useResponsive';
 
@@ -270,9 +272,13 @@ function ReportTypeChip({
 function SourceEntryRow({
   entry,
   attachmentCount,
+  selected,
+  onToggle,
 }: {
   entry: Entry;
   attachmentCount: number;
+  selected?: boolean;
+  onToggle?: () => void;
 }) {
   const option = getEntryTypeOption(entry.entry_type);
   const attachmentLabel =
@@ -283,10 +289,16 @@ function SourceEntryRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open source entry: ${titleForEntry(entry)}`}
-      onPress={() => openEntry(entry.id)}
+      accessibilityState={typeof selected === 'boolean' ? { selected } : undefined}
+      accessibilityLabel={`${onToggle ? 'Toggle' : 'Open'} source entry: ${titleForEntry(entry)}`}
+      onPress={onToggle ?? (() => openEntry(entry.id))}
       style={({ pressed }) => [styles.sourceRow, pressed && styles.pressed]}
     >
+      {onToggle ? (
+        <View style={[styles.sourceCheckbox, selected && styles.sourceCheckboxActive]}>
+          {selected ? <Icon name="check" size={12} color={fbColors.paper} /> : null}
+        </View>
+      ) : null}
       <View style={styles.sourceIcon}>
         <Icon name={option.icon as IconName} size={14} color={fbColors.ink} />
       </View>
@@ -301,6 +313,7 @@ function SourceEntryRow({
           Flagged
         </Chip>
       ) : null}
+      {!onToggle ? <Icon name="chevR" size={14} color={fbColors.inkMute} /> : null}
     </Pressable>
   );
 }
@@ -310,11 +323,17 @@ function ReportPreviewCard({
   attachmentCountsByEntryId,
   filingLinkCount,
   dense,
+  selectable,
+  selectedEntryIds,
+  onToggleEntry,
 }: {
   report: ReportPreview;
   attachmentCountsByEntryId: AttachmentCountsByEntryId;
   filingLinkCount: number;
   dense?: boolean;
+  selectable?: boolean;
+  selectedEntryIds?: Set<string>;
+  onToggleEntry?: (entryId: string) => void;
 }) {
   const references = report.entries.slice(0, 6);
   const attachmentCount = report.entries.reduce(
@@ -392,6 +411,8 @@ function ReportPreviewCard({
                 key={entry.id}
                 entry={entry}
                 attachmentCount={attachmentCountsByEntryId[entry.id] ?? 0}
+                selected={selectedEntryIds?.has(entry.id)}
+                onToggle={selectable ? () => onToggleEntry?.(entry.id) : undefined}
               />
             ))}
             {report.entries.length > references.length ? (
@@ -418,18 +439,61 @@ function ReportsContextRail({
   filingLinkCount,
   persistenceActive,
   sourceLabel,
+  savedReportVersions,
+  filingPackages,
+  onSaveReport,
+  onToggleReportFiling,
 }: {
   report: ReportPreview;
   attachmentCount: number;
   filingLinkCount: number;
   persistenceActive: boolean;
   sourceLabel: string;
+  savedReportVersions: SavedReportVersion[];
+  filingPackages: FilingPackage[];
+  onSaveReport: () => void;
+  onToggleReportFiling: (packageId: string) => void;
 }) {
   return (
     <SoftCard p={14} style={styles.railCard}>
       <Text style={styles.sectionLabel}>REPORT CONTEXT</Text>
       <Text style={styles.railValue}>{report.entries.length} entries</Text>
       <Text style={styles.railText}>{report.title}</Text>
+      <Rule />
+      <PillButton tone="primary" size="sm" icon="check" onPress={onSaveReport}>
+        Save report version
+      </PillButton>
+      <View style={styles.railSection}>
+        <Text style={styles.railSectionTitle}>Saved versions</Text>
+        {savedReportVersions.length ? (
+          savedReportVersions.slice(0, 4).map((version) => (
+            <Text key={version.id} style={styles.railText}>
+              {version.title} · {version.includedEntryIds.length} entries
+            </Text>
+          ))
+        ) : (
+          <Text style={styles.railText}>No saved report versions yet.</Text>
+        )}
+      </View>
+      <Rule />
+      <View style={styles.railSection}>
+        <Text style={styles.railSectionTitle}>Add to filing package</Text>
+        {filingPackages.length ? (
+          filingPackages.slice(0, 4).map((filingPackage) => (
+            <PillButton
+              key={filingPackage.id}
+              tone="ghost"
+              size="sm"
+              icon={filingLinkCount ? 'check' : 'plus'}
+              onPress={() => onToggleReportFiling(filingPackage.id)}
+            >
+              {filingPackage.title}
+            </PillButton>
+          ))
+        ) : (
+          <Text style={styles.railText}>Create a filing package before linking report previews.</Text>
+        )}
+      </View>
       <Rule />
       <Text style={styles.railText}>
         {attachmentCount} local attachment references · {filingLinkCount ? 'linked to a filing package' : 'not linked to a filing package'}.
@@ -443,8 +507,19 @@ function ReportsContextRail({
 
 export default function Reports() {
   const { snapshot, entries, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
-  const { reportPreviewState, setReportPreviewState, filingReportLinkCounts } = useReportPreviewState();
-  const { isMobile } = useResponsive();
+  const {
+    reportPreviewState,
+    setReportPreviewState,
+    filingReportLinkCounts,
+    savedReportVersions,
+    saveReportVersion,
+    filingPackages,
+    toggleFilingPackageReport,
+  } = useReportPreviewState();
+  const { isMobile, width } = useResponsive();
+  const [childFilter, setChildFilter] = useState<string>('all');
+  const [excludedEntryIds, setExcludedEntryIds] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const reportType = reportPreviewState.reportType;
   const typeFilter = reportPreviewState.typeFilter;
   const flagFilter = reportPreviewState.flagFilter;
@@ -453,12 +528,23 @@ export default function Reports() {
     return entries.filter((entry) => {
       if (typeFilter !== 'all' && entry.entry_type !== typeFilter) return false;
       if (flagFilter === 'flagged' && !entry.is_flagged) return false;
+      if (childFilter !== 'all' && entry.child_id !== childFilter) return false;
       return true;
     });
-  }, [entries, flagFilter, typeFilter]);
+  }, [childFilter, entries, flagFilter, typeFilter]);
 
   const reports = useMemo(() => buildReports(filteredEntries), [filteredEntries]);
-  const activeReport = reports[reportType];
+  const activeSourceReport = reports[reportType];
+  const includedEntries = activeSourceReport.entries.filter((entry) => !excludedEntryIds.includes(entry.id));
+  const activeReport = buildReports(includedEntries)[reportType];
+  const selectedEntryIds = useMemo(() => new Set(includedEntries.map((entry) => entry.id)), [includedEntries]);
+  const children = useMemo(() => {
+    const caseId = activeCase?.id;
+    if (!caseId) return [];
+    return snapshot.children
+      .filter((child) => !child.deleted_at && child.case_id === caseId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeCase?.id, snapshot.children]);
   const attachmentCountsByEntryId = useMemo(() => {
     return snapshot.evidenceAttachments.reduce<AttachmentCountsByEntryId>((counts, attachment) => {
       if (!attachment.entry_id || attachment.deleted_at) return counts;
@@ -471,8 +557,31 @@ export default function Reports() {
     0,
   );
   const activeReportFilingLinkCount = filingReportLinkCounts[activeReport.id] ?? 0;
+  const showDesktopRail = !isMobile && width >= 1280;
   const sourceLabel =
     source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data';
+
+  function toggleIncludedEntry(entryId: string) {
+    setNotice(null);
+    setExcludedEntryIds((current) =>
+      current.includes(entryId) ? current.filter((id) => id !== entryId) : [...current, entryId],
+    );
+  }
+
+  function saveCurrentReport() {
+    const saved = saveReportVersion({
+      reportType,
+      title: `${activeReport.title} - ${new Date().toISOString().slice(0, 10)}`,
+      includedEntryIds: activeReport.entries.map((entry) => entry.id),
+      filters: {
+        typeFilter,
+        flagFilter,
+        childFilter: childFilter === 'all' ? null : childFilter,
+        dateRangeLabel: dateRangeLabel(activeReport.entries),
+      },
+    });
+    setNotice(`${saved.title} was saved locally.`);
+  }
 
   const filterPanel = (
     <SoftCard p={16} style={[styles.filterCard, !isMobile && styles.desktopPanelCard]}>
@@ -500,6 +609,11 @@ export default function Reports() {
         ))}
       </View>
 
+      <View style={styles.placeholderBox}>
+        <Text style={styles.placeholderTitle}>Date range</Text>
+        <Text style={styles.placeholderBody}>Date range selector coming later. Current preview uses matching saved entries.</Text>
+      </View>
+
       <Segment<FlagFilter>
         items={[
           { v: 'all', label: 'All' },
@@ -510,6 +624,7 @@ export default function Reports() {
       />
 
       <View style={styles.typeFilters}>
+        <Text style={styles.filterSubhead}>Entry type</Text>
         <TypeFilterChip
           value="all"
           active={typeFilter === 'all'}
@@ -524,6 +639,41 @@ export default function Reports() {
           />
         ))}
       </View>
+
+      {children.length ? (
+        <View style={styles.typeFilters}>
+          <Text style={styles.filterSubhead}>Child</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: childFilter === 'all' }}
+            accessibilityLabel="Filter reports by all children"
+            onPress={() => setChildFilter('all')}
+            style={({ pressed }) => [
+              styles.filterChip,
+              childFilter === 'all' && styles.filterChipActive,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Chip tone="ink" outline={childFilter !== 'all'}>All children</Chip>
+          </Pressable>
+          {children.map((child) => (
+            <Pressable
+              key={child.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: childFilter === child.id }}
+              accessibilityLabel={`Filter reports by ${child.name}`}
+              onPress={() => setChildFilter(child.id)}
+              style={({ pressed }) => [
+                styles.filterChip,
+                childFilter === child.id && styles.filterChipActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Chip tone="forest" outline={childFilter !== child.id}>{child.name}</Chip>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </SoftCard>
   );
 
@@ -545,21 +695,34 @@ export default function Reports() {
         attachmentCountsByEntryId={attachmentCountsByEntryId}
         filingLinkCount={activeReportFilingLinkCount}
         dense={!isMobile}
+        selectable={!isMobile}
+        selectedEntryIds={selectedEntryIds}
+        onToggleEntry={toggleIncludedEntry}
       />
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
     </>
   );
 
   return (
     <CaseScreen
       desktopMaxWidth={1120}
+      contentStyle={!isMobile ? styles.reportsDesktopContent : undefined}
       rightRail={
-        <ReportsContextRail
-          report={activeReport}
-          attachmentCount={activeReportAttachmentCount}
-          filingLinkCount={activeReportFilingLinkCount}
-          persistenceActive={persistence.active}
-          sourceLabel={sourceLabel}
-        />
+        showDesktopRail ? (
+          <ReportsContextRail
+            report={activeReport}
+            attachmentCount={activeReportAttachmentCount}
+            filingLinkCount={activeReportFilingLinkCount}
+            persistenceActive={persistence.active}
+            sourceLabel={sourceLabel}
+            savedReportVersions={savedReportVersions}
+            filingPackages={filingPackages}
+            onSaveReport={saveCurrentReport}
+            onToggleReportFiling={(packageId) => toggleFilingPackageReport(packageId, activeReport.id)}
+          />
+        ) : (
+          false
+        )
       }
     >
       <View style={styles.header}>
@@ -598,6 +761,9 @@ const styles = StyleSheet.create({
     fontSize: fbType.body,
     lineHeight: 21,
     fontFamily: fbFonts.sansRegular,
+  },
+  reportsDesktopContent: {
+    paddingHorizontal: fbSpacing.x4,
   },
   filterCard: {
     marginTop: fbSpacing.x5,
@@ -641,6 +807,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: fbSpacing.x2,
+  },
+  filterSubhead: {
+    width: '100%',
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.84,
+    textTransform: 'uppercase',
+  },
+  placeholderBox: {
+    gap: fbSpacing.x1,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.paperDeep,
+  },
+  placeholderTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  placeholderBody: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
   },
   filterChip: {
     minHeight: fbTouch.min,
@@ -773,6 +969,20 @@ const styles = StyleSheet.create({
     gap: fbSpacing.x3,
     paddingVertical: fbSpacing.x2,
   },
+  sourceCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: fbRadii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: fbBorder.selected,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+  },
+  sourceCheckboxActive: {
+    borderColor: fbColors.ink,
+    backgroundColor: fbColors.ink,
+  },
   sourceIcon: {
     width: 28,
     height: 28,
@@ -813,6 +1023,16 @@ const styles = StyleSheet.create({
   railCard: {
     gap: fbSpacing.x3,
   },
+  railSection: {
+    gap: fbSpacing.x2,
+  },
+  railSectionTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
   railValue: {
     color: fbColors.ink,
     fontSize: fbType.h2,
@@ -821,6 +1041,13 @@ const styles = StyleSheet.create({
     fontWeight: fbWeights.semi,
   },
   railText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  notice: {
+    marginTop: fbSpacing.x3,
     color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,
