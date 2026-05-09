@@ -902,6 +902,15 @@ function CaseMapContextRail({
         <PillButton tone="ghost" size="md" icon="clock" disabled full>
           Add key date shell coming later
         </PillButton>
+        <PillButton
+          tone="ghost"
+          size="md"
+          icon="chat"
+          full
+          onPress={() => router.push('/practitioners' as never)}
+        >
+          Practitioner sharing placeholder
+        </PillButton>
       </View>
       <Rule />
       <Text style={styles.railText}>
