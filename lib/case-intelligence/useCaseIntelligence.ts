@@ -2430,6 +2430,7 @@ export function useCaseMap() {
   const {
     snapshot,
     home,
+    filingBuilderState,
     loading,
     error,
     hasHydrated,
@@ -2439,6 +2440,17 @@ export function useCaseMap() {
     persistence,
   } = useCaseIntelligenceHome();
   const caseId = home.activeCase?.id;
+  const filingPackageLinkedEntryCounts = useMemo(
+    () =>
+      Object.values(filingBuilderState.packageStates).reduce<Record<string, number>>(
+        (counts, packageState) => {
+          counts[packageState.packageId] = packageState.linkedEntryIds.length;
+          return counts;
+        },
+        {},
+      ),
+    [filingBuilderState],
+  );
 
   return {
     snapshot,
@@ -2473,6 +2485,7 @@ export function useCaseMap() {
           .filter((pkg) => !pkg.deleted_at && pkg.case_id === caseId)
           .sort((a, b) => (a.due_date ?? '9999-12-31').localeCompare(b.due_date ?? '9999-12-31'))
       : [],
+    filingPackageLinkedEntryCounts,
     loading,
     error,
     hasHydrated,

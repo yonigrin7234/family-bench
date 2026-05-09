@@ -25,6 +25,7 @@ import {
   type Child,
   type CourtOrder,
   type CourtOrderProvision,
+  type FamilyBenchCase,
   type FilingPackage,
   type KeyDate,
   type Person,
@@ -222,24 +223,165 @@ function DatesSection({ keyDates }: { keyDates: KeyDate[] }) {
   );
 }
 
-function FilingsSection({ filingPackages }: { filingPackages: FilingPackage[] }) {
+function FilingsSection({
+  filingPackages,
+  linkedEntryCountsByPackageId,
+}: {
+  filingPackages: FilingPackage[];
+  linkedEntryCountsByPackageId: Record<string, number>;
+}) {
   return (
     <SoftCard p={16} style={styles.section}>
       <SectionHeader icon="doc" title="Filing packages" count={filingPackages.length} />
       {filingPackages.length ? (
         <View style={styles.recordStack}>
-          {filingPackages.map((pkg) => (
-            <SmallRecord
-              key={pkg.id}
-              title={pkg.title}
-              subtitle={pkg.court_ready_summary}
-              tone={pkg.status === 'draft' ? 'amber' : 'forest'}
-              meta={pkg.due_date ? getRelativeDueLabel(pkg.due_date) : pkg.status}
-            />
-          ))}
+          {filingPackages.map((pkg) => {
+            const linkedEntryCount = linkedEntryCountsByPackageId[pkg.id] ?? 0;
+            const linkedEntryLabel = `${linkedEntryCount} linked ${
+              linkedEntryCount === 1 ? 'entry' : 'entries'
+            }`;
+
+            return (
+              <SmallRecord
+                key={pkg.id}
+                title={pkg.title}
+                subtitle={[pkg.court_ready_summary, linkedEntryLabel].filter(Boolean).join(' · ')}
+                tone={pkg.status === 'draft' ? 'amber' : 'forest'}
+                meta={pkg.due_date ? getRelativeDueLabel(pkg.due_date) : pkg.status}
+              />
+            );
+          })}
         </View>
       ) : (
         <EmptyState>No filing packages have been started yet.</EmptyState>
+      )}
+    </SoftCard>
+  );
+}
+
+function ChecklistRow({
+  complete,
+  label,
+  detail,
+}: {
+  complete: boolean;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <View style={styles.checklistRow}>
+      <Chip tone={complete ? 'forest' : 'amber'} outline={false}>
+        {complete ? 'Recorded' : 'Missing'}
+      </Chip>
+      <View style={styles.checklistCopy}>
+        <Text style={styles.checklistLabel}>{label}</Text>
+        <Text style={styles.checklistDetail}>{detail}</Text>
+      </View>
+    </View>
+  );
+}
+
+function CaseSpine({
+  activeCase,
+  childrenRows,
+  people,
+  hasLocalCaseSetup,
+  isDemoCase,
+}: {
+  activeCase: FamilyBenchCase | null;
+  childrenRows: Child[];
+  people: Person[];
+  hasLocalCaseSetup: boolean;
+  isDemoCase: boolean;
+}) {
+  return (
+    <SoftCard p={16} style={styles.spineCard}>
+      <SectionHeader icon="scales" title="Case spine" />
+      {activeCase ? (
+        <>
+          <View style={styles.spineDetails}>
+            <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
+            <DetailRow label="Case number" value={activeCase.case_number} />
+            <DetailRow label="Court" value={activeCase.court_name} />
+            <DetailRow label="County" value={activeCase.county} />
+            <DetailRow label="Department" value={activeCase.department} />
+            <DetailRow label="Judge" value={activeCase.judge_name} />
+          </View>
+
+          <Rule />
+
+          <View style={styles.spineBlock}>
+            <View style={styles.spineBlockHeader}>
+              <Text style={styles.spineBlockTitle}>Children</Text>
+              <Chip tone="mute" outline={false}>
+                {childrenRows.length}
+              </Chip>
+            </View>
+            {childrenRows.length ? (
+              <View style={styles.compactStack}>
+                {childrenRows.map((child) => (
+                  <SmallRecord
+                    key={child.id}
+                    title={child.name}
+                    subtitle={child.date_of_birth ? `DOB ${child.date_of_birth}` : 'Date of birth not recorded'}
+                    tone="forest"
+                    meta="Child"
+                  />
+                ))}
+              </View>
+            ) : (
+              <EmptyState>No children have been added to this case record yet.</EmptyState>
+            )}
+          </View>
+
+          <Rule />
+
+          <View style={styles.spineBlock}>
+            <View style={styles.spineBlockHeader}>
+              <Text style={styles.spineBlockTitle}>Parties and people</Text>
+              <Chip tone="mute" outline={false}>
+                {people.length}
+              </Chip>
+            </View>
+            {people.length ? (
+              <View style={styles.compactStack}>
+                {people.slice(0, 6).map((person) => (
+                  <SmallRecord
+                    key={person.id}
+                    title={person.display_name}
+                    subtitle={[person.relationship, person.email, person.phone].filter(Boolean).join(' · ')}
+                    tone={person.is_primary_client ? 'ox' : 'sand'}
+                    meta={person.role}
+                  />
+                ))}
+                {people.length > 6 ? (
+                  <Text style={styles.compactNote}>{people.length - 6} more people are recorded.</Text>
+                ) : null}
+              </View>
+            ) : (
+              <EmptyState>No parties or people have been added to this case record yet.</EmptyState>
+            )}
+          </View>
+
+          <Rule />
+
+          <View style={styles.caseActions}>
+            <Chip tone={isDemoCase ? 'amber' : 'forest'} outline={false}>
+              {hasLocalCaseSetup ? 'Local case' : 'Demo case'}
+            </Chip>
+            <PillButton
+              tone="soft"
+              size="md"
+              icon="scales"
+              full
+              onPress={() => router.push({ pathname: '/onboarding', params: { mode: 'edit' } } as never)}
+            >
+              {hasLocalCaseSetup ? 'Edit case details' : 'Set up local case'}
+            </PillButton>
+          </View>
+        </>
+      ) : (
+        <EmptyState>No active case has been selected yet.</EmptyState>
       )}
     </SoftCard>
   );
@@ -249,8 +391,12 @@ function CaseMapContextRail({
   caseTitle,
   childrenCount,
   peopleCount,
+  courtOrdersCount,
+  provisionsCount,
   datesCount,
   filingCount,
+  hasCaseNumber,
+  hasCourtInfo,
   persistenceActive,
   hydrationCompleted,
   sourceLabel,
@@ -258,8 +404,12 @@ function CaseMapContextRail({
   caseTitle: string;
   childrenCount: number;
   peopleCount: number;
+  courtOrdersCount: number;
+  provisionsCount: number;
   datesCount: number;
   filingCount: number;
+  hasCaseNumber: boolean;
+  hasCourtInfo: boolean;
   persistenceActive: boolean;
   hydrationCompleted: boolean;
   sourceLabel: string;
@@ -271,6 +421,55 @@ function CaseMapContextRail({
       <Text style={styles.railText}>
         {childrenCount} children · {peopleCount} people · {datesCount} key dates · {filingCount} filing packages.
       </Text>
+      <Rule />
+      <Text style={styles.sectionLabel}>WHAT THIS PAGE IS FOR</Text>
+      <Text style={styles.railText}>
+        Use Case Map as the local case spine: case facts, people, orders, deadlines, and filing-package context in one place.
+      </Text>
+      <Rule />
+      <Text style={styles.sectionLabel}>MISSING INFO CHECKLIST</Text>
+      <View style={styles.checklistStack}>
+        <ChecklistRow
+          complete={hasCaseNumber}
+          label="Case number"
+          detail="Used for captions and future court form preparation."
+        />
+        <ChecklistRow
+          complete={hasCourtInfo}
+          label="Court and county"
+          detail="Keeps reports and filing packages tied to the right jurisdiction label."
+        />
+        <ChecklistRow
+          complete={childrenCount > 0}
+          label="Children"
+          detail="Supports child-specific entries, reports, and future filtering."
+        />
+        <ChecklistRow
+          complete={courtOrdersCount > 0}
+          label="Court orders"
+          detail="Order intake is local placeholder only until document intake is added."
+        />
+        <ChecklistRow
+          complete={provisionsCount > 0}
+          label="Order provisions"
+          detail="Provision extraction and entry linking come in later stages."
+        />
+      </View>
+      <Rule />
+      <View style={styles.railActionStack}>
+        <PillButton tone="ghost" size="md" icon="doc" disabled full>
+          Document intake coming later
+        </PillButton>
+        <PillButton tone="ghost" size="md" icon="link" disabled full>
+          Court-order extraction coming later
+        </PillButton>
+        <PillButton tone="ghost" size="md" icon="scales" disabled full>
+          Add court order shell coming later
+        </PillButton>
+        <PillButton tone="ghost" size="md" icon="clock" disabled full>
+          Add key date shell coming later
+        </PillButton>
+      </View>
       <Rule />
       <Text style={styles.railText}>
         Persistence {persistenceActive ? 'active' : 'inactive'} · hydration {hydrationCompleted ? 'complete' : 'pending'}.
@@ -289,6 +488,7 @@ export default function CaseMap() {
     courtOrderProvisions,
     keyDates,
     filingPackages,
+    filingPackageLinkedEntryCounts,
     source,
     hasLocalCaseSetup,
     isDemoCase,
@@ -303,7 +503,21 @@ export default function CaseMap() {
     <CourtOrdersSection courtOrders={courtOrders} provisions={courtOrderProvisions} />
   );
   const datesSection = <DatesSection keyDates={keyDates} />;
-  const filingsSection = <FilingsSection filingPackages={filingPackages} />;
+  const filingsSection = (
+    <FilingsSection
+      filingPackages={filingPackages}
+      linkedEntryCountsByPackageId={filingPackageLinkedEntryCounts}
+    />
+  );
+  const caseSpineSection = (
+    <CaseSpine
+      activeCase={activeCase}
+      childrenRows={children}
+      people={people}
+      hasLocalCaseSetup={hasLocalCaseSetup}
+      isDemoCase={isDemoCase}
+    />
+  );
   const sourceSection = (
     <SoftCard p={16} style={styles.section}>
       <SectionHeader icon="shield" title="Data source" />
@@ -328,8 +542,12 @@ export default function CaseMap() {
           caseTitle={activeCase?.title || activeCase?.case_number || 'Current case'}
           childrenCount={children.length}
           peopleCount={people.length}
+          courtOrdersCount={courtOrders.length}
+          provisionsCount={courtOrderProvisions.length}
           datesCount={keyDates.length}
           filingCount={filingPackages.length}
+          hasCaseNumber={Boolean(activeCase?.case_number)}
+          hasCourtInfo={Boolean(activeCase?.court_name || activeCase?.county)}
           persistenceActive={persistence.active}
           hydrationCompleted={persistence.hydrationCompleted}
           sourceLabel={sourceLabel}
@@ -345,37 +563,39 @@ export default function CaseMap() {
         </Text>
       </View>
 
-      <SoftCard p={16} style={styles.caseSummary}>
-        <SectionHeader icon="scales" title="Active case" />
-        {activeCase ? (
-          <View style={[styles.caseSummaryBody, !isMobile && styles.desktopCaseSummaryBody]}>
-            <View style={[styles.summaryGrid, !isMobile && styles.desktopSummaryGrid]}>
-              <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
-              <DetailRow label="Court" value={activeCase.court_name} />
-              <DetailRow label="County" value={activeCase.county} />
-              <DetailRow label="Department" value={activeCase.department} />
-              <DetailRow label="Judge" value={activeCase.judge_name} />
-              <DetailRow label="Status" value={activeCase.status} />
+      {isMobile ? (
+        <SoftCard p={16} style={styles.caseSummary}>
+          <SectionHeader icon="scales" title="Active case" />
+          {activeCase ? (
+            <View style={styles.caseSummaryBody}>
+              <View style={styles.summaryGrid}>
+                <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
+                <DetailRow label="Court" value={activeCase.court_name} />
+                <DetailRow label="County" value={activeCase.county} />
+                <DetailRow label="Department" value={activeCase.department} />
+                <DetailRow label="Judge" value={activeCase.judge_name} />
+                <DetailRow label="Status" value={activeCase.status} />
+              </View>
+              <View style={styles.caseActions}>
+                <Chip tone={isDemoCase ? 'amber' : 'forest'} outline={false}>
+                  {hasLocalCaseSetup ? 'Local case' : 'Demo case'}
+                </Chip>
+                <PillButton
+                  tone="soft"
+                  size="md"
+                  icon="scales"
+                  full
+                  onPress={() => router.push({ pathname: '/onboarding', params: { mode: 'edit' } } as never)}
+                >
+                  {hasLocalCaseSetup ? 'Edit case details' : 'Set up local case'}
+                </PillButton>
+              </View>
             </View>
-            <View style={styles.caseActions}>
-              <Chip tone={isDemoCase ? 'amber' : 'forest'} outline={false}>
-                {hasLocalCaseSetup ? 'Local case' : 'Demo case'}
-              </Chip>
-              <PillButton
-                tone="soft"
-                size="md"
-                icon="scales"
-                full
-                onPress={() => router.push({ pathname: '/onboarding', params: { mode: 'edit' } } as never)}
-              >
-                {hasLocalCaseSetup ? 'Edit case details' : 'Set up local case'}
-              </PillButton>
-            </View>
-          </View>
-        ) : (
-          <EmptyState>No active case has been selected yet.</EmptyState>
-        )}
-      </SoftCard>
+          ) : (
+            <EmptyState>No active case has been selected yet.</EmptyState>
+          )}
+        </SoftCard>
+      ) : null}
 
       <InfoCallout title="Linking status" tone="ink">
         Entry linking is not active yet. This map establishes the case structure for future links to orders, hearings, deadlines, and filings.
@@ -391,14 +611,13 @@ export default function CaseMap() {
           {sourceSection}
         </>
       ) : (
-        <View style={styles.desktopMapGrid}>
-          <View style={styles.desktopMapColumn}>
-            {childrenSection}
-            {peopleSection}
-            {datesSection}
+        <View style={styles.desktopWorkstationGrid}>
+          <View style={styles.desktopSpineColumn}>
+            {caseSpineSection}
           </View>
-          <View style={styles.desktopMapColumn}>
+          <View style={styles.desktopCenterColumn}>
             {courtOrdersSection}
+            {datesSection}
             {filingsSection}
             {sourceSection}
           </View>
@@ -459,30 +678,57 @@ const styles = StyleSheet.create({
   summaryGrid: {
     gap: fbSpacing.x3,
   },
-  desktopSummaryGrid: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
   caseSummaryBody: {
     gap: fbSpacing.x4,
-  },
-  desktopCaseSummaryBody: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
   },
   caseActions: {
     gap: fbSpacing.x3,
   },
-  desktopMapGrid: {
+  desktopWorkstationGrid: {
     marginTop: fbSpacing.x4,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: fbSpacing.x4,
   },
-  desktopMapColumn: {
+  desktopSpineColumn: {
+    width: 320,
+    flexShrink: 0,
+  },
+  desktopCenterColumn: {
     flex: 1,
     minWidth: 0,
+  },
+  spineCard: {
+    marginTop: fbSpacing.x4,
+    gap: fbSpacing.x4,
+  },
+  spineDetails: {
+    gap: fbSpacing.x3,
+  },
+  spineBlock: {
+    gap: fbSpacing.x3,
+  },
+  spineBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x2,
+  },
+  spineBlockTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0,
+  },
+  compactStack: {
+    gap: fbSpacing.x1,
+  },
+  compactNote: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
   },
   detailRow: {
     gap: fbSpacing.x1,
@@ -564,5 +810,31 @@ const styles = StyleSheet.create({
     fontSize: fbType.small,
     lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
+  },
+  checklistStack: {
+    gap: fbSpacing.x3,
+  },
+  checklistRow: {
+    alignItems: 'flex-start',
+    gap: fbSpacing.x2,
+  },
+  checklistCopy: {
+    gap: fbSpacing.x1,
+  },
+  checklistLabel: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  checklistDetail: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railActionStack: {
+    gap: fbSpacing.x2,
   },
 });
