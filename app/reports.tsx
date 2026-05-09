@@ -27,6 +27,7 @@ import {
 import {
   ENTRY_TYPE_OPTIONS,
   formatDateLabel,
+  getEntryMetadata,
   getEntryTypeOption,
   useCaseIntelligenceTimeline,
   useReportPreviewState,
@@ -88,6 +89,65 @@ function distinctTypes(entries: Entry[]) {
   return labels.length ? labels.join(', ') : 'No entry types in this preview';
 }
 
+function metadataString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function minutesFromTime(value?: string | null) {
+  if (!value) return null;
+  const match = value.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function getExchangeTimes(entry: Entry) {
+  const metadata = getEntryMetadata(entry);
+  const scheduled =
+    metadataString(metadata.scheduled_time) ??
+    metadataString(metadata.scheduled_exchange_time) ??
+    metadataString(metadata.scheduled_at);
+  const actual =
+    metadataString(metadata.actual_time) ??
+    metadataString(metadata.actual_exchange_time) ??
+    entry.event_time;
+  const scheduledMinutes = minutesFromTime(scheduled);
+  const actualMinutes = minutesFromTime(actual);
+
+  if (scheduledMinutes === null || actualMinutes === null) {
+    return { scheduled, actual, lateMinutes: null };
+  }
+
+  return {
+    scheduled,
+    actual,
+    lateMinutes: Math.max(0, actualMinutes - scheduledMinutes),
+  };
+}
+
+function buildCustodyCalculation(entries: Entry[]) {
+  const exchangeEntries = entries.filter((entry) =>
+    ['pickup_dropoff', 'visit_denied', 'schedule_change'].includes(entry.entry_type),
+  );
+  const calculatedRows = exchangeEntries
+    .map((entry) => ({ entry, ...getExchangeTimes(entry) }))
+    .filter((row) => row.lateMinutes !== null);
+  const totalLateMinutes = calculatedRows.reduce((total, row) => total + (row.lateMinutes ?? 0), 0);
+
+  return {
+    exchangeCount: exchangeEntries.length,
+    flaggedExchangeCount: exchangeEntries.filter((entry) => entry.is_flagged).length,
+    calculatedRows,
+    totalLateMinutes,
+    summary:
+      calculatedRows.length > 0
+        ? `${calculatedRows.length} entries have scheduled/actual time fields. Calculated late minutes total ${totalLateMinutes}.`
+        : 'Scheduled-vs-actual calculation placeholder: no entries currently include both scheduled and actual exchange times.',
+  };
+}
+
 function dateRangeLabel(entries: Entry[]) {
   if (!entries.length) return 'Date range placeholder: no entries in the current preview.';
 
@@ -120,6 +180,7 @@ function buildReports(entries: Entry[]): Record<ReportType, ReportPreview> {
   const custodyExchangeEntries = entries.filter((entry) =>
     ['pickup_dropoff', 'visit_denied', 'schedule_change'].includes(entry.entry_type),
   );
+  const custodyCalculation = buildCustodyCalculation(custodyExchangeEntries);
 
   return {
     timeline: {
@@ -190,6 +251,8 @@ function buildReports(entries: Entry[]): Record<ReportType, ReportPreview> {
       keyFacts: custodyExchangeEntries.length
         ? [
             `${custodyExchangeEntries.length} custody or exchange entries are included.`,
+            `${custodyCalculation.flaggedExchangeCount} included exchange entries are flagged.`,
+            custodyCalculation.summary,
             `Included categories: ${distinctTypes(custodyExchangeEntries)}.`,
             ...fallbackFacts(custodyExchangeEntries).slice(0, 3),
           ]
@@ -340,6 +403,7 @@ function ReportPreviewCard({
     (total, entry) => total + (attachmentCountsByEntryId[entry.id] ?? 0),
     0,
   );
+  const custodyCalculation = report.id === 'custodyExchange' ? buildCustodyCalculation(report.entries) : null;
 
   return (
     <SoftCard p={16} style={styles.reportCard}>
@@ -386,6 +450,34 @@ function ReportPreviewCard({
         <InfoCallout title="Placeholder" tone="ink">
           {report.placeholder}
         </InfoCallout>
+      ) : null}
+
+      {custodyCalculation ? (
+        <View style={styles.calculationPanel}>
+          <View style={styles.calculationHeader}>
+            <Icon name="clock" size={15} color={fbColors.ink} />
+            <Text style={styles.calculationTitle}>Custody calculation foundation</Text>
+          </View>
+          <View style={[styles.metaGrid, dense && styles.desktopMetaGrid]}>
+            <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
+              <Text style={styles.metaLabel}>EXCHANGES</Text>
+              <Text style={styles.metaValue}>{custodyCalculation.exchangeCount} source entries</Text>
+            </View>
+            <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
+              <Text style={styles.metaLabel}>FLAGGED</Text>
+              <Text style={styles.metaValue}>{custodyCalculation.flaggedExchangeCount} flagged entries</Text>
+            </View>
+            <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
+              <Text style={styles.metaLabel}>LATE MINUTES</Text>
+              <Text style={styles.metaValue}>
+                {custodyCalculation.calculatedRows.length
+                  ? `${custodyCalculation.totalLateMinutes} calculated minutes`
+                  : 'Placeholder until scheduled and actual times exist'}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.calculationBody}>{custodyCalculation.summary}</Text>
+        </View>
       ) : null}
 
       <View style={styles.sectionBlock}>
@@ -937,6 +1029,32 @@ const styles = StyleSheet.create({
   metaValue: {
     marginTop: fbSpacing.x1,
     color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  calculationPanel: {
+    gap: fbSpacing.x3,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.paperDeep,
+  },
+  calculationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+  },
+  calculationTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  calculationBody: {
+    color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
