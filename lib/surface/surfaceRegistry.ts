@@ -50,6 +50,7 @@ export type SurfaceRouteId =
   | 'entryDetail'
   | 'caseMap'
   | 'reports'
+  | 'calculator'
   | 'advisor'
   | 'filings'
   | 'patterns'
@@ -237,6 +238,26 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     mobileNavOrder: 50,
     desktopNavOrder: 70,
     futureNotes: ['Final PDF export and filing insertion remain later phases.'],
+  },
+  {
+    id: 'calculator',
+    path: '/calculator',
+    label: 'Custody calculator',
+    icon: 'scales',
+    surfaceClass: 'mobile-primary',
+    primaryFeatureSections: [14, 15],
+    mobileRole: 'Custody time-share breakdown from logged entries.',
+    desktopRole: 'Custody analytics with breakdown and transition list.',
+    mobileComplexity: 'medium',
+    desktopComplexity: 'medium',
+    mobileBehavior: ['Period segment + big-number breakdown + bar + legend stack.'],
+    desktopBehavior: ['Same flow inside the shared desktop shell with wider columns.'],
+    appearsInMobileNav: false,
+    appearsInDesktopNav: true,
+    desktopNavOrder: 75,
+    futureNotes: [
+      'Scheduled-vs-actual comparison waits for the custody-schedule data model.',
+    ],
   },
   {
     id: 'advisor',

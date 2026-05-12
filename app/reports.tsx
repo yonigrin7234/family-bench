@@ -833,6 +833,16 @@ export default function Reports() {
         <Text style={styles.subtitle}>
           Factual previews from saved entries. {fbLegalCopy.legalInformationNotAdvice}
         </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: fbSpacing.x2, marginTop: fbSpacing.x3 }}>
+          <PillButton
+            tone="soft"
+            size="sm"
+            icon="scales"
+            onPress={() => router.push('/calculator' as never)}
+          >
+            Open custody calculator
+          </PillButton>
+        </View>
       </View>
 
       {isMobile ? (
