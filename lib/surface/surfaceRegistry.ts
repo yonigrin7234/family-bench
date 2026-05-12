@@ -2,6 +2,45 @@ import type { IconName } from '@/components/ui/fb';
 
 export type SurfaceId = 'mobile' | 'desktop';
 export type SurfaceComplexity = 'low' | 'medium' | 'high';
+
+/**
+ * Feature-level surface classification. Mirrors the taxonomy in
+ * `docs/feature-surface-split.md` so every route can declare which
+ * surface should "feature" it without consumers re-deriving the answer.
+ *
+ * - `mobile-only`: the feature can only meaningfully exist on a phone
+ *   (camera, panic button, watch). Never appears on desktop.
+ * - `mobile-primary`: designed and optimized for phone. Desktop may
+ *   surface a read-only summary or admin control.
+ * - `shared`: equal weight on both surfaces. Same store, same logic,
+ *   density may differ.
+ * - `desktop-primary`: designed for the war-room context. Phone may
+ *   surface a summary, but the work happens on desktop.
+ * - `desktop-only`: requires desktop affordances (multi-doc editing,
+ *   browser extension, print binders). Never appears on mobile.
+ */
+export type SurfaceClass =
+  | 'mobile-only'
+  | 'mobile-primary'
+  | 'shared'
+  | 'desktop-primary'
+  | 'desktop-only';
+
+export const SURFACE_CLASS_VALUES: readonly SurfaceClass[] = [
+  'mobile-only',
+  'mobile-primary',
+  'shared',
+  'desktop-primary',
+  'desktop-only',
+] as const;
+
+/**
+ * Section IDs from `docs/family-bench-complete-feature-list.md`.
+ * Used by `primaryFeatureSections` on each route so a route can declare
+ * which sections of the master feature list it surfaces.
+ */
+export type FeatureSectionId = number;
+
 export type SurfaceRouteId =
   | 'home'
   | 'capture'
@@ -25,6 +64,14 @@ export type SurfaceRouteDefinition = {
   path: string;
   label: string;
   icon: IconName;
+  /** Which surface "owns" this route at the feature level. See `SurfaceClass`. */
+  surfaceClass: SurfaceClass;
+  /**
+   * Section numbers from `docs/family-bench-complete-feature-list.md`
+   * that this route primarily surfaces. A route can pull in features
+   * from other sections too, but these are the canonical ones.
+   */
+  primaryFeatureSections: readonly FeatureSectionId[];
   mobileRole: string;
   desktopRole: string;
   mobileComplexity: SurfaceComplexity;
@@ -46,6 +93,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/',
     label: 'Home',
     icon: 'home',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [27],
     mobileRole: 'Quick case status and capture entry point.',
     desktopRole: 'Case overview for the broader work session.',
     mobileComplexity: 'low',
@@ -63,6 +112,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/capture',
     label: 'Capture',
     icon: 'plus',
+    surfaceClass: 'mobile-primary',
+    primaryFeatureSections: [3, 4, 6],
     mobileRole: 'Primary in-the-moment entry capture.',
     desktopRole: 'Manual entry creation during review or preparation work.',
     mobileComplexity: 'medium',
@@ -81,6 +132,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/voice-capture',
     label: 'Voice Capture',
     icon: 'mic',
+    surfaceClass: 'mobile-primary',
+    primaryFeatureSections: [5],
     mobileRole: 'Hands-light transcript and voice memo placeholder flow.',
     desktopRole: 'Voice capture review surface for typed transcripts and saved audio metadata.',
     mobileComplexity: 'medium',
@@ -97,6 +150,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/timeline',
     label: 'Timeline',
     icon: 'clock',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [9, 10],
     mobileRole: 'Quick chronological review.',
     desktopRole: 'Dense chronological case review with filters and source counts.',
     mobileComplexity: 'medium',
@@ -114,6 +169,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/evidence',
     label: 'Evidence',
     icon: 'folder',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [8, 9],
     mobileRole: 'Evidence browsing and attachment-count visibility.',
     desktopRole: 'Searchable evidence workspace for entries, attachments, and voice memos.',
     mobileComplexity: 'medium',
@@ -131,6 +188,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/entry/[id]',
     label: 'Entry Detail',
     icon: 'doc',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [7],
     mobileRole: 'Focused review, notes, summaries, and local source attachments.',
     desktopRole: 'Source-record inspection from timeline, evidence, reports, filings, or patterns.',
     mobileComplexity: 'medium',
@@ -146,6 +205,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/case-map',
     label: 'Case Map',
     icon: 'scales',
+    surfaceClass: 'desktop-primary',
+    primaryFeatureSections: [2, 18, 19, 20],
     mobileRole: 'Basic case details and setup edit access.',
     desktopRole: 'Structured case map for parties, children, key dates, orders, and filing packages.',
     mobileComplexity: 'medium',
@@ -163,6 +224,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/reports',
     label: 'Reports',
     icon: 'doc',
+    surfaceClass: 'desktop-primary',
+    primaryFeatureSections: [13, 14, 15],
     mobileRole: 'Preview factual report groupings from local entries.',
     desktopRole: 'Report preparation workspace with filters, preview, and source references.',
     mobileComplexity: 'medium',
@@ -180,6 +243,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/advisor',
     label: 'Advisor',
     icon: 'chat',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [16, 17],
     mobileRole: 'Quick legal-information-not-advice guidance placeholder.',
     desktopRole: 'Case companion thread placeholder with broader case context.',
     mobileComplexity: 'medium',
@@ -196,6 +261,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/filings',
     label: 'Filings',
     icon: 'folder',
+    surfaceClass: 'desktop-primary',
+    primaryFeatureSections: [11, 12, 23, 24],
     mobileRole: 'Limited filing-package visibility and simple linking when needed.',
     desktopRole: 'Primary filing-package organization workspace.',
     mobileComplexity: 'high',
@@ -212,6 +279,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/patterns',
     label: 'Patterns',
     icon: 'filter',
+    surfaceClass: 'desktop-primary',
+    primaryFeatureSections: [26],
     mobileRole: 'Review possible local patterns when prompted.',
     desktopRole: 'Rule-based pattern review and acknowledgement workspace.',
     mobileComplexity: 'medium',
@@ -228,6 +297,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/onboarding',
     label: 'Onboarding',
     icon: 'scales',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [1, 2],
     mobileRole: 'First-run local case setup and quick case edits.',
     desktopRole: 'Local case setup and basic case details editing.',
     mobileComplexity: 'medium',
@@ -243,6 +314,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/export-prep',
     label: 'Export Prep',
     icon: 'doc',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [34],
     mobileRole: 'Preview local export structures when reached from entries, reports, or settings.',
     desktopRole: 'Inspect local JSON preview structures before export tooling exists.',
     mobileComplexity: 'medium',
@@ -258,6 +331,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/practitioners',
     label: 'Practitioners',
     icon: 'chat',
+    surfaceClass: 'desktop-primary',
+    primaryFeatureSections: [25, 46],
     mobileRole: 'Review local sharing placeholders when needed.',
     desktopRole: 'Plan practitioner access scopes without granting remote permissions.',
     mobileComplexity: 'medium',
@@ -274,6 +349,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/safety',
     label: 'Safety',
     icon: 'shield',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [31],
     mobileRole: 'Read calm safety placeholders and reminders.',
     desktopRole: 'Review safety-resource and preservation placeholders in the case workspace.',
     mobileComplexity: 'low',
@@ -290,6 +367,8 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     path: '/settings',
     label: 'Settings',
     icon: 'folder',
+    surfaceClass: 'shared',
+    primaryFeatureSections: [30, 36, 39, 51],
     mobileRole: 'Review local data status and memory counts when needed.',
     desktopRole: 'Inspect local persistence, memory index, and reset/export placeholders.',
     mobileComplexity: 'medium',
@@ -331,4 +410,47 @@ export function isSurfaceRouteActive(pathname: string, route: SurfaceRoute, surf
     surface === 'mobile' ? route.mobileActivePathPrefixes : route.desktopActivePathPrefixes;
 
   return Boolean(activePrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(prefix)));
+}
+
+/**
+ * All routes whose `surfaceClass` matches the given class.
+ * Useful for answering "which routes are mobile-primary?" without
+ * iterating manually.
+ */
+export function getRoutesByClass(surfaceClass: SurfaceClass): SurfaceRoute[] {
+  return SURFACE_ROUTES.filter((route) => route.surfaceClass === surfaceClass);
+}
+
+/**
+ * All routes that declare the given feature section as a primary
+ * concern. Section numbers reference
+ * `docs/family-bench-complete-feature-list.md`.
+ */
+export function getRoutesByFeatureSection(sectionId: FeatureSectionId): SurfaceRoute[] {
+  return SURFACE_ROUTES.filter((route) =>
+    route.primaryFeatureSections.includes(sectionId),
+  );
+}
+
+/**
+ * Should this route be visible/featured on the given surface based on
+ * its surface class? Independent of `appearsInMobileNav` /
+ * `appearsInDesktopNav` (those still govern nav menus). Use this when
+ * answering product questions like "should we surface filings on
+ * mobile?" (no — desktop-primary) versus nav-rendering questions.
+ */
+export function isRouteFeaturedOnSurface(
+  route: Pick<SurfaceRouteDefinition, 'surfaceClass'>,
+  surface: SurfaceId,
+): boolean {
+  switch (route.surfaceClass) {
+    case 'mobile-only':
+      return surface === 'mobile';
+    case 'desktop-only':
+      return surface === 'desktop';
+    case 'mobile-primary':
+    case 'desktop-primary':
+    case 'shared':
+      return true;
+  }
 }
