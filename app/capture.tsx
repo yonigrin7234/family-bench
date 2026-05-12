@@ -1,7 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+// Capture — guided multi-step interview, parity with
+// family bench/capture-flow.jsx. Six steps:
+//   1. Type + child   (required)
+//   2. When           (required)
+//   3. Mood           (skippable)
+//   4. Where          (skippable)
+//   5. Attach         (skippable, placeholder)
+//   6. Review + save  (final)
+//
+// Data model is unchanged. The same createEntry() call still runs at
+// the end with the same fields. Visual structure mirrors the prototype.
+
+import React, { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -9,12 +22,14 @@ import {
 } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
+  BigChoice,
   Chip,
   Display,
   Icon,
   InfoCallout,
   MoodPicker,
   PillButton,
+  ProgressBar,
   Rule,
   SoftCard,
   fbAlpha,
@@ -39,6 +54,8 @@ import {
   type EntryTypeValue,
 } from '@/lib/case-intelligence';
 
+// ─── helpers ──────────────────────────────────────────────
+
 function toDateInput(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
@@ -60,11 +77,33 @@ function isDateInput(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
 }
 
-function FormLabel({ children }: { children: string }) {
-  return <Text style={styles.label}>{children}</Text>;
+function formatPrettyDate(value: string) {
+  if (!isDateInput(value)) return value;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
-function Field({
+// ─── shared primitives ────────────────────────────────────
+
+function StepKicker({ children }: { children: string }) {
+  return <Text style={styles.kicker}>{children}</Text>;
+}
+
+function StepHelp({ children }: { children: React.ReactNode }) {
+  return <Text style={styles.help}>{children}</Text>;
+}
+
+function FieldLabel({ children }: { children: string }) {
+  return <Text style={styles.fieldLabel}>{children}</Text>;
+}
+
+function PlainField({
   label,
   value,
   onChangeText,
@@ -79,7 +118,7 @@ function Field({
 }) {
   return (
     <View style={styles.field}>
-      <FormLabel>{label}</FormLabel>
+      <FieldLabel>{label}</FieldLabel>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -89,50 +128,6 @@ function Field({
         textAlignVertical={multiline ? 'top' : 'center'}
         style={[styles.input, multiline && styles.inputMultiline]}
       />
-    </View>
-  );
-}
-
-function EntryTypePicker({
-  value,
-  onChange,
-}: {
-  value: EntryTypeValue;
-  onChange: (value: EntryTypeValue) => void;
-}) {
-  return (
-    <View style={styles.typeGrid}>
-      {ENTRY_TYPE_OPTIONS.map((option) => {
-        const active = option.value === value;
-
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={option.label}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.typeOption,
-              active && styles.typeOptionActive,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.typeHeader}>
-              <Icon
-                name={option.icon as IconName}
-                size={15}
-                color={active ? fbColors.oxDeep : fbColors.ink}
-              />
-              <Chip tone={option.tone as ChipTone} outline={false}>
-                {option.shortLabel}
-              </Chip>
-            </View>
-            <Text style={styles.typeTitle}>{option.label}</Text>
-            <Text style={styles.typeBody}>{option.body}</Text>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
@@ -156,44 +151,343 @@ function FlagToggle({
         {value ? <Icon name="check" size={14} color={fbColors.paper} /> : null}
       </View>
       <View style={styles.flagCopy}>
-        <Text style={styles.flagTitle}>Flag for review</Text>
-        <Text style={styles.flagBody}>Use this for entries that may need follow-up later.</Text>
+        <Text style={styles.flagTitle}>Flag for follow-up</Text>
+        <Text style={styles.flagBody}>
+          Use this for entries that may need review later.
+        </Text>
       </View>
     </Pressable>
   );
 }
 
-function VoiceCaptureLauncher() {
+// ─── step content ─────────────────────────────────────────
+
+function StepType({
+  entryType,
+  onChangeType,
+}: {
+  entryType: EntryTypeValue;
+  onChangeType: (value: EntryTypeValue) => void;
+}) {
   return (
-    <SoftCard p={16} style={styles.voiceLauncher}>
-      <View style={styles.voiceHeader}>
-        <View style={styles.voiceTitleRow}>
-          <View style={styles.voiceIcon}>
-            <Icon name="mic" size={16} color={fbColors.ink} />
-          </View>
-          <View style={styles.voiceCopy}>
-            <Text style={styles.voiceTitle}>Voice capture placeholder</Text>
-            <Text style={styles.voiceBody}>
-              Type or paste a transcript and review it before saving a local journal entry.
-            </Text>
-          </View>
-        </View>
-        <Chip tone="amber" outline={false}>
-          Local
-        </Chip>
+    <View style={styles.stepBody}>
+      <StepKicker>NEW JOURNAL ENTRY</StepKicker>
+      <Display size={26} style={styles.stepTitle}>
+        Who was involved?
+      </Display>
+      <StepHelp>
+        We&apos;ll use this to match the entry to the right custody order and
+        child.
+      </StepHelp>
+
+      <FieldLabel>WHAT KIND OF EVENT?</FieldLabel>
+      <View style={styles.stack}>
+        {ENTRY_TYPE_OPTIONS.map((option) => (
+          <BigChoice
+            key={option.value}
+            label={option.label}
+            hint={option.body}
+            icon={option.icon as IconName}
+            selected={entryType === option.value}
+            onPress={() => onChangeType(option.value)}
+          />
+        ))}
       </View>
-      <PillButton
-        tone="soft"
-        size="md"
-        icon="mic"
-        full
-        onPress={() => router.push('/voice-capture' as never)}
-      >
-        Open voice placeholder
-      </PillButton>
-    </SoftCard>
+
+      <InfoCallout title="Why we ask" tone="ink">
+        Events of the same type aggregate into patterns. Three late exchanges
+        in 30 days carries more weight than three disconnected notes.
+      </InfoCallout>
+    </View>
   );
 }
+
+function StepWhen({
+  entryType,
+  eventDate,
+  setEventDate,
+  eventTime,
+  setEventTime,
+}: {
+  entryType: EntryTypeValue;
+  eventDate: string;
+  setEventDate: (value: string) => void;
+  eventTime: string;
+  setEventTime: (value: string) => void;
+}) {
+  const option = getEntryTypeOption(entryType);
+  return (
+    <View style={styles.stepBody}>
+      <StepKicker>{option.label.toUpperCase()}</StepKicker>
+      <Display size={26} style={styles.stepTitle}>
+        When did it happen?
+      </Display>
+      <StepHelp>
+        The gap between scheduled and actual is what courts care about. For
+        now, capture the time it actually happened.
+      </StepHelp>
+
+      <PlainField
+        label="DATE"
+        value={eventDate}
+        onChangeText={setEventDate}
+        placeholder="YYYY-MM-DD"
+      />
+      {isDateInput(eventDate) ? (
+        <Text style={styles.fieldPreview}>{formatPrettyDate(eventDate)}</Text>
+      ) : null}
+
+      <View style={styles.fieldGap} />
+      <PlainField
+        label="TIME"
+        value={eventTime}
+        onChangeText={setEventTime}
+        placeholder="HH:MM"
+      />
+
+      <InfoCallout title="Scheduled vs actual" tone="ink">
+        We&apos;ll capture scheduled-vs-actual separately once the custody-order
+        timing model lands. For now, this is the time you observed.
+      </InfoCallout>
+    </View>
+  );
+}
+
+function StepMood({
+  entryType,
+  childMood,
+  onChangeMood,
+  body,
+  onChangeBody,
+}: {
+  entryType: EntryTypeValue;
+  childMood: MoodKey | undefined;
+  onChangeMood: (value: MoodKey) => void;
+  body: string;
+  onChangeBody: (value: string) => void;
+}) {
+  const option = getEntryTypeOption(entryType);
+  return (
+    <View style={styles.stepBody}>
+      <StepKicker>{option.label.toUpperCase()}</StepKicker>
+      <Display size={26} style={styles.stepTitle}>
+        How did your child seem?
+      </Display>
+      <StepHelp>
+        Pick the closest match. Emotional state is relevant to best-interest
+        determinations. You can skip this step.
+      </StepHelp>
+
+      <MoodPicker value={childMood} onPick={onChangeMood} />
+
+      <View style={styles.fieldGap} />
+      <FieldLabel>OBSERVATIONS (OPTIONAL)</FieldLabel>
+      <TextInput
+        value={body}
+        onChangeText={onChangeBody}
+        placeholder="Verbatim quotes when possible. Keep it factual."
+        placeholderTextColor={fbColors.inkFaint}
+        multiline
+        textAlignVertical="top"
+        style={[styles.input, styles.inputMultiline]}
+      />
+
+      <InfoCallout title="What makes this admissible" tone="ox">
+        A child&apos;s spontaneous statement made during emotional stress can be
+        admitted under California Evidence Code § 1240, even though it&apos;s
+        hearsay. Verbatim quotes plus context capture both conditions.
+      </InfoCallout>
+    </View>
+  );
+}
+
+function StepWhere({
+  entryType,
+  locationName,
+  setLocationName,
+}: {
+  entryType: EntryTypeValue;
+  locationName: string;
+  setLocationName: (value: string) => void;
+}) {
+  const option = getEntryTypeOption(entryType);
+  return (
+    <View style={styles.stepBody}>
+      <StepKicker>{option.label.toUpperCase()}</StepKicker>
+      <Display size={26} style={styles.stepTitle}>
+        Where did it happen?
+      </Display>
+      <StepHelp>
+        Skip if you&apos;d rather not say. GPS is auto-captured at save time when
+        permissions are granted.
+      </StepHelp>
+
+      <PlainField
+        label="LOCATION"
+        value={locationName}
+        onChangeText={setLocationName}
+        placeholder="e.g. 1425 Park Blvd, Oakland"
+      />
+
+      <InfoCallout title="Witnesses · coming later" tone="ink">
+        Witness tracking will land with the witness data model. For now, name
+        any witnesses in the observations field on the previous step.
+      </InfoCallout>
+    </View>
+  );
+}
+
+function StepAttach() {
+  return (
+    <View style={styles.stepBody}>
+      <StepKicker>ATTACH EVIDENCE</StepKicker>
+      <Display size={26} style={styles.stepTitle}>
+        Anything to attach?
+      </Display>
+      <StepHelp>
+        Photos, messages, receipts. Every attachment gets its own hash and
+        timestamp when the attachment model lands.
+      </StepHelp>
+
+      <View style={styles.attachGrid}>
+        {(
+          [
+            { label: 'Photo', icon: 'camera' },
+            { label: 'Message', icon: 'chat' },
+            { label: 'Receipt', icon: 'receipt' },
+            { label: 'Document', icon: 'doc' },
+          ] as { label: string; icon: IconName }[]
+        ).map((slot) => (
+          <View key={slot.label} style={styles.attachSlot}>
+            <Icon name={slot.icon} size={18} color={fbColors.inkMute} />
+            <Text style={styles.attachLabel}>{slot.label}</Text>
+            <Text style={styles.attachComing}>Coming later</Text>
+          </View>
+        ))}
+      </View>
+
+      <InfoCallout title="Why attachments matter" tone="ink">
+        Photos with intact EXIF data and message screenshots with platform
+        timestamps are the strongest evidence. The attachment pipeline ships
+        in a later pass.
+      </InfoCallout>
+    </View>
+  );
+}
+
+function StepReview({
+  entryType,
+  eventDate,
+  eventTime,
+  title,
+  setTitle,
+  body,
+  childMood,
+  locationName,
+  isFlagged,
+  setIsFlagged,
+  privateNotes,
+  setPrivateNotes,
+}: {
+  entryType: EntryTypeValue;
+  eventDate: string;
+  eventTime: string;
+  title: string;
+  setTitle: (value: string) => void;
+  body: string;
+  childMood: MoodKey | undefined;
+  locationName: string;
+  isFlagged: boolean;
+  setIsFlagged: (value: boolean) => void;
+  privateNotes: string;
+  setPrivateNotes: (value: string) => void;
+}) {
+  const option = getEntryTypeOption(entryType);
+  const summaryRows: [string, string][] = [
+    ['Date', isDateInput(eventDate) ? formatPrettyDate(eventDate) : eventDate || '—'],
+    ['Time', eventTime || '—'],
+    ['Type', option.label],
+    ['Mood', childMood ? childMood : '—'],
+    ['Location', locationName || '—'],
+  ];
+  return (
+    <View style={styles.stepBody}>
+      <StepKicker>ALMOST DONE</StepKicker>
+      <Display size={26} style={styles.stepTitle}>
+        Does this look right?
+      </Display>
+      <StepHelp>
+        We&apos;ll save this as one entry. Edits are tracked after sealing.{' '}
+        {fbLegalCopy.legalInformationNotAdvice}
+      </StepHelp>
+
+      <SoftCard p={0} style={styles.reviewCard}>
+        <View style={styles.reviewHeader}>
+          <Text style={styles.reviewHeaderType}>{option.label}</Text>
+          <Chip tone={option.tone as ChipTone} outline={false}>
+            {option.shortLabel}
+          </Chip>
+        </View>
+        <View style={styles.reviewGrid}>
+          {summaryRows.map(([key, value]) => (
+            <View key={key} style={styles.reviewCell}>
+              <Text style={styles.reviewKey}>{key.toUpperCase()}</Text>
+              <Text style={styles.reviewValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
+        {body ? (
+          <View style={styles.reviewBodyBlock}>
+            <Text style={styles.reviewKey}>OBSERVATIONS</Text>
+            <Text style={styles.reviewBody}>{body}</Text>
+          </View>
+        ) : null}
+      </SoftCard>
+
+      <PlainField
+        label="TITLE"
+        value={title}
+        onChangeText={setTitle}
+        placeholder={option.defaultTitle}
+      />
+
+      <FlagToggle value={isFlagged} onChange={setIsFlagged} />
+
+      <View style={styles.fieldGap} />
+      <FieldLabel>PRIVATE NOTE (NOT FOR COURT)</FieldLabel>
+      <TextInput
+        value={privateNotes}
+        onChangeText={setPrivateNotes}
+        placeholder="Context you do not want mixed into a court-ready summary."
+        placeholderTextColor={fbColors.inkFaint}
+        multiline
+        textAlignVertical="top"
+        style={[styles.input, styles.inputMultiline]}
+      />
+
+      <InfoCallout title="What happens when you save" tone="ink">
+        Content and metadata are written to your local case-intelligence
+        store. You can still edit later — edits are logged, originals
+        preserved.
+      </InfoCallout>
+    </View>
+  );
+}
+
+// ─── main wizard ──────────────────────────────────────────
+
+const TOTAL_STEPS = 6;
+
+type StepIndex = 0 | 1 | 2 | 3 | 4 | 5;
+
+const SKIPPABLE: Record<StepIndex, boolean> = {
+  0: false,
+  1: false,
+  2: true,
+  3: true,
+  4: true,
+  5: false,
+};
 
 export default function Capture() {
   const params = useLocalSearchParams();
@@ -209,31 +503,54 @@ export default function Capture() {
   const [childMood, setChildMood] = useState<MoodKey | undefined>();
   const [isFlagged, setIsFlagged] = useState(false);
   const [privateNotes, setPrivateNotes] = useState('');
+  const [step, setStep] = useState<StepIndex>(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const selectedOption = getEntryTypeOption(entryType);
-  const hasText = Boolean(title.trim() || body.trim());
-  const canSave = isDateInput(eventDate) && hasText && !saving;
 
   useEffect(() => {
     setEntryType(requestedType);
   }, [requestedType]);
 
-  async function onSave() {
-    if (!canSave) {
-      setError('Add a date and at least a short title or note.');
+  const isLastStep = step === TOTAL_STEPS - 1;
+  const canContinue = canStepContinue();
+  const canSkip = SKIPPABLE[step];
+
+  function canStepContinue() {
+    if (step === 0) return Boolean(entryType);
+    if (step === 1) return isDateInput(eventDate);
+    if (step === 5) {
+      const finalTitle = title.trim() || getEntryTypeOption(entryType).defaultTitle;
+      return Boolean(finalTitle) && isDateInput(eventDate) && !saving;
+    }
+    return true;
+  }
+
+  function next() {
+    if (isLastStep) {
+      onSave();
       return;
     }
+    setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1) as StepIndex);
+  }
 
+  function back() {
+    if (step === 0) {
+      router.back();
+      return;
+    }
+    setStep((s) => Math.max(s - 1, 0) as StepIndex);
+  }
+
+  async function onSave() {
     setSaving(true);
     setError(null);
-
     try {
+      const finalTitle = title.trim() || getEntryTypeOption(entryType).defaultTitle;
       await createEntry({
         entryType,
         eventDate: eventDate.trim(),
         eventTime: eventTime.trim() || null,
-        title,
+        title: finalTitle,
         body,
         locationName,
         childMood: childMood ?? null,
@@ -252,274 +569,248 @@ export default function Capture() {
     <CaseScreen
       footer={
         <View style={styles.footer}>
+          {canSkip ? (
+            <PillButton
+              tone="ghost"
+              size="lg"
+              onPress={() => setStep((s) => Math.min(s + 1, 5) as StepIndex)}
+            >
+              Skip
+            </PillButton>
+          ) : null}
           <PillButton
             tone="primary"
             size="lg"
-            full
-            icon="check"
-            disabled={!canSave}
-            onPress={onSave}
+            full={!canSkip}
+            iconRight={isLastStep ? 'check' : 'chevR'}
+            disabled={!canContinue}
+            onPress={next}
           >
-            {saving ? 'Saving' : 'Save entry'}
+            {isLastStep ? (saving ? 'Saving' : 'Save and seal entry') : 'Continue'}
           </PillButton>
           {error ? <Text style={styles.footerError}>{error}</Text> : null}
         </View>
       }
     >
-      <View style={styles.header}>
-        <PillButton tone="ghost" size="sm" icon="caret" onPress={() => router.back()}>
-          Back
-        </PillButton>
-        <Display italic size={32} style={styles.title}>
-          Capture entry
-        </Display>
-        <Text style={styles.subtitle}>
-          Record facts while details are fresh. {fbLegalCopy.legalInformationNotAdvice}
+      <View style={styles.wizHeader}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={step === 0 ? 'Cancel capture' : 'Previous step'}
+          onPress={back}
+          style={({ pressed }) => [styles.chromeButton, pressed && styles.pressed]}
+        >
+          <View style={styles.chromeIconLeft}>
+            <Icon name="caret" size={16} color={fbColors.ink} />
+          </View>
+        </Pressable>
+        <Text style={styles.stepCounter}>
+          Step <Text style={styles.stepCounterNum}>{step + 1}</Text> of {TOTAL_STEPS}
         </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close capture"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.chromeButton, pressed && styles.pressed]}
+        >
+          <Icon name="x" size={14} color={fbColors.ink} />
+        </Pressable>
       </View>
 
-      <InfoCallout title="Case record" tone="ink">
-        {home.activeCase?.title || 'Current case'} · Separate private notes from court-ready facts.
-      </InfoCallout>
+      <ProgressBar
+        pct={Math.round(((step + 1) / TOTAL_STEPS) * 100)}
+        style={styles.wizProgress}
+      />
 
-      <VoiceCaptureLauncher />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
+        {step === 0 ? (
+          <StepType entryType={entryType} onChangeType={setEntryType} />
+        ) : null}
+        {step === 1 ? (
+          <StepWhen
+            entryType={entryType}
+            eventDate={eventDate}
+            setEventDate={setEventDate}
+            eventTime={eventTime}
+            setEventTime={setEventTime}
+          />
+        ) : null}
+        {step === 2 ? (
+          <StepMood
+            entryType={entryType}
+            childMood={childMood}
+            onChangeMood={setChildMood}
+            body={body}
+            onChangeBody={setBody}
+          />
+        ) : null}
+        {step === 3 ? (
+          <StepWhere
+            entryType={entryType}
+            locationName={locationName}
+            setLocationName={setLocationName}
+          />
+        ) : null}
+        {step === 4 ? <StepAttach /> : null}
+        {step === 5 ? (
+          <StepReview
+            entryType={entryType}
+            eventDate={eventDate}
+            eventTime={eventTime}
+            title={title}
+            setTitle={setTitle}
+            body={body}
+            childMood={childMood}
+            locationName={locationName}
+            isFlagged={isFlagged}
+            setIsFlagged={setIsFlagged}
+            privateNotes={privateNotes}
+            setPrivateNotes={setPrivateNotes}
+          />
+        ) : null}
 
-      <SoftCard p={16} style={styles.section}>
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Entry type</Text>
-          <Chip tone={selectedOption.tone as ChipTone} outline={false}>
-            {selectedOption.shortLabel}
-          </Chip>
-        </View>
-        <EntryTypePicker value={entryType} onChange={setEntryType} />
-      </SoftCard>
-
-      <SoftCard p={16} style={styles.section}>
-        <Text style={styles.sectionTitle}>Common fields</Text>
-        <View style={styles.twoCol}>
-          <View style={styles.twoColItem}>
-            <Field label="Date" value={eventDate} onChangeText={setEventDate} placeholder="YYYY-MM-DD" />
-          </View>
-          <View style={styles.twoColItem}>
-            <Field label="Time" value={eventTime} onChangeText={setEventTime} placeholder="HH:MM" />
-          </View>
-        </View>
-        <Field
-          label="Title"
-          value={title}
-          onChangeText={setTitle}
-          placeholder={selectedOption.defaultTitle}
-        />
-        <Field
-          label="What happened"
-          value={body}
-          onChangeText={setBody}
-          placeholder="Keep this factual and specific."
-          multiline
-        />
-        <Field
-          label="Location"
-          value={locationName}
-          onChangeText={setLocationName}
-          placeholder="Optional"
-        />
-        <Rule />
-        <FormLabel>Child mood</FormLabel>
-        <MoodPicker value={childMood} onPick={setChildMood} />
-        <FlagToggle value={isFlagged} onChange={setIsFlagged} />
-      </SoftCard>
-
-      <SoftCard p={16} style={styles.section}>
-        <Text style={styles.sectionTitle}>Private note</Text>
-        <Text style={styles.privateHelp}>
-          Use this space for context you do not want mixed into a court-ready summary.
-        </Text>
-        <TextInput
-          value={privateNotes}
-          onChangeText={setPrivateNotes}
-          placeholder="Optional private note"
-          placeholderTextColor={fbColors.inkFaint}
-          multiline
-          textAlignVertical="top"
-          style={[styles.input, styles.inputMultiline]}
-        />
-      </SoftCard>
+        {home.activeCase ? (
+          <Text style={styles.caseFootnote}>
+            Capturing for {home.activeCase.title || 'current case'}.
+          </Text>
+        ) : null}
+      </ScrollView>
     </CaseScreen>
   );
 }
 
+// ─── styles ───────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  header: {
-    gap: fbSpacing.x3,
+  pressed: {
+    opacity: fbAlpha.pressed,
   },
-  title: {
-    marginTop: fbSpacing.x2,
-    lineHeight: 34,
-  },
-  subtitle: {
-    color: fbColors.inkMute,
-    fontSize: fbType.body,
-    lineHeight: 21,
-    fontFamily: fbFonts.sansRegular,
-  },
-  section: {
-    marginTop: fbSpacing.x4,
-    gap: fbSpacing.x4,
-  },
-  voiceLauncher: {
-    marginTop: fbSpacing.x4,
-    gap: fbSpacing.x4,
-  },
-  voiceHeader: {
-    minHeight: fbTouch.min,
+  wizHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: fbSpacing.x3,
+    paddingTop: fbSpacing.x2,
+    paddingBottom: fbSpacing.x3,
   },
-  voiceTitleRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: fbSpacing.x3,
-  },
-  voiceIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: fbRadii.pill,
+  chromeButton: {
+    width: fbTouch.min,
+    height: fbTouch.min,
+    borderRadius: fbRadii.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: fbColors.paperDeep,
   },
-  voiceCopy: {
-    flex: 1,
+  chromeIconLeft: {
+    transform: [{ rotate: '180deg' }],
   },
-  voiceTitle: {
+  stepCounter: {
+    color: fbColors.inkMute,
+    fontSize: 12,
+    fontFamily: fbFonts.sansMedium,
+    fontWeight: fbWeights.medium,
+    letterSpacing: 0.4,
+  },
+  stepCounterNum: {
     color: fbColors.ink,
-    fontSize: fbType.body,
-    lineHeight: 21,
-    fontFamily: fbFonts.sansSemi,
+    fontFamily: fbFonts.monoSemi,
     fontWeight: fbWeights.semi,
   },
-  voiceBody: {
-    marginTop: fbSpacing.x1,
-    color: fbColors.inkMute,
-    fontSize: fbType.small,
-    lineHeight: 18,
-    fontFamily: fbFonts.sansRegular,
+  wizProgress: {
+    marginBottom: fbSpacing.x4,
   },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  scroll: {
+    paddingBottom: fbSpacing.x8,
+  },
+  stepBody: {
     gap: fbSpacing.x3,
   },
-  sectionTitle: {
-    color: fbColors.ink,
-    fontSize: fbType.h2,
+  kicker: {
+    color: fbColors.ox,
+    fontSize: 11,
     fontFamily: fbFonts.sansSemi,
     fontWeight: fbWeights.semi,
-    letterSpacing: -0.18,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
   },
-  typeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: fbSpacing.x2,
-  },
-  typeOption: {
-    flexBasis: '48%',
-    flexGrow: 1,
-    minHeight: 132,
-    padding: fbSpacing.x3,
-    borderRadius: fbRadii.md,
-    borderWidth: fbBorder.hairline,
-    borderColor: fbColors.rule,
-    backgroundColor: fbColors.surface,
-  },
-  typeOptionActive: {
-    borderWidth: fbBorder.focus,
-    borderColor: fbColors.ox,
-    backgroundColor: fbColors.oxWash,
-  },
-  typeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: fbSpacing.x2,
-  },
-  typeTitle: {
-    marginTop: fbSpacing.x3,
-    color: fbColors.ink,
-    fontSize: fbType.body,
-    fontFamily: fbFonts.sansSemi,
-    fontWeight: fbWeights.semi,
-    letterSpacing: -0.14,
-  },
-  typeBody: {
+  stepTitle: {
     marginTop: fbSpacing.x1,
+    lineHeight: 30,
+  },
+  help: {
     color: fbColors.inkMute,
-    fontSize: fbType.small,
-    lineHeight: 18,
+    fontSize: fbType.body,
+    lineHeight: 22,
     fontFamily: fbFonts.sansRegular,
+    marginBottom: fbSpacing.x3,
   },
-  twoCol: {
-    flexDirection: 'row',
-    gap: fbSpacing.x3,
+  stack: {
+    gap: fbSpacing.x2,
+    marginBottom: fbSpacing.x4,
   },
-  twoColItem: {
-    flex: 1,
+  fieldLabel: {
+    color: fbColors.inkMute,
+    fontSize: 11,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    marginBottom: fbSpacing.x2,
   },
   field: {
-    gap: fbSpacing.x2,
+    marginBottom: fbSpacing.x1,
   },
-  label: {
+  fieldGap: {
+    height: fbSpacing.x4,
+  },
+  fieldPreview: {
     color: fbColors.inkMute,
-    fontSize: fbType.micro,
-    fontFamily: fbFonts.sansSemi,
-    fontWeight: fbWeights.semi,
-    letterSpacing: 0.84,
-    textTransform: 'uppercase',
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansRegular,
+    marginTop: fbSpacing.x1,
   },
   input: {
     minHeight: fbTouch.min,
+    paddingHorizontal: fbSpacing.x4,
+    paddingVertical: fbSpacing.x3,
     borderRadius: fbRadii.md,
     borderWidth: fbBorder.hairline,
     borderColor: fbColors.rule,
     backgroundColor: fbColors.surface,
-    paddingHorizontal: fbSpacing.x3,
     color: fbColors.ink,
     fontSize: fbType.body,
     fontFamily: fbFonts.sansRegular,
   },
   inputMultiline: {
-    minHeight: 116,
+    minHeight: 96,
     paddingTop: fbSpacing.x3,
-    lineHeight: 21,
   },
   flagToggle: {
-    minHeight: fbTouch.min,
     flexDirection: 'row',
     alignItems: 'center',
     gap: fbSpacing.x3,
+    paddingVertical: fbSpacing.x3,
+    paddingHorizontal: fbSpacing.x4,
     borderRadius: fbRadii.md,
     borderWidth: fbBorder.hairline,
     borderColor: fbColors.rule,
-    padding: fbSpacing.x3,
-    backgroundColor: fbColors.paper,
+    backgroundColor: fbColors.surface,
+    marginTop: fbSpacing.x3,
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: fbRadii.sm,
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: fbColors.inkMute,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: fbBorder.selected,
-    borderColor: fbColors.rule,
-    backgroundColor: fbColors.surface,
+    backgroundColor: 'transparent',
   },
   checkboxActive: {
-    backgroundColor: fbColors.ox,
-    borderColor: fbColors.ox,
+    backgroundColor: fbColors.ink,
+    borderColor: fbColors.ink,
   },
   flagCopy: {
     flex: 1,
@@ -527,6 +818,7 @@ const styles = StyleSheet.create({
   flagTitle: {
     color: fbColors.ink,
     fontSize: fbType.body,
+    lineHeight: 21,
     fontFamily: fbFonts.sansSemi,
     fontWeight: fbWeights.semi,
   },
@@ -534,27 +826,120 @@ const styles = StyleSheet.create({
     marginTop: fbSpacing.x1,
     color: fbColors.inkMute,
     fontSize: fbType.small,
-    fontFamily: fbFonts.sansRegular,
-  },
-  privateHelp: {
-    color: fbColors.inkMute,
-    fontSize: fbType.small,
     lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
   },
-  footer: {
+  attachGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: fbSpacing.x2,
-    paddingTop: fbSpacing.x2,
-    backgroundColor: fbColors.paper,
+    marginBottom: fbSpacing.x4,
   },
-  footerError: {
-    color: fbColors.ox,
-    fontSize: fbType.small,
+  attachSlot: {
+    flexBasis: '47.5%',
+    flexGrow: 1,
+    minHeight: 96,
+    borderRadius: fbRadii.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: fbSpacing.x4,
+  },
+  attachLabel: {
+    color: fbColors.ink,
+    fontSize: 13,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  attachComing: {
+    color: fbColors.inkMute,
+    fontSize: 10.5,
+    fontFamily: fbFonts.monoMedium,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  reviewCard: {
+    marginBottom: fbSpacing.x3,
+    borderTopWidth: 3,
+    borderTopColor: fbColors.ox,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x2,
+    paddingVertical: fbSpacing.x3,
+    paddingHorizontal: fbSpacing.x4,
+    backgroundColor: fbColors.paperDeep,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.ruleSoft,
+  },
+  reviewHeaderType: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  reviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: fbSpacing.x4,
+    paddingVertical: fbSpacing.x4,
+    rowGap: fbSpacing.x3,
+  },
+  reviewCell: {
+    width: '50%',
+  },
+  reviewKey: {
+    color: fbColors.inkMute,
+    fontSize: 10,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  reviewValue: {
+    marginTop: 3,
+    color: fbColors.ink,
+    fontSize: fbType.body,
     fontFamily: fbFonts.sansMedium,
     fontWeight: fbWeights.medium,
+  },
+  reviewBodyBlock: {
+    paddingHorizontal: fbSpacing.x4,
+    paddingBottom: fbSpacing.x4,
+  },
+  reviewBody: {
+    marginTop: fbSpacing.x1,
+    color: fbColors.inkSoft,
+    fontSize: fbType.body,
+    lineHeight: 22,
+    fontFamily: fbFonts.sansRegular,
+  },
+  caseFootnote: {
+    marginTop: fbSpacing.x6,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansRegular,
     textAlign: 'center',
   },
-  pressed: {
-    opacity: fbAlpha.pressedSubtle,
+  footer: {
+    gap: fbSpacing.x2,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  footerError: {
+    width: '100%',
+    color: fbColors.ox,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansRegular,
+    textAlign: 'center',
   },
 });
