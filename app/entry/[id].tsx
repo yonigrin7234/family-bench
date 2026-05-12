@@ -10,8 +10,10 @@ import {
 import {
   Chip,
   Display,
+  EntryMark,
   Icon,
   InfoCallout,
+  Mono,
   PillButton,
   Rule,
   Segment,
@@ -28,6 +30,7 @@ import {
   type ChipTone,
   type IconName,
 } from '@/components/ui/fb';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 import {
   formatDateLabel,
   getCapturedBody,
@@ -328,6 +331,7 @@ function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
 export default function EntryDetail() {
   const params = useLocalSearchParams();
   const entryId = getParam(params.id);
+  const { isMobile } = useResponsive();
   const updateEntryReview = useUpdateEntryReview();
   const createPlaceholderAttachment = useCreatePlaceholderAttachment();
   const createLocalAttachment = useCreateLocalAttachment();
@@ -474,8 +478,74 @@ export default function EntryDetail() {
     );
   }
 
+  const rightRail = !isMobile ? (
+    <View style={styles.rightRail}>
+      <Text style={styles.railKicker}>CHAIN OF CUSTODY</Text>
+      <View style={styles.railDivider} />
+      <View style={styles.railRow}>
+        <Text style={styles.railLabel}>Captured</Text>
+        <Mono size={11} dim>{entry.created_at?.slice(0, 16) || '—'}</Mono>
+      </View>
+      <View style={styles.railRow}>
+        <Text style={styles.railLabel}>Method</Text>
+        <Text style={styles.railValue}>{entry.capture_method || 'Manual'}</Text>
+      </View>
+      <View style={styles.railRow}>
+        <Text style={styles.railLabel}>Content hash</Text>
+        <Mono size={10} dim numberOfLines={1}>
+          {entry.content_hash ? `${entry.content_hash.slice(0, 12)}…` : '—'}
+        </Mono>
+      </View>
+      <View style={styles.railRow}>
+        <Text style={styles.railLabel}>Updated</Text>
+        <Mono size={11} dim>{entry.updated_at?.slice(0, 16) || '—'}</Mono>
+      </View>
+
+      <View style={styles.railSection}>
+        <Text style={styles.railKicker}>QUICK ACTIONS</Text>
+        <PillButton
+          tone={reviewed ? 'soft' : 'primary'}
+          size="md"
+          full
+          icon="check"
+          onPress={markReviewed}
+          disabled={reviewed}
+        >
+          {reviewed ? 'Reviewed' : 'Mark reviewed'}
+        </PillButton>
+        <View style={styles.railGap} />
+        <PillButton
+          tone="ghost"
+          size="md"
+          full
+          icon="scales"
+          onPress={() => router.push('/case-map' as never)}
+        >
+          Open Case Map
+        </PillButton>
+        <View style={styles.railGap} />
+        <PillButton
+          tone="ghost"
+          size="md"
+          full
+          icon="doc"
+          onPress={() => router.push({ pathname: '/export-prep', params: { entryId: entry.id } } as never)}
+        >
+          Preview JSON export
+        </PillButton>
+      </View>
+
+      <View style={styles.railSection}>
+        <Text style={styles.railKicker}>ENTRY ID</Text>
+        <Mono size={11} dim numberOfLines={2}>{entry.id}</Mono>
+      </View>
+    </View>
+  ) : undefined;
+
   return (
     <CaseScreen
+      desktopMaxWidth={920}
+      rightRail={rightRail}
       footer={
         mode === 'edit' ? (
           <View style={styles.footer}>
@@ -490,44 +560,75 @@ export default function EntryDetail() {
         <PillButton tone="ghost" size="sm" icon="caret" onPress={() => router.back()}>
           Back
         </PillButton>
+        <View style={styles.titleHeader}>
+          <EntryMark type={entry.entry_type} size={36} />
+          <View style={styles.titleHeaderCopy}>
+            <Text style={styles.headerKicker}>{option.label.toUpperCase()}</Text>
+            <Display size={isMobile ? 26 : 30} style={styles.title}>
+              {entry.title || option.defaultTitle}
+            </Display>
+          </View>
+        </View>
+        <Text style={styles.subtitle}>
+          {formatDateLabel(entry.event_date, entry.event_time)} · {fbLegalCopy.legalInformationNotAdvice}
+        </Text>
         <View style={styles.kickerRow}>
-          <Chip tone={option.tone as ChipTone} outline={false}>
-            {option.shortLabel}
-          </Chip>
           {reviewed ? (
             <Chip tone="forest" outline={false}>
               Reviewed
             </Chip>
-          ) : null}
+          ) : (
+            <Chip tone="amber" outline={false}>
+              Needs review
+            </Chip>
+          )}
           {entry.is_flagged ? (
             <Chip tone="ox" outline={false}>
-              Flagged
+              {entry.flag_severity ? `Flagged · ${entry.flag_severity}` : 'Flagged'}
             </Chip>
           ) : null}
           {filingLinkCount > 0 ? (
             <Chip tone="forest" outline={false}>
-              Linked to filing
+              {filingLinkCount === 1 ? 'Linked to 1 filing' : `Linked to ${filingLinkCount} filings`}
             </Chip>
           ) : null}
         </View>
-        <Display size={31} style={styles.title}>
-          {entry.title || option.defaultTitle}
-        </Display>
-        <Text style={styles.subtitle}>
-          {formatDateLabel(entry.event_date, entry.event_time)} · {fbLegalCopy.legalInformationNotAdvice}
-        </Text>
       </View>
 
-      <SoftCard p={16} style={styles.section}>
-        <SectionTitle icon={option.icon as IconName} title="Record details" />
-        <View style={styles.detailGrid}>
-          <DetailRow label="Entry type" value={option.label} />
-          <DetailRow label="Date and time" value={formatDateLabel(entry.event_date, entry.event_time)} />
-          <DetailRow label="Child" value={child?.name} />
-          <DetailRow label="Custody period" value={entry.custody_period} />
-          <DetailRow label="People present" value="Not recorded in MVP" />
-          <DetailRow label="Review status" value={reviewed ? 'Reviewed' : 'Needs review'} />
-          <DetailRow label="Severity / flag" value={statusLabel} />
+      {linkedCourtOrderProvision ? (
+        <View style={styles.linkedBanner}>
+          <Icon name="link" size={14} color={fbColors.ox} />
+          <View style={styles.linkedBannerCopy}>
+            <Text style={styles.linkedBannerTitle}>
+              Linked to {linkedCourtOrder?.order_title || 'court order'} · {linkedCourtOrderProvision.label}
+            </Text>
+            <Text style={styles.linkedBannerSub}>
+              {provisionCategoryLabel(linkedCourtOrderProvision.category)} ·{' '}
+              {getCourtOrderProvisionStatus(linkedCourtOrderProvision)}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      <SoftCard p={0} style={styles.section}>
+        <View style={styles.factsHeader}>
+          <Icon name={option.icon as IconName} size={15} color={fbColors.ink} />
+          <Text style={styles.factsHeaderTitle}>The facts</Text>
+        </View>
+        <View style={styles.factsGrid}>
+          {[
+            ['Date', formatDateLabel(entry.event_date, entry.event_time)],
+            ['Type', option.label],
+            ['Child', child?.name || 'Not recorded'],
+            ['Custody period', entry.custody_period || 'Not recorded'],
+            ['Status', statusLabel],
+            ['Review', reviewed ? 'Reviewed' : 'Needs review'],
+          ].map(([key, value], i) => (
+            <View key={i} style={styles.factsCell}>
+              <Text style={styles.factsCellLabel}>{key.toUpperCase()}</Text>
+              <Text style={styles.factsCellValue}>{value || 'Not recorded'}</Text>
+            </View>
+          ))}
         </View>
       </SoftCard>
 
@@ -788,18 +889,20 @@ export default function EntryDetail() {
         </PillButton>
       </SoftCard>
 
-      <View style={styles.reviewActions}>
-        <PillButton
-          tone={reviewed ? 'soft' : 'primary'}
-          size="lg"
-          full
-          icon="check"
-          onPress={markReviewed}
-          disabled={reviewed}
-        >
-          {reviewed ? 'Reviewed' : 'Mark reviewed'}
-        </PillButton>
-      </View>
+      {isMobile ? (
+        <View style={styles.reviewActions}>
+          <PillButton
+            tone={reviewed ? 'soft' : 'primary'}
+            size="lg"
+            full
+            icon="check"
+            onPress={markReviewed}
+            disabled={reviewed}
+          >
+            {reviewed ? 'Reviewed' : 'Mark reviewed'}
+          </PillButton>
+        </View>
+      ) : null}
     </CaseScreen>
   );
 }
@@ -807,6 +910,25 @@ export default function EntryDetail() {
 const styles = StyleSheet.create({
   header: {
     gap: fbSpacing.x3,
+  },
+  titleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x3,
+    marginTop: fbSpacing.x2,
+  },
+  titleHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerKicker: {
+    color: fbColors.ox,
+    fontSize: 11,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
   kickerRow: {
     flexDirection: 'row',
@@ -816,6 +938,116 @@ const styles = StyleSheet.create({
   },
   title: {
     lineHeight: 34,
+  },
+  linkedBanner: {
+    marginTop: fbSpacing.x4,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: fbRadii.md,
+    backgroundColor: '#F4E3DE',
+    borderWidth: fbBorder.hairline,
+    borderColor: 'rgba(180,64,40,0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  linkedBannerCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  linkedBannerTitle: {
+    color: fbColors.ink,
+    fontSize: 12.5,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  linkedBannerSub: {
+    marginTop: 1,
+    color: fbColors.inkSoft,
+    fontSize: 11,
+    fontFamily: fbFonts.sansRegular,
+  },
+  factsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: fbSpacing.x3,
+    paddingHorizontal: fbSpacing.x4,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.ruleSoft,
+  },
+  factsHeaderTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  factsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: fbSpacing.x4,
+    paddingVertical: fbSpacing.x4,
+    rowGap: fbSpacing.x3,
+  },
+  factsCell: {
+    width: '50%',
+  },
+  factsCellLabel: {
+    color: fbColors.inkMute,
+    fontSize: 10,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  factsCellValue: {
+    marginTop: 3,
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansMedium,
+    fontWeight: fbWeights.medium,
+  },
+  rightRail: {
+    paddingHorizontal: fbSpacing.x4,
+    paddingTop: fbSpacing.x4,
+    gap: fbSpacing.x2,
+  },
+  railKicker: {
+    color: fbColors.inkMute,
+    fontSize: 10.5,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.84,
+    textTransform: 'uppercase',
+    marginBottom: fbSpacing.x2,
+  },
+  railDivider: {
+    height: fbBorder.hairline,
+    backgroundColor: fbColors.ruleSoft,
+    marginBottom: fbSpacing.x2,
+  },
+  railRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  railLabel: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansMedium,
+    fontWeight: fbWeights.medium,
+  },
+  railSection: {
+    marginTop: fbSpacing.x5,
+  },
+  railGap: {
+    height: fbSpacing.x2,
   },
   subtitle: {
     color: fbColors.inkMute,
