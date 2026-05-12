@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Chip,
-  Icon,
+  EntryMark,
+  Mono,
   Rule,
   SoftCard,
   fbAlpha,
@@ -11,7 +12,6 @@ import {
   fbType,
   fbWeights,
   type ChipTone,
-  type IconName,
 } from '@/components/ui/fb';
 import {
   formatDateLabel,
@@ -41,12 +41,12 @@ export function EntryCard({
     <SoftCard p={compact ? 14 : 16} style={styles.card}>
       <View style={styles.header}>
         <View style={styles.typeRow}>
-          <View style={styles.iconWrap}>
-            <Icon name={option.icon as IconName} size={15} color={fbColors.ink} />
-          </View>
+          <EntryMark type={entry.entry_type} size={compact ? 28 : 32} />
           <View style={styles.headerCopy}>
             <Text style={styles.title}>{entry.title || option.defaultTitle}</Text>
-            <Text style={styles.date}>{formatDateLabel(entry.event_date, entry.event_time)}</Text>
+            <Mono dim size={10.5} style={styles.date}>
+              {formatDateLabel(entry.event_date, entry.event_time)}
+            </Mono>
           </View>
         </View>
         <View style={styles.chips}>
@@ -84,7 +84,11 @@ export function EntryCard({
         </Text>
       ) : null}
 
-      {entry.location_name ? <Text style={styles.meta}>Location: {entry.location_name}</Text> : null}
+      {entry.location_name ? (
+        <Mono dim size={10.5} style={styles.meta}>
+          Location: {entry.location_name}
+        </Mono>
+      ) : null}
 
       {hasPrivateNote && !compact ? (
         <>
@@ -129,14 +133,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: fbSpacing.x3,
   },
-  iconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: fbColors.paperDeep,
-  },
   headerCopy: {
     flex: 1,
   },
@@ -149,9 +145,6 @@ const styles = StyleSheet.create({
   },
   date: {
     marginTop: fbSpacing.x1,
-    color: fbColors.inkMute,
-    fontSize: fbType.small,
-    fontFamily: fbFonts.sansRegular,
   },
   chips: {
     alignItems: 'flex-end',
@@ -164,9 +157,7 @@ const styles = StyleSheet.create({
     fontFamily: fbFonts.sansRegular,
   },
   meta: {
-    color: fbColors.inkMute,
-    fontSize: fbType.small,
-    fontFamily: fbFonts.sansRegular,
+    textTransform: 'uppercase',
   },
   rule: {
     marginTop: fbSpacing.x1,

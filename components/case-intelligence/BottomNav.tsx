@@ -41,6 +41,7 @@ export function BottomNav() {
               color={active ? fbColors.ink : fbColors.inkMute}
             />
             <Text style={[styles.label, active && styles.labelActive]}>{item.label}</Text>
+            {active ? <View style={styles.mobileActiveRule} /> : null}
           </Pressable>
         );
       })}
@@ -63,7 +64,14 @@ export function DesktopSidebar() {
         </View>
       </View>
 
+      <View style={styles.caseSpine}>
+        <Text style={styles.caseSpineLabel}>ACTIVE CASE</Text>
+        <Text style={styles.caseSpineTitle}>Local case workspace</Text>
+        <Text style={styles.caseSpineMeta}>Shared store · offline first</Text>
+      </View>
+
       <View style={styles.sidebarNav}>
+        <Text style={styles.navSectionLabel}>WORKSPACE</Text>
         {DESKTOP_NAV_ITEMS.map((item) => {
           const active = isSurfaceRouteActive(pathname, item, 'desktop');
 
@@ -117,6 +125,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: fbSpacing.x1,
+    position: 'relative',
   },
   pressed: {
     opacity: fbAlpha.pressed,
@@ -131,26 +140,33 @@ const styles = StyleSheet.create({
   labelActive: {
     color: fbColors.ink,
   },
+  mobileActiveRule: {
+    position: 'absolute',
+    top: 0,
+    width: 18,
+    height: 2,
+    backgroundColor: fbColors.ox,
+  },
   sidebar: {
-    width: 252,
+    width: 276,
     minHeight: '100%',
-    paddingHorizontal: fbSpacing.x4,
-    paddingTop: fbSpacing.x6,
-    paddingBottom: fbSpacing.x5,
     borderRightWidth: fbBorder.hairline,
     borderRightColor: fbColors.rule,
-    backgroundColor: fbColors.surface,
+    backgroundColor: fbColors.paperDeep,
   },
   sidebarBrand: {
-    minHeight: 54,
+    minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
     gap: fbSpacing.x3,
+    paddingHorizontal: fbSpacing.x5,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.rule,
   },
   brandMark: {
-    width: 38,
-    height: 38,
-    borderRadius: fbRadii.md,
+    width: 36,
+    height: 36,
+    borderRadius: fbRadii.sm,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: fbColors.ink,
@@ -178,23 +194,66 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontFamily: fbFonts.sansRegular,
   },
-  sidebarNav: {
-    flex: 1,
-    marginTop: fbSpacing.x6,
+  caseSpine: {
+    paddingHorizontal: fbSpacing.x5,
+    paddingVertical: fbSpacing.x4,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.rule,
     gap: fbSpacing.x1,
   },
+  caseSpineLabel: {
+    color: fbColors.ox,
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 1,
+  },
+  caseSpineTitle: {
+    color: fbColors.ink,
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  caseSpineMeta: {
+    color: fbColors.inkMute,
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: fbFonts.sansRegular,
+  },
+  sidebarNav: {
+    flex: 1,
+    paddingHorizontal: fbSpacing.x3,
+    paddingTop: fbSpacing.x4,
+    gap: fbSpacing.x1,
+  },
+  navSectionLabel: {
+    paddingHorizontal: fbSpacing.x3,
+    paddingBottom: fbSpacing.x2,
+    color: fbColors.inkMute,
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 1,
+  },
   sidebarItem: {
-    minHeight: fbTouch.min,
-    borderRadius: fbRadii.md,
+    minHeight: 38,
+    borderRadius: fbRadii.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: fbSpacing.x3,
     paddingHorizontal: fbSpacing.x3,
+    borderLeftWidth: 2,
+    borderLeftColor: 'transparent',
   },
   sidebarItemActive: {
-    backgroundColor: fbColors.paperDeep,
+    backgroundColor: fbColors.surface,
     borderWidth: fbBorder.hairline,
     borderColor: fbColors.rule,
+    borderLeftWidth: 2,
+    borderLeftColor: fbColors.ox,
   },
   sidebarLabel: {
     flex: 1,
@@ -210,9 +269,10 @@ const styles = StyleSheet.create({
     fontWeight: fbWeights.semi,
   },
   sidebarStatus: {
+    margin: fbSpacing.x3,
     padding: fbSpacing.x3,
-    borderRadius: fbRadii.md,
-    backgroundColor: fbColors.paperDeep,
+    borderRadius: fbRadii.sm,
+    backgroundColor: fbColors.surface,
     borderWidth: fbBorder.hairline,
     borderColor: fbColors.ruleSoft,
   },

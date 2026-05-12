@@ -68,6 +68,7 @@ export function PillButton({
           minHeight: fbTouch.min,
           alignSelf: full ? 'stretch' : 'flex-start',
           opacity: disabled ? fbAlpha.disabled : pressed ? fbAlpha.pressed : 1,
+          transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
         },
         style,
       ]}

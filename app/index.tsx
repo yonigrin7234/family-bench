@@ -15,7 +15,6 @@ import {
   PillButton,
   ProgressBar,
   Rule,
-  Seal,
   SoftCard,
   fbAlpha,
   fbBorder,
@@ -33,8 +32,6 @@ import {
   type Entry,
   type EntryTypeValue,
   formatDateLabel,
-  getRelativeDueLabel,
-  isKeyDatePriority,
   useCaseIntelligenceHome,
   useCasePatterns,
   type FamilyBenchCase,
@@ -42,6 +39,7 @@ import {
   type NextStep,
   type Person,
 } from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 function ChromeButton({
   icon,
@@ -91,16 +89,6 @@ function firstName(person: Person | null) {
   return person?.display_name.split(/\s+/)[0] || 'there';
 }
 
-function initials(person: Person | null) {
-  if (!person?.display_name) return '';
-  return person.display_name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
-}
-
 function caseCaption(activeCase: FamilyBenchCase | null) {
   return activeCase?.title || activeCase?.case_number || 'Family Bench case';
 }
@@ -114,25 +102,37 @@ function caseMeta(activeCase: FamilyBenchCase | null) {
 
 function CaseCard({
   activeCase,
-  primaryPerson,
+  primaryPerson: _primaryPerson,
 }: {
   activeCase: FamilyBenchCase | null;
   primaryPerson: Person | null;
 }) {
-  const personInitials = initials(primaryPerson);
-
   return (
-    <SoftCard p={14} style={styles.caseCard}>
-      <Seal size={38} label="FB" style={styles.caseSeal} />
-      <View style={styles.caseCopy}>
-        <Display italic size={16} style={styles.caseCaption}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Switch case"
+      style={({ pressed }) => [styles.caseStrip, pressed && styles.pressed]}
+    >
+      <View style={styles.caseStripSeal}>
+        <Text style={styles.caseStripSealText}>FB</Text>
+      </View>
+      <View style={styles.caseStripCopy}>
+        <Display italic size={15} style={styles.caseStripCaption}>
           {caseCaption(activeCase)}
         </Display>
-        <Text style={styles.caseMeta}>{caseMeta(activeCase)}</Text>
+        <Text style={styles.caseStripMeta}>{caseMeta(activeCase)}</Text>
       </View>
-      {personInitials ? <Text style={styles.caseInitials}>{personInitials}</Text> : null}
-    </SoftCard>
+      <Icon name="caretDown" size={12} color={fbColors.inkMute} />
+    </Pressable>
   );
+}
+
+function getDaysToDate(dateStr?: string | null): number {
+  if (!dateStr) return 0;
+  const target = new Date(dateStr).getTime();
+  if (Number.isNaN(target)) return 0;
+  const diff = target - Date.now();
+  return Math.max(0, Math.ceil(diff / 86400000));
 }
 
 function FilingNextStep({ nextStep }: { nextStep: NextStep }) {
@@ -162,25 +162,24 @@ function FilingNextStep({ nextStep }: { nextStep: NextStep }) {
 
 function HearingStrip({ keyDate }: { keyDate?: KeyDate }) {
   if (!keyDate) return null;
-  const dueLabel = getRelativeDueLabel(keyDate.event_date);
-  const priority = isKeyDatePriority(keyDate);
+  const days = getDaysToDate(keyDate.event_date);
+  const dateLabel = formatDateLabel(keyDate.event_date, keyDate.event_time);
 
   return (
-    <SoftCard p={14} style={styles.hearingStrip}>
-      <View style={styles.hearingHeader}>
-        <Text style={styles.hearingValue}>
-          {dueLabel ? `${dueLabel} · ${keyDate.title}` : keyDate.title}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${days} days to ${keyDate.title}`}
+      style={({ pressed }) => [styles.countdownStrip, pressed && styles.pressed]}
+    >
+      <Text style={styles.countdownNumber}>{days}</Text>
+      <View style={styles.countdownCopy}>
+        <Text style={styles.countdownTitle}>days to hearing</Text>
+        <Text style={styles.countdownMeta}>
+          {dateLabel} · {keyDate.title}
         </Text>
-        {priority ? (
-          <Chip tone="amber" outline={false}>
-            Priority
-          </Chip>
-        ) : null}
       </View>
-      <Text style={styles.hearingDate}>
-        {formatDateLabel(keyDate.event_date, keyDate.event_time)}
-      </Text>
-    </SoftCard>
+      <Icon name="chevR" size={14} color={fbColors.inkMute} />
+    </Pressable>
   );
 }
 
@@ -308,18 +307,6 @@ function QuickCapture() {
     <View style={styles.quickSection}>
       <Text style={styles.sectionLabel}>QUICK CAPTURE</Text>
 
-      <View style={styles.captureLauncher}>
-        <PillButton
-          icon="plus"
-          tone="primary"
-          size="lg"
-          full
-          onPress={() => openCapture()}
-        >
-          Log new entry
-        </PillButton>
-      </View>
-
       <View style={styles.captureGrid}>
         <CaptureTile
           icon="home"
@@ -402,12 +389,70 @@ function RecentEntries({
   );
 }
 
-function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
+function HomeContextRail({
+  activeCase,
+  nextKeyDate,
+  entriesCount,
+  flaggedCount,
+  attachmentCount,
+  filingPackageCount,
+}: {
+  activeCase: FamilyBenchCase | null;
+  nextKeyDate?: KeyDate;
+  entriesCount: number;
+  flaggedCount: number;
+  attachmentCount: number;
+  filingPackageCount: number;
+}) {
   return (
-    <CaseScreen>
-      <TopChrome />
+    <View style={styles.contextRail}>
+      <Text style={styles.sectionLabel}>CASE CONTEXT</Text>
+      <Display italic size={19} style={styles.contextCaption}>
+        {caseCaption(activeCase)}
+      </Display>
+      <Text style={styles.contextMeta}>{caseMeta(activeCase) || 'Local case details'}</Text>
+      <Rule />
+      <View style={styles.contextStatStack}>
+        <View style={styles.contextStatRow}>
+          <Text style={styles.contextStatLabel}>Entries</Text>
+          <Text style={styles.contextStatValue}>{entriesCount}</Text>
+        </View>
+        <View style={styles.contextStatRow}>
+          <Text style={styles.contextStatLabel}>Flagged</Text>
+          <Text style={styles.contextStatValue}>{flaggedCount}</Text>
+        </View>
+        <View style={styles.contextStatRow}>
+          <Text style={styles.contextStatLabel}>Attachments</Text>
+          <Text style={styles.contextStatValue}>{attachmentCount}</Text>
+        </View>
+        <View style={styles.contextStatRow}>
+          <Text style={styles.contextStatLabel}>Filing packages</Text>
+          <Text style={styles.contextStatValue}>{filingPackageCount}</Text>
+        </View>
+      </View>
+      <Rule />
+      <Text style={styles.contextRailTitle}>Next date</Text>
+      <Text style={styles.contextRailText}>
+        {nextKeyDate
+          ? `${nextKeyDate.title} · ${formatDateLabel(nextKeyDate.event_date, nextKeyDate.event_time)}`
+          : 'No upcoming date recorded locally.'}
+      </Text>
+      <Rule />
+      <Text style={styles.contextRailText}>
+        Desktop is for organizing the local case file. Mobile remains optimized for quick capture.
+      </Text>
+    </View>
+  );
+}
 
-      <View style={styles.setupHero}>
+function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
+  const { isMobile } = useResponsive();
+
+  return (
+    <CaseScreen desktopMaxWidth={820}>
+      {isMobile ? <TopChrome /> : null}
+
+      <View style={[styles.setupHero, !isMobile && styles.setupHeroDesktop]}>
         <View style={styles.kickerRow}>
           <Chip tone="forest" outline={false}>
             Local setup
@@ -454,44 +499,79 @@ export default function Home() {
   const { home, snapshot, filingEntryLinkCounts, hasUserCaseSetup, hasHydrated, isDemoCase } =
     useCaseIntelligenceHome();
   const { activePatterns } = useCasePatterns();
+  const { isMobile } = useResponsive();
 
   if (hasHydrated && !hasUserCaseSetup) {
     return <FirstRunSetup demoCase={isDemoCase} />;
   }
 
-  return (
-    <CaseScreen>
-      <TopChrome />
+  const filingPackageCount = home.activeCase
+    ? snapshot.filingPackages.filter(
+        (filingPackage) =>
+          !filingPackage.deleted_at && filingPackage.case_id === home.activeCase?.id,
+      ).length
+    : 0;
 
-      <View style={styles.greetingBlock}>
-        <Display italic size={31} style={styles.greeting}>
-          Good morning, {firstName(home.primaryPerson)}
-        </Display>
-        <Text style={styles.subGreeting}>Here is today.</Text>
+  return (
+    <CaseScreen
+      desktopMaxWidth={1160}
+      contentStyle={!isMobile ? styles.homeDesktopContent : undefined}
+      rightRail={
+        !isMobile ? (
+          <HomeContextRail
+            activeCase={home.activeCase}
+            nextKeyDate={home.upcomingKeyDates[0]}
+            entriesCount={snapshot.entries.filter((entry) => !entry.deleted_at).length}
+            flaggedCount={home.flaggedEntries.length}
+            attachmentCount={snapshot.evidenceAttachments.filter((attachment) => !attachment.deleted_at).length}
+            filingPackageCount={filingPackageCount}
+          />
+        ) : undefined
+      }
+    >
+      {isMobile ? <TopChrome /> : null}
+
+      <View style={!isMobile ? styles.desktopHeroGrid : undefined}>
+        <View style={!isMobile ? styles.desktopHeroPrimary : undefined}>
+          <View style={[styles.greetingBlock, !isMobile && styles.desktopGreetingBlock]}>
+            <Text style={styles.desktopKicker}>
+              Good morning, {firstName(home.primaryPerson)}
+            </Text>
+            <Display
+              size={isMobile ? 28 : 40}
+              style={[styles.greeting, !isMobile && styles.desktopGreeting]}
+            >
+              Here&apos;s today.
+            </Display>
+          </View>
+
+          <CaseCard activeCase={home.activeCase} primaryPerson={home.primaryPerson} />
+          <FilingNextStep nextStep={home.nextStep} />
+          <HearingStrip keyDate={home.upcomingKeyDates[0]} />
+        </View>
+
+        {!isMobile ? (
+          <View style={styles.desktopHeroSecondary}>
+            <AdvisorLauncher activeCase={home.activeCase} flaggedCount={home.flaggedEntries.length} />
+            <PatternsLauncher patternCount={activePatterns.length} />
+            <FilingBuilderLauncher packageCount={filingPackageCount} />
+          </View>
+        ) : null}
       </View>
 
-      <CaseCard activeCase={home.activeCase} primaryPerson={home.primaryPerson} />
-      <FilingNextStep nextStep={home.nextStep} />
-      <HearingStrip keyDate={home.upcomingKeyDates[0]} />
-      <AdvisorLauncher activeCase={home.activeCase} flaggedCount={home.flaggedEntries.length} />
-      <PatternsLauncher patternCount={activePatterns.length} />
-      <FilingBuilderLauncher
-        packageCount={
-          home.activeCase
-            ? snapshot.filingPackages.filter(
-                (filingPackage) =>
-                  !filingPackage.deleted_at && filingPackage.case_id === home.activeCase?.id,
-              ).length
-            : 0
-        }
-      />
       <Rule style={styles.captureRule} />
-      <QuickCapture />
-      <RecentEntries
-        entries={home.recentEntries}
-        attachments={snapshot.evidenceAttachments}
-        filingEntryLinkCounts={filingEntryLinkCounts}
-      />
+      <View style={!isMobile ? styles.desktopLowerGrid : undefined}>
+        <View style={!isMobile ? styles.desktopQuickColumn : undefined}>
+          <QuickCapture />
+        </View>
+        <View style={!isMobile ? styles.desktopRecentColumn : undefined}>
+          <RecentEntries
+            entries={home.recentEntries}
+            attachments={snapshot.evidenceAttachments}
+            filingEntryLinkCounts={filingEntryLinkCounts}
+          />
+        </View>
+      </View>
     </CaseScreen>
   );
 }
@@ -513,6 +593,9 @@ const styles = StyleSheet.create({
   setupHero: {
     marginTop: fbSpacing.x8,
     gap: fbSpacing.x3,
+  },
+  setupHeroDesktop: {
+    marginTop: 0,
   },
   setupTitle: {
     lineHeight: 34,
@@ -576,8 +659,22 @@ const styles = StyleSheet.create({
   greetingBlock: {
     marginTop: fbSpacing.x8,
   },
+  desktopGreetingBlock: {
+    marginTop: 0,
+  },
+  desktopKicker: {
+    color: fbColors.inkMute,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansMedium,
+    fontWeight: fbWeights.medium,
+    marginBottom: fbSpacing.x1,
+  },
   greeting: {
     lineHeight: 34,
+  },
+  desktopGreeting: {
+    lineHeight: 44,
   },
   subGreeting: {
     marginTop: 2,
@@ -585,64 +682,115 @@ const styles = StyleSheet.create({
     fontSize: fbType.body,
     fontFamily: fbFonts.sansRegular,
   },
-  caseCard: {
-    marginTop: fbSpacing.x5 - 2,
-    minHeight: 70,
-    borderRadius: fbRadii.xl,
+  homeDesktopContent: {
+    alignSelf: 'stretch',
+  },
+  desktopHeroGrid: {
+    flexDirection: 'row',
+    gap: fbSpacing.x5,
+    alignItems: 'stretch',
+  },
+  desktopHeroPrimary: {
+    flex: 1.35,
+    minWidth: 0,
+  },
+  desktopHeroSecondary: {
+    flex: 0.85,
+    minWidth: 280,
+    paddingTop: fbSpacing.x8,
+  },
+  desktopLowerGrid: {
+    flexDirection: 'row',
+    gap: fbSpacing.x6,
+    alignItems: 'flex-start',
+  },
+  desktopQuickColumn: {
+    flex: 0.82,
+    minWidth: 260,
+  },
+  desktopRecentColumn: {
+    flex: 1.18,
+    minWidth: 0,
+  },
+  caseStrip: {
+    marginTop: fbSpacing.x4,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: fbSpacing.x3,
+    gap: 10,
   },
-  caseSeal: {
-    borderRadius: fbRadii.md - 2,
+  caseStripSeal: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: fbColors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  caseCopy: {
-    flex: 1,
-  },
-  caseCaption: {
-    lineHeight: 19,
-  },
-  caseMeta: {
-    marginTop: 3,
-    color: fbColors.inkMute,
-    fontSize: 10.5,
-    fontFamily: fbFonts.monoMedium,
-    textTransform: 'uppercase',
-  },
-  caseInitials: {
-    color: fbColors.ox,
-    fontSize: 11,
+  caseStripSealText: {
+    color: fbColors.paper,
+    fontSize: 12,
     fontFamily: fbFonts.sansSemi,
     fontWeight: fbWeights.semi,
-    letterSpacing: 0.8,
+    letterSpacing: -0.4,
+  },
+  caseStripCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  caseStripCaption: {
+    lineHeight: 18,
+  },
+  caseStripMeta: {
+    marginTop: 1,
+    color: fbColors.inkMute,
+    fontSize: 10,
+    fontFamily: fbFonts.monoMedium,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   nextStepWrap: {
     marginTop: fbSpacing.x3,
   },
-  hearingStrip: {
+  countdownStrip: {
     marginTop: fbSpacing.x3,
-    borderRadius: fbRadii.xl,
-    backgroundColor: fbColors.paperDeep,
-  },
-  hearingHeader: {
-    minHeight: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: fbRadii.lg,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: fbSpacing.x2,
+    gap: 14,
   },
-  hearingValue: {
-    flex: 1,
+  countdownNumber: {
     color: fbColors.ink,
-    fontSize: 15,
+    fontSize: 44,
+    lineHeight: 44,
     fontFamily: fbFonts.sansSemi,
     fontWeight: fbWeights.semi,
-    letterSpacing: -0.18,
+    letterSpacing: -1.8,
   },
-  hearingDate: {
-    marginTop: fbSpacing.x1,
+  countdownCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  countdownTitle: {
+    color: fbColors.ink,
+    fontSize: 14,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  countdownMeta: {
+    marginTop: 2,
     color: fbColors.inkMute,
-    fontSize: fbType.small,
+    fontSize: 12,
     fontFamily: fbFonts.sansRegular,
   },
   advisorPressable: {
@@ -760,6 +908,59 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     marginTop: fbSpacing.x1,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  contextRail: {
+    gap: fbSpacing.x3,
+    padding: fbSpacing.x4,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+  },
+  contextCaption: {
+    lineHeight: 23,
+  },
+  contextMeta: {
+    color: fbColors.inkMute,
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: fbFonts.monoMedium,
+    textTransform: 'uppercase',
+  },
+  contextStatStack: {
+    gap: fbSpacing.x2,
+  },
+  contextStatRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  contextStatLabel: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  contextStatValue: {
+    color: fbColors.ink,
+    fontSize: 18,
+    lineHeight: 22,
+    fontFamily: fbFonts.monoSemi,
+    fontWeight: fbWeights.semi,
+  },
+  contextRailTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 20,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  contextRailText: {
     color: fbColors.inkMute,
     fontSize: fbType.small,
     lineHeight: 18,

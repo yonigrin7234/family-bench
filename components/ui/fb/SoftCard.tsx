@@ -28,6 +28,7 @@ export function SoftCard({
           borderWidth: accent ? fbBorder.selected : fbBorder.hairline,
           borderColor: accent ? `${fbColors.ox}4D` : fbColors.rule,
           padding: p,
+          overflow: 'hidden',
         },
         style,
       ]}
