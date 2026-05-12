@@ -1,5 +1,12 @@
 # Feature Surface Split
 
+> The canonical product spec is `docs/product-spec.md`. This mapping
+> originally tracked the 51-section feature list and remains useful for
+> "where does feature X live" questions. Spec sections (1–79) map
+> approximately 1:1 to feature-list sections for product capabilities,
+> with the spec adding flow/state/behavior detail beyond surface
+> placement.
+
 Source-of-truth mapping from `docs/family-bench-complete-feature-list.md`
 to the two surfaces defined in `docs/surface-architecture.md`. For every
 one of the 51 feature sections, this doc states whether it lives on

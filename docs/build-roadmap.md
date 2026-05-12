@@ -1,17 +1,59 @@
 # Build Roadmap
 
-Cross-references `docs/family-bench-complete-feature-list.md` (51 sections)
-against the current implementation, then groups remaining work into
-execution phases. This is the working contract for "what to build next"
-once parity polish is done.
+Cross-references the canonical product spec against the current
+implementation, then groups remaining work into execution phases. This
+is the working contract for "what to build next" once parity polish is
+done.
+
+## Authoritative spec
+
+`docs/product-spec.md` is the **canonical product specification**. It
+defines:
+
+- **Part I** (sections 1–50) — what the product IS: identity, principles,
+  personas, the 5 core user moments, data model, entry system, capture
+  methods, forensic evidence layer, evidence org, filings, court forms,
+  reports, calculator, automated calculations, AI advisor, diagnostic,
+  document intake, court orders, key dates, notifications, integrations,
+  e-filing, service of process, practitioner sharing, pattern detection,
+  memory, security, DV/safety, accessibility, localization, data
+  management, offline, subscription, account lifecycle, support,
+  analytics, multi-child/case, court-specific workflows, platforms, AI
+  inventory, tone/voice rules, legal grounding, collaboration,
+  versioning, scope boundaries, build-order philosophy, success
+  definition.
+- **Part II** (sections 51–79) — what the product DOES: account flow,
+  case setup flow, entry capture flows, voice-to-entry flow detail,
+  filing assembly, form fill, declaration drafting, e-filing,
+  service-of-process flow, document intake, advisor conversation,
+  diagnostic flow, pattern detection cycle, practitioner invitation,
+  subscription lifecycle, account deletion, panic activation, memory
+  formation, forensic metadata capture timing, sync & offline, AI
+  validation pipeline, notification triggers, state machines,
+  calculation behaviors, error handling, background processes,
+  concurrency, security events, edge cases.
+
+When any code change has product implications, it must be consistent
+with the spec. When the spec is silent on a behavior, prefer to extend
+the spec before shipping a behavior.
 
 ## Companion docs
 
-- `docs/family-bench-complete-feature-list.md` — every feature the product does
-- `docs/feature-surface-split.md` — which surface owns each section
+- `docs/product-spec.md` — **canonical spec (this is the source of truth)**
+- `docs/family-bench-complete-feature-list.md` — short-form feature inventory (predates the full spec; still useful as a flat checklist; cross-references product-spec sections)
+- `docs/feature-surface-split.md` — which surface owns each section (mobile / desktop / both)
 - `docs/surface-architecture.md` — per-route capability matrix
 - `docs/prototype-parity-plan.md` — parity rules + currently deferred items
 - `lib/surface/surfaceRegistry.ts` — typed per-route metadata
+
+## How section numbers map
+
+The short-form feature list (51 sections) and the canonical spec (79
+sections, Parts I + II) overlap but are not identical. The feature list
+focuses on **capabilities**; the spec covers **capabilities + flows +
+state + behaviors**. The build phases below reference feature-list
+section numbers for continuity; each phase also notes which spec
+sections it implements.
 
 ## Status legend
 

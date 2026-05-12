@@ -1,5 +1,11 @@
 # Family Bench — Complete Feature List
 
+> **Canonical product spec is now `docs/product-spec.md` (Parts I and II,
+> 79 sections).** This shorter feature list (51 sections) predates the
+> full spec and remains useful as a flat "what does the product do"
+> inventory. For product behaviors, flows, state machines, error
+> handling, and edge cases, always read `docs/product-spec.md` first.
+
 This document describes the complete long-term Family Bench product scope. Not all features are currently implemented.
 
 Current implemented MVP includes:
