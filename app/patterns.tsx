@@ -612,7 +612,7 @@ export default function Patterns() {
       }
     >
       <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Patterns
         </Display>
         <Text style={styles.subtitle}>

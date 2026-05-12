@@ -463,7 +463,7 @@ function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
             </Chip>
           ) : null}
         </View>
-        <Display italic size={32} style={styles.setupTitle}>
+        <Display size={32} style={styles.setupTitle}>
           Set up your local case
         </Display>
         <Text style={styles.setupBody}>
@@ -501,8 +501,11 @@ export default function Home() {
   const { activePatterns } = useCasePatterns();
   const { isMobile } = useResponsive();
 
-  if (hasHydrated && !hasUserCaseSetup) {
-    return <FirstRunSetup demoCase={isDemoCase} />;
+  // Block on FirstRunSetup only when neither real nor demo data exists.
+  // With demo data loaded, fall through to the parity-aligned home so
+  // we can actually preview the design.
+  if (hasHydrated && !hasUserCaseSetup && !isDemoCase) {
+    return <FirstRunSetup demoCase={false} />;
   }
 
   const filingPackageCount = home.activeCase

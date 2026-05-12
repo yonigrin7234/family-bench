@@ -199,7 +199,7 @@ export default function Onboarding() {
             No remote writes
           </Chip>
         </View>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           {editMode ? 'Edit case setup' : 'Case setup'}
         </Display>
         <Text style={styles.subtitle}>

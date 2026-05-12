@@ -827,7 +827,7 @@ export default function Reports() {
       }
     >
       <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Reports
         </Display>
         <Text style={styles.subtitle}>

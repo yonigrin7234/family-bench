@@ -234,7 +234,7 @@ export default function VoiceCapture() {
             Local only
           </Chip>
         </View>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Voice capture
         </Display>
         <Text style={styles.subtitle}>

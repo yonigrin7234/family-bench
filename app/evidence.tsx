@@ -965,11 +965,11 @@ export default function Evidence() {
       }
     >
       <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Evidence
         </Display>
         <Text style={styles.subtitle}>
-          {activeCase?.title || 'Current case'} - {entries.length} entries -{' '}
+          {activeCase?.title || 'Current case'} · {entries.length} entries ·{' '}
           {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
         </Text>
       </View>

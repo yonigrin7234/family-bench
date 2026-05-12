@@ -482,7 +482,7 @@ export default function Filings() {
       }
     >
       <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Filing Builder
         </Display>
         <Text style={styles.subtitle}>

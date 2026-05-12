@@ -206,7 +206,7 @@ export default function ExportPrepRoute() {
             No file generated
           </Chip>
         </View>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Export preparation
         </Display>
         <Text style={styles.subtitle}>

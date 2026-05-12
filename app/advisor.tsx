@@ -436,7 +436,7 @@ export default function Advisor() {
             Static responses
           </Chip>
         </View>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Advisor
         </Display>
         <Text style={styles.subtitle}>

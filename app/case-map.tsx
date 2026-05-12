@@ -1040,7 +1040,7 @@ export default function CaseMap() {
       }
     >
       <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Case map
         </Display>
         <Text style={styles.subtitle}>

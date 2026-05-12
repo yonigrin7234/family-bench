@@ -650,7 +650,7 @@ export default function Timeline() {
       }
     >
       <View style={styles.header}>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Timeline
         </Display>
         <Text style={styles.subtitle}>

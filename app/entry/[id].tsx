@@ -510,7 +510,7 @@ export default function EntryDetail() {
             </Chip>
           ) : null}
         </View>
-        <Display italic size={31} style={styles.title}>
+        <Display size={31} style={styles.title}>
           {entry.title || option.defaultTitle}
         </Display>
         <Text style={styles.subtitle}>

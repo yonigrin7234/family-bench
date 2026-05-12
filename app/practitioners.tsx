@@ -109,7 +109,7 @@ export default function Practitioners() {
             Local only
           </Chip>
         </View>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Practitioner sharing
         </Display>
         <Text style={styles.subtitle}>

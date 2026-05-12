@@ -89,7 +89,7 @@ export default function Settings() {
             Settings
           </Chip>
         </View>
-        <Display italic size={32} style={styles.title}>
+        <Display size={32} style={styles.title}>
           Settings
         </Display>
         <Text style={styles.subtitle}>
