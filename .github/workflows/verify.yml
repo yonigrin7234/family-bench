@@ -3,7 +3,7 @@ name: Verify Family Bench
 on:
   pull_request:
   push:
-    branches: [baseline-v2, 'codex/**']
+    branches: [main, baseline-v2, 'codex/**']
 
 permissions:
   contents: read

@@ -41,6 +41,9 @@ yarn-error.*
 # Supabase CLI local state
 supabase/.temp/
 
+# Vercel local project link and downloaded environment files
+.vercel/
+
 # typescript
 *.tsbuildinfo
 
