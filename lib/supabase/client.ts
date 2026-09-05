@@ -8,8 +8,8 @@ import type { SupabaseEnvironmentStatus } from './environment';
 export { getSupabaseEnvironmentStatus };
 export type { SupabaseEnvironmentStatus };
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
 export const supabaseEnvironmentStatus = getSupabaseEnvironmentStatus();
 export const isSupabaseConfigured = supabaseEnvironmentStatus === 'configured';
