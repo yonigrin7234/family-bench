@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, V
 import * as Linking from 'expo-linking';
 import { supabase, supabaseEnvironmentStatus } from '@/lib/supabase/client';
 import { hasVerifiedSession, signOut, useAuthStore } from '@/lib/auth/session';
-import { normalizeEmail, validateNewPassword } from '@/lib/auth/validation';
+import { NEW_PASSWORD_HELP, normalizeEmail, validateNewPassword } from '@/lib/auth/validation';
 import { Display, PillButton, SoftCard, fbColors, fbFonts, fbRadii, fbSpacing } from '@/components/ui/fb';
 import { Redirect } from 'expo-router';
 
@@ -89,8 +89,8 @@ export default function AuthScreen() {
               </>}
               {(recovery || mode !== 'reset') && <>
                 <Text nativeID="auth-password-label" style={styles.label}>{recovery ? 'New password' : 'Password'}</Text>
-                <TextInput ref={passwordInput} accessibilityLabel={recovery ? 'New password' : 'Password'} aria-labelledby="auth-password-label" accessibilityHint={mode === 'signup' || recovery ? 'Use at least 12 characters.' : undefined} value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={mode === 'signup' || recovery ? 'new-password' : 'current-password'} textContentType={mode === 'signup' || recovery ? 'newPassword' : 'password'} style={styles.input} editable={!busy} returnKeyType="go" onSubmitEditing={submit} />
-                {(recovery || mode === 'signup') && <Text style={styles.help}>Use at least 12 characters.</Text>}
+                <TextInput ref={passwordInput} accessibilityLabel={recovery ? 'New password' : 'Password'} aria-labelledby="auth-password-label" accessibilityHint={mode === 'signup' || recovery ? NEW_PASSWORD_HELP : undefined} value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={mode === 'signup' || recovery ? 'new-password' : 'current-password'} textContentType={mode === 'signup' || recovery ? 'newPassword' : 'password'} style={styles.input} editable={!busy} returnKeyType="go" onSubmitEditing={submit} />
+                {(recovery || mode === 'signup') && <Text style={styles.help}>{NEW_PASSWORD_HELP}</Text>}
               </>}
             </>}
             {(error || sessionError) && <Text accessibilityRole="alert" style={styles.error}>{error || sessionError}</Text>}

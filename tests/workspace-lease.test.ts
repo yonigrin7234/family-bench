@@ -44,6 +44,9 @@ test('a browser workspace holds its writer lock across saves, and old saves cann
     assertOriginalLease();
     release();
     assert.throws(assertOriginalLease, /no longer open/);
+    // Resolving the release callback does not synchronously finish the lock
+    // manager's callback promise. Same-owner resets must retain their lease.
+    await assert.rejects(acquireWorkspaceLease('owner'), /another tab/);
     await new Promise<void>((resolve) => setImmediate(resolve));
     const releaseAgain = await acquireWorkspaceLease('owner');
     assert.throws(assertOriginalLease, /reopened/);

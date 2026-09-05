@@ -21,7 +21,8 @@ import {
   fbWeights,
 } from '@/components/ui/fb';
 import { useSettingsMemoryIndex } from '@/lib/case-intelligence';
-import { signOut, useAuthStore } from '@/lib/auth/session';
+import { AccountDetails, AccountSignOutButton } from '@/components/case-intelligence/AccountMenu';
+import { useAuthStore } from '@/lib/auth/session';
 import { useCaseIntelligenceStore } from '@/lib/case-intelligence/useCaseIntelligence';
 import { supabaseEnvironmentStatus } from '@/lib/supabase/client';
 
@@ -37,7 +38,6 @@ function MemoryRow({ label, value }: { label: string; value: number | string }) 
 }
 
 export default function Settings() {
-  const session = useAuthStore((s) => s.session);
   const workspace = useCaseIntelligenceStore();
   const [accountBusy, setAccountBusy] = useState(false);
   const {
@@ -139,14 +139,9 @@ export default function Settings() {
 
       <SoftCard p={16} style={styles.section}>
         <Text style={styles.sectionTitle}>Your account</Text>
-        <Text style={styles.bodyText}>{session?.user.email}</Text>
+        <AccountDetails />
         <Text style={styles.bodyText}>Signing out clears the open case from memory. Encrypted records saved on this device remain available when you sign in again.</Text>
-        {workspace.persistence.error && <Text style={styles.warningText}>Retry the failed save before signing out to preserve your latest changes.</Text>}
-        <PillButton tone="ghost" disabled={accountBusy || Boolean(workspace.saving || workspace.persistence.error)} onPress={async () => {
-          setAccountBusy(true); setNotice(null);
-          try { await signOut(); } catch (err) { setNotice(err instanceof Error ? err.message : 'Unable to sign out.'); }
-          finally { setAccountBusy(false); }
-        }}>{accountBusy ? 'Signing out…' : 'Sign out'}</PillButton>
+        <AccountSignOutButton disabled={accountBusy || clearing || archiving} />
       </SoftCard>
       {workspace.contextError ? <SoftCard p={16} style={styles.section}>
         <Text accessibilityRole="header" style={styles.sectionTitle}>Saved working context needs review</Text>
@@ -240,7 +235,7 @@ export default function Settings() {
           </View>
         </View>
         <Text style={styles.bodyText}>
-          Download a factual timeline and selected original evidence. Shared reports exclude private notes. Account deletion and full private archives are tracked separately in the product roadmap.
+          Download a factual timeline and selected original evidence. Shared reports exclude private notes. Use the private workspace archive below when you need a copy that includes those notes.
         </Text>
         <PillButton
           tone="soft"

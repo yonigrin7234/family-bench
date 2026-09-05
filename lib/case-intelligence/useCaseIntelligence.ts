@@ -251,7 +251,7 @@ type CaseIntelligenceState = {
   hasHydrated: boolean;
   hasPersistedSnapshot: boolean;
   error: string | null;
-  load: () => Promise<void>;
+  load: (options?: { requireSuccessfulRefresh?: boolean }) => Promise<void>;
   saveCaseSetup: (input: CaseSetupInput) => Promise<SaveCaseSetupResult>;
   createEntry: (input: CaptureEntryInput) => Promise<SaveEntryResult>;
   createPlaceholderAttachment: (
@@ -289,6 +289,7 @@ type CaseIntelligenceState = {
 
 let workspaceEpoch = 0;
 let releaseWorkspaceLease: (() => void) | null = null;
+let pendingCacheRefreshOwner: string | null = null;
 function isActiveWorkspace(ownerId: string, epoch: number): boolean {
   const auth = useAuthStore.getState();
   return workspaceEpoch === epoch && hasVerifiedSession(auth.session) && !auth.recovery && auth.session!.user.id === ownerId;
@@ -1663,9 +1664,10 @@ export const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get)
   hasHydrated: false,
   hasPersistedSnapshot: false,
   error: null,
-  load: async () => {
+  load: async (options) => {
     const owner = getWorkspaceOwnerId();
     const epoch = workspaceEpoch;
+    const requiresCloudRefresh = options?.requireSuccessfulRefresh || pendingCacheRefreshOwner === owner;
     if (get().loading || !isActiveWorkspace(owner, epoch)) return;
     set({ loading: true, storageBlocked: false, error: null });
     try {
@@ -1688,6 +1690,7 @@ export const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get)
     } catch (err) {
       if (!isActiveWorkspace(owner, epoch)) return;
       set({ loading: false, hasLoaded: true, hasHydrated: true, storageBlocked: true, error: err instanceof Error ? err.message : 'Unable to open saved data. It has not been overwritten.' });
+      if (options?.requireSuccessfulRefresh) throw err;
       return;
     }
     try {
@@ -1697,24 +1700,38 @@ export const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get)
     } catch (err) {
       if (!isActiveWorkspace(owner, epoch)) return;
       set({ syncError: err instanceof Error ? err.message : 'Cloud is unavailable. Working from this device.' });
+      if (requiresCloudRefresh) {
+        const message = `This device's cache was cleared, but account records could not be refreshed. ${err instanceof Error ? err.message : 'Retry when your connection is available.'}`;
+        set({ loading: false, storageBlocked: true, error: message });
+        if (options?.requireSuccessfulRefresh) throw new Error(message);
+        return;
+      }
     }
     if (!isActiveWorkspace(owner, epoch)) return;
     set({ loading: false, hasLoaded: true });
-    await persistStateSnapshot(get().snapshot, get().reportPreviewState, get().advisorState, get().localRecords, set, get);
+    const persisted = await persistStateSnapshot(get().snapshot, get().reportPreviewState, get().advisorState, get().localRecords, set, get, options?.requireSuccessfulRefresh);
+    if (persisted && isActiveWorkspace(owner, epoch)) pendingCacheRefreshOwner = null;
   },
   clearLocalCaseData: async () => {
     const owner = requireReadyWorkspace(get());
-    const epoch = workspaceEpoch;
     if (get().contextRecovery.length) throw new Error('This device has preserved context recovery copies that are not synced to the cloud. Keep its private archive before arranging removal of this cache.');
     if (Object.values(get().localRecords).some((r) => r.sync_status !== 'synced')) throw new Error('Sync your pending changes before clearing this device.');
     if (get().saving || get().syncing) throw new Error('Wait for saving and sync to finish first.');
+    // Cancel preparations before the first deletion await. Otherwise a hash
+    // already in flight can finish, save a new entry, and then be erased below.
+    let epoch = ++workspaceEpoch;
     set({ loading: true });
     try {
       await clearLocalEvidence(owner);
+      if (!isActiveWorkspace(owner, epoch)) throw new Error('Account changed while clearing this device. Reopen the current account.');
       await clearPersistedCaseIntelligence(owner);
-      if (!isActiveWorkspace(owner, epoch)) return;
-      resetWorkspace(owner);
-      await get().load();
+      if (!isActiveWorkspace(owner, epoch)) throw new Error('Account changed while clearing this device. Reopen the current account.');
+      // Keep this account's writer lock through the refresh. Releasing and
+      // immediately reacquiring it can race the browser's asynchronous release.
+      resetWorkspace(owner, { retainOwnerLease: true });
+      epoch = workspaceEpoch;
+      await get().load({ requireSuccessfulRefresh: true });
+      if (!isActiveWorkspace(owner, epoch)) throw new Error('Account changed while refreshing this device. Reopen the current account.');
     } finally { if (isActiveWorkspace(owner, epoch)) set({ loading: false }); }
   },
   switchCase: async (caseId) => {
@@ -2257,10 +2274,16 @@ export const useCaseIntelligenceStore = create<CaseIntelligenceState>((set, get)
   },
 }));
 
-function resetWorkspace(ownerId: string | null) {
+function resetWorkspace(ownerId: string | null, options?: { retainOwnerLease?: boolean }) {
   workspaceEpoch += 1;
-  releaseWorkspaceLease?.();
-  releaseWorkspaceLease = null;
+  const retainOwnerLease = options?.retainOwnerLease && ownerId && useCaseIntelligenceStore.getState().ownerId === ownerId;
+  if (!retainOwnerLease) {
+    releaseWorkspaceLease?.();
+    releaseWorkspaceLease = null;
+  }
+  // Automatic retries after clearing must restore the cloud copy before they
+  // can treat an empty device cache as a usable workspace.
+  pendingCacheRefreshOwner = retainOwnerLease ? ownerId : null;
   useCaseIntelligenceStore.setState({
     ownerId, snapshot: emptyCaseSnapshot(), source: 'local', storageBlocked: false,
     saving: 0, switchingCase: false, caseWorkspaceStates: {}, contextRecovery: [], contextError: null, syncing: false, syncError: null, conflicts: [], conflictHistory: [], workspaceJSON: '',

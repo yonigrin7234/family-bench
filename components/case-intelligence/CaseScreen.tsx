@@ -23,6 +23,7 @@ import {
 import { useResponsive } from '@/lib/hooks/useResponsive';
 import { BottomNav, DesktopSidebar } from './BottomNav';
 import { WorkspaceStatus } from './WorkspaceStatus';
+import { AccountMenu } from './AccountMenu';
 
 const centeredMobileWidth = {
   width: '100%' as const,
@@ -99,7 +100,7 @@ export function CaseScreen({
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
-      <View style={{ paddingTop: insets.top }}><WorkspaceStatus /></View>
+      <View style={{ paddingTop: insets.top }}><DesktopWorkspaceBar /><WorkspaceStatus /></View>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -145,6 +146,7 @@ function DesktopWorkspaceBar() {
       <View style={styles.workspaceTitleGroup}>
         <Text style={styles.workspaceTitle}>Your case workspace</Text>
       </View>
+      <AccountMenu />
     </View>
   );
 }

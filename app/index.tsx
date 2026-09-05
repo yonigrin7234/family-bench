@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -102,6 +103,7 @@ function CaseCard({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Switch case"
+      onPress={() => router.push('/cases' as never)}
       style={({ pressed }) => [styles.caseStrip, pressed && styles.pressed]}
     >
       <View style={styles.caseStripSeal}>
@@ -126,7 +128,25 @@ function getDaysToDate(dateStr?: string | null): number {
   return Math.max(0, Math.ceil(diff / 86400000));
 }
 
-function FilingNextStep({ nextStep }: { nextStep: NextStep }) {
+function FilingNextStep({ nextStep, caseId }: { nextStep: NextStep; caseId: string | null }) {
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const identity = JSON.stringify([caseId, nextStep]);
+  if (dismissed === identity) return null;
+
+  function openNextStep() {
+    if (!caseId) {
+      router.push('/onboarding' as never);
+    } else if (nextStep.relatedFilingPackageId) {
+      router.push({
+        pathname: '/filings',
+        params: { packageId: nextStep.relatedFilingPackageId },
+      } as never);
+    } else if (nextStep.relatedKeyDateId) {
+      router.push('/case-map' as never);
+    } else {
+      openCapture();
+    }
+  }
   return (
     <View style={styles.nextStepWrap}>
       <NextStepCard
@@ -135,6 +155,8 @@ function FilingNextStep({ nextStep }: { nextStep: NextStep }) {
         body={nextStep.body}
         primary={nextStep.primaryLabel}
         secondary={nextStep.secondaryLabel}
+        onPrimary={openNextStep}
+        onSecondary={() => setDismissed(identity)}
         right={
           nextStep.dueLabel ? (
             <Chip tone={nextStep.dueLabel === 'Past due' ? 'ox' : 'amber'} outline={false}>
@@ -159,12 +181,13 @@ function HearingStrip({ keyDate }: { keyDate?: KeyDate }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${days} days to ${keyDate.title}`}
+      accessibilityLabel={`Open date: ${keyDate.title}`}
+      onPress={() => router.push('/case-map' as never)}
       style={({ pressed }) => [styles.countdownStrip, pressed && styles.pressed]}
     >
       <Text style={styles.countdownNumber}>{days}</Text>
       <View style={styles.countdownCopy}>
-        <Text style={styles.countdownTitle}>days to hearing</Text>
+        <Text style={styles.countdownTitle}>days to next date</Text>
         <Text style={styles.countdownMeta}>
           {dateLabel} · {keyDate.title}
         </Text>
@@ -538,7 +561,7 @@ export default function Home() {
           </View>
 
           <CaseCard activeCase={home.activeCase} primaryPerson={home.primaryPerson} />
-          <FilingNextStep nextStep={home.nextStep} />
+          <FilingNextStep nextStep={home.nextStep} caseId={home.activeCase?.id ?? null} />
           <HearingStrip keyDate={home.upcomingKeyDates[0]} />
         </View>
 

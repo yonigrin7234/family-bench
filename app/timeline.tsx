@@ -268,12 +268,14 @@ function DesktopTimelineRow({
   row,
   childName,
   selected,
-  onSelect,
+  actionLabel,
+  onPress,
 }: {
   row: TimelineRow;
   childName?: string | null;
   selected: boolean;
-  onSelect: () => void;
+  actionLabel: 'Open' | 'Select';
+  onPress: () => void;
 }) {
   const option = getEntryTypeOption(row.entry.entry_type);
   const reviewed = isEntryReviewed(row.entry);
@@ -281,9 +283,9 @@ function DesktopTimelineRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected }}
-      accessibilityLabel={`Select timeline event ${option.shortLabel} from ${formatDateLabel(row.entry.event_date, row.entry.event_time)}`}
-      onPress={onSelect}
+      accessibilityState={actionLabel === 'Select' ? { selected } : undefined}
+      accessibilityLabel={`${actionLabel} timeline event ${option.shortLabel} from ${formatDateLabel(row.entry.event_date, row.entry.event_time)}`}
+      onPress={onPress}
       style={({ pressed }) => [
         styles.desktopRow,
         selected && styles.desktopRowSelected,
@@ -401,7 +403,7 @@ export default function Timeline() {
     attachmentFilter !== 'all',
   ].filter(Boolean).length;
   const selectedRow = rows.find((row) => row.entry.id === selectedEntryId) ?? rows[0] ?? null;
-  const showDesktopInspector = !isMobile && width >= 1280;
+  const showDesktopInspector = !isMobile && width >= 1440;
 
   const filterPanel = (
     <SoftCard p={16} style={[styles.filterCard, !isMobile && styles.desktopPanelCard]}>
@@ -601,8 +603,9 @@ export default function Timeline() {
                   key={row.entry.id}
                   row={row}
                   childName={row.entry.child_id ? childrenById[row.entry.child_id]?.name : null}
-                  selected={selectedRow?.entry.id === row.entry.id}
-                  onSelect={() => setSelectedEntryId(row.entry.id)}
+                  selected={showDesktopInspector && selectedRow?.entry.id === row.entry.id}
+                  actionLabel={showDesktopInspector ? 'Select' : 'Open'}
+                  onPress={() => showDesktopInspector ? setSelectedEntryId(row.entry.id) : openEntry(row.entry.id)}
                 />
               ))}
             </SoftCard>
