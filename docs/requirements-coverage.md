@@ -46,6 +46,8 @@ The [database implementation notes](authenticated-case-sync.md) describe exact R
 
 ## Connected-workflow implementation update — September 5, 2026
 
+**Production release update:** the connected workspace is merged into `main` and deployed at [family-bench.vercel.app](https://family-bench.vercel.app), commit `0aad43a`. The release CI passed 176 tests, TypeScript and the 27-route web build; public hosted HTTP and signed-out browser checks passed. Managed Auth email/redirect behavior, actual private Storage bytes, second-account/device recovery, native behavior and the remaining product features are still outstanding. See [current production status](production-foundation-status.md). The September 4 assessment above and the 79-section baseline crosswalk below remain historical evidence, not claims that the entire product is complete.
+
 This dated update supersedes the implementation state of the earlier focused-workflow table where noted. The capability inventory below deliberately retains the historical baseline; its placeholder descriptions are not current release claims. Neither this update nor the 79-section crosswalk marks every requirement complete.
 
 | Requirement groups | Current implementation and evidence | Verification and remaining boundary |

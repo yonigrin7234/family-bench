@@ -2,7 +2,7 @@
 
 A private case workspace for recording events, preserving original evidence, organizing case papers and preparing selected factual output. Built with Expo Router, React Native/Web, TypeScript and Supabase.
 
-**Development status:** the connected workspace is implemented locally and the database foundation is deployed. The application is not yet a verified private beta. See [current status](docs/production-foundation-status.md), [requirements coverage](docs/requirements-coverage.md) and [canonical specification](docs/product-spec.md).
+**Development status:** the connected workspace is merged into `main` and live at [family-bench.vercel.app](https://family-bench.vercel.app); the database foundation is deployed. The application is not yet a verified private beta. See [current status](docs/production-foundation-status.md), [requirements coverage](docs/requirements-coverage.md) and [canonical specification](docs/product-spec.md).
 
 ## Local development
 
@@ -29,7 +29,7 @@ npm test
 npm run build:web
 ```
 
-The GitHub workflow runs these checks on pull requests and pushes to `baseline-v2` or `codex/**`, using pinned [checkout](https://github.com/actions/checkout) and [setup-node](https://github.com/actions/setup-node) actions with read-only repository permissions. It does not deploy or receive live Supabase credentials.
+The GitHub workflow runs these checks on pull requests and pushes to `main`, `baseline-v2` or `codex/**`, using pinned [checkout](https://github.com/actions/checkout) and [setup-node](https://github.com/actions/setup-node) actions with read-only repository permissions. It does not deploy or receive live Supabase credentials.
 
 Unit/integration tests use synthetic records and selected I/O substitutes. Passing them does not demonstrate managed account confirmation, actual cloud original-file storage, second-device recovery or native device behavior. The [live verification procedure](docs/live-verification.md) documents the separate managed-service checks and local secret-key handling. Do not use real family records as test fixtures.
 
@@ -46,6 +46,6 @@ Unit/integration tests use synthetic records and selected I/O substitutes. Passi
 
 The composite migration `20260905032608_authenticated_case_foundation.sql` is already applied to the verified project. Do not reapply it, run the archived component inputs, or blindly reset/push the historical managed migration ledger. Read the [migration receipt and checks](docs/foundation-deployment-verification.md).
 
-Expo exports static web files to `dist`. [Static hosting notes](docs/static-web-hosting.md) explain private dynamic entry routes and the Vercel mapping. Frontend deployment and managed Auth redirect configuration still require verification for the chosen hostname.
+Expo exports static web files to `dist`. The existing Vercel project `family-bench` is connected to production branch `main`; release `0aad43a` is deployed and its public routes, headers and representative assets were verified. [Static hosting notes](docs/static-web-hosting.md) explain private dynamic entry routes and the Vercel mapping. Managed Auth email/redirect behavior, actual private Storage bytes and native devices still require verification.
 
 The [shared-design comparison](docs/shared-design-comparison.md) records the newer 71-artboard reference and its differences from the local exports. A design screen is a requirement reference, not proof of a connected service.
