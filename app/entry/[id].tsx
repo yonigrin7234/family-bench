@@ -430,7 +430,7 @@ function EntryDetailContent({ entryId }: { entryId?: string }) {
         <SoftCard p={18} style={styles.missingCard}>
           <Text style={styles.emptyTitle}>{loading ? 'Loading entry' : 'Entry not found'}</Text>
           <Text style={styles.emptyBody}>
-            This entry is not available in your account. Open your timeline to choose another record.
+            {loading ? 'Loading your saved entry…' : 'This entry is not available in your account. Open your timeline to choose another record.'}
           </Text>
           <PillButton
             tone="primary"
