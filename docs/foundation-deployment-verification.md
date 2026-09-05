@@ -2,6 +2,8 @@
 
 Verified September 4, 2026 Pacific / September 5 UTC. This records a database deployment and bounded checks, not a frontend launch or full managed-service acceptance.
 
+This receipt preserves that database checkpoint, including its original zero-user counts and then-outstanding checks. Later September 5 frontend deployment, Auth URL configuration and bounded synthetic production account/original checks are recorded in [live verification](live-verification.md). Those later checks do not complete the two-owner admin harness, mailbox delivery, native acceptance or complete product acceptance. The later export regression was fixed and production downloads verified in the [account release](account-release-verification-2026-09-05.md).
+
 ## Applied artifact
 
 | Item | Verified value |

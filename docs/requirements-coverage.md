@@ -63,6 +63,12 @@ This dated update supersedes the implementation state of the earlier focused-wor
 
 The coordinator reported **169 passing tests at the full-suite checkpoint**. Subsequent review fixes require the coordinator’s final count/build checks; this is not a final total. Named scoped checks and their environment limits are recorded in [connected-workflow verification](connected-workflows-2026-09-05.md). No managed-user/Storage test, physical-device test or production launch is implied by passing unit tests, TypeScript, browser rendering or a static build.
 
+## Released account navigation and bounded production verification
+
+The [September 5 account release](account-release-verification-2026-09-05.md) adds a shared initials menu with Dashboard, Account & settings, verified email status and guarded Sign out. It fixes Home navigation/dismissal, Timeline navigation when the inspector is hidden, new-password byte validation, cache-reset races and the actual Metro PDF export crash. CI passed 200 tests and the compiled-output gate. Production checks covered synthetic account record/original saves, same-browser cloud restoration, downloaded PDFs/ZIP exact bytes and private-note exclusion, menu navigation/sign-out and a second-account empty-workspace/foreign-entry check. Both synthetic accounts and their records/originals were removed and scoped cleanup verified.
+
+These are updates to G02/G03/G06/G07/G10/G14/G22/G27 evidence, not completion of their full requirements. Mailbox confirmation/reset, the full two-owner API harness, second devices/native behavior, broader lifecycle and roadmap features remain open. The baseline inventory below stays historical; this release does not silently convert a whole group to complete.
+
 ## Capability inventory
 
 Every group below is documented. `S` numbers refer to the canonical spec; `F` numbers refer to the earlier feature list. Group rows summarize requirements without replacing their detailed fields, flows, states, error handling, or edge cases.

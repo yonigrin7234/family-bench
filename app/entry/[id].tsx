@@ -430,7 +430,7 @@ function EntryDetailContent({ entryId }: { entryId?: string }) {
         <SoftCard p={18} style={styles.missingCard}>
           <Text style={styles.emptyTitle}>{loading ? 'Loading entry' : 'Entry not found'}</Text>
           <Text style={styles.emptyBody}>
-            This review layer can open entries after local hydration completes.
+            This entry is not available in your account. Open your timeline to choose another record.
           </Text>
           <PillButton
             tone="primary"

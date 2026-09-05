@@ -2,7 +2,7 @@
 
 Family Bench must know exactly which Supabase project it is targeting before any schema, migration, RLS, storage, or generated-type work happens.
 
-Current status: the exact project is confirmed and the tested composite migration was applied after explicit user approval. Ledger version `20260905032608` and the resulting RPCs/private evidence bucket were verified. The frontend and complete managed-service workflow are not yet release-verified. See [production foundation status](production-foundation-status.md).
+Current status: the exact project is confirmed and the tested composite migration was applied after explicit user approval. Ledger version `20260905032608` and the resulting RPCs/private evidence bucket were verified. The frontend is deployed; bounded synthetic production login, record/original saves and same-browser cloud restoration have been checked. The [account release](account-release-verification-2026-09-05.md) also verified actual production PDF/ZIP downloads, menu sign-out and a second-account UI isolation check; both synthetic accounts and their records were then removed and cleanup verified. See [production foundation status](production-foundation-status.md).
 
 ## Required Environment
 
@@ -40,7 +40,7 @@ https://<project-ref>.supabase.co
 
 If the project ref in the URL does not match the intended environment, stop.
 
-Confirmed target, inspected September 4, 2026:
+Confirmed target, inspected September 4 and updated September 5, 2026:
 
 ```text
 URL: https://aeeovmnhfxobeqpczjvt.supabase.co
@@ -49,10 +49,19 @@ Project name: Family Bench
 Organization ID: epelsraplgfepkesvsdt
 Status: ACTIVE_HEALTHY
 Migration target: identity confirmed; composite applied as 20260905032608
-Release status: existing managed project; database foundation deployed, app not launched
+Release status: database and frontend deployed; complete managed-service acceptance pending
 ```
 
-Read-only verification after the approved deployment found zero Auth users, 45 migration records ending at `20260905032608`, the `case_sync_versions` table, both new read/sync RPCs, and the private `evidence-originals` bucket. Its 44 original migration records are unchanged. Do not relabel this managed project as a disposable staging environment based on the empty user count.
+Read-only verification immediately after the approved migration found zero Auth users, 45 migration records ending at `20260905032608`, the `case_sync_versions` table, both new read/sync RPCs, and the private `evidence-originals` bucket. Its 44 original migration records are unchanged. A subsequent authorized production test created a confirmed synthetic account and records; the earlier zero-user count is historical. This is an existing managed project, not a disposable staging environment.
+
+## Verified production Auth URLs
+
+On September 5, the dashboard for `aeeovmnhfxobeqpczjvt` saved and reload-verified:
+
+- Site URL: `https://family-bench.vercel.app`
+- Exact allowed redirect: `https://family-bench.vercel.app/auth`
+
+This confirms stored configuration. It does not demonstrate confirmation/reset email delivery, completed email callbacks or native redirects; those remain in [live verification](live-verification.md). The confirmed synthetic production account used a no-email test flow.
 
 ## Link The Project
 
