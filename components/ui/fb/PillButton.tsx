@@ -50,6 +50,7 @@ export function PillButton({
   return (
     <Pressable
       onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={disabled ? { disabled: true } : undefined}
@@ -66,6 +67,7 @@ export function PillButton({
           borderWidth: fbBorder.hairline,
           borderColor: t.bd,
           minHeight: fbTouch.min,
+          maxWidth: '100%',
           alignSelf: full ? 'stretch' : 'flex-start',
           opacity: disabled ? fbAlpha.disabled : pressed ? fbAlpha.pressed : 1,
           transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
@@ -82,6 +84,8 @@ export function PillButton({
           fontFamily: fbFonts.sansMedium,
           color: t.fg,
           letterSpacing: s.fs * -0.01,
+          flexShrink: 1,
+          textAlign: 'center',
         }}
       >
         {children}

@@ -15,7 +15,7 @@ export const supabaseEnvironmentStatus = getSupabaseEnvironmentStatus();
 export const isSupabaseConfigured = supabaseEnvironmentStatus === 'configured';
 
 // Guard for SSR/static rendering where localStorage doesn't exist
-const isServer = typeof window === 'undefined';
+const isServer = Platform.OS === 'web' && typeof window === 'undefined';
 
 // Secure storage adapter for auth tokens
 const SecureStoreAdapter = {
@@ -50,13 +50,15 @@ function warnIfSupabaseDisabled() {
   const reason =
     supabaseEnvironmentStatus === 'missing'
       ? 'missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY'
+      : supabaseEnvironmentStatus === 'wrong_project'
+        ? 'a Supabase URL that does not match the Family Bench project'
       : supabaseEnvironmentStatus === 'placeholder'
         ? 'placeholder Supabase environment values'
         : 'an invalid EXPO_PUBLIC_SUPABASE_URL';
 
   console.warn(
     `[Family Bench] Supabase is disabled because of ${reason}. ` +
-      'The app is using local demo data and is not connected to a Supabase project.',
+      'Account access is disabled until the Family Bench environment is configured.',
   );
 }
 
@@ -71,7 +73,8 @@ export const supabase = isSupabaseConfigured && supabaseUrl && supabaseAnonKey
           storage: SecureStoreAdapter,
           autoRefreshToken: !isServer,
           persistSession: !isServer,
-          detectSessionInUrl: false,
+          detectSessionInUrl: Platform.OS === 'web' && !isServer,
+          flowType: 'pkce',
         },
       },
     )

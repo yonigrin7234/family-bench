@@ -1,3 +1,4 @@
+import { localCalendarDate } from '../utils/dateInput';
 import type {
   CaseIntelligenceSnapshot,
   Entry,
@@ -62,13 +63,11 @@ export function getRelativeDueLabel(date?: string | null, today = new Date()) {
 }
 
 export function getActiveCase(snapshot: CaseIntelligenceSnapshot): FamilyBenchCase | null {
-  return (
-    snapshot.cases
-      .filter(isLive)
-      .find((c) => c.is_active || c.status === 'active') ??
-    snapshot.cases.filter(isLive)[0] ??
-    null
-  );
+  const cases = snapshot.cases.filter(isLive);
+  return cases.find((row) => row.id === snapshot.selectedCaseId)
+    ?? cases.find((row) => row.is_active)
+    ?? cases.find((row) => row.status === 'active')
+    ?? cases[0] ?? null;
 }
 
 export function getUpcomingKeyDates(
@@ -77,7 +76,7 @@ export function getUpcomingKeyDates(
   today = new Date(),
 ) {
   if (!caseId) return [];
-  const todayDate = today.toISOString().slice(0, 10);
+  const todayDate = localCalendarDate(today);
 
   return snapshot.keyDates
     .filter(isLive)

@@ -1,742 +1,210 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as Crypto from 'expo-crypto';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import { EntryCard } from '@/components/case-intelligence/EntryCard';
-import {
-  Chip,
-  Display,
-  Icon,
-  InfoCallout,
-  PillButton,
-  ProgressBar,
-  Rule,
-  Segment,
-  SoftCard,
-  fbAlpha,
-  fbBorder,
-  fbColors,
-  fbFonts,
-  fbLegalCopy,
-  fbRadii,
-  fbSpacing,
-  fbTouch,
-  fbType,
-  fbWeights,
-  type ChipTone,
-  type IconName,
-} from '@/components/ui/fb';
-import {
-  formatDateLabel,
-  getEntryTypeOption,
-  getRelativeDueLabel,
-  useFilingBuilder,
-  type EvidenceAttachment,
-  type FilingChecklistKey,
-  type FilingPackage,
-  type FilingPackageLocalState,
-  type FilingPackageStatus,
-  type KeyDate,
-  type ReportPreviewType,
-} from '@/lib/case-intelligence';
+import { Chip, Display, Icon, InfoCallout, PillButton, ProgressBar, Segment, SoftCard, fbAlpha, fbBorder, fbColors, fbFonts, fbLegalCopy, fbRadii, fbSpacing, fbTouch, fbType, fbWeights, type ChipTone, type IconName } from '@/components/ui/fb';
+import { useFilingBuilder, useCaseIntelligenceHome, getActiveCase, type FilingChecklistKey, type FilingPackageStatus, type ReportPreviewType } from '@/lib/case-intelligence';
+import { useCaseIntelligenceStore } from '@/lib/case-intelligence/useCaseIntelligence';
+import { getWorkspaceGeneration, useAuthStore } from '@/lib/auth/session';
+import { resolveFilingPackageSelection } from '@/lib/filings/model';
+import { isPrivateEntry } from '@/lib/export/model';
 import { useResponsive } from '@/lib/hooks/useResponsive';
 
-type FilingTypeOption = {
-  value: string;
-  label: string;
-  tone: ChipTone;
-};
-
-const FILING_TYPES: FilingTypeOption[] = [
+const FILING_TYPES: Array<{ value: string; label: string; tone: ChipTone }> = [
   { value: 'request_for_order', label: 'Request for order', tone: 'ink' },
   { value: 'response', label: 'Response', tone: 'sand' },
   { value: 'custody_visitation', label: 'Custody / visitation', tone: 'forest' },
   { value: 'compliance_packet', label: 'Compliance packet', tone: 'amber' },
   { value: 'expense_support', label: 'Expense support', tone: 'ox' },
 ];
-
 const REPORT_OPTIONS: Array<{ value: ReportPreviewType; label: string; icon: IconName }> = [
   { value: 'timeline', label: 'Timeline summary', icon: 'clock' },
   { value: 'flagged', label: 'Flagged entries report', icon: 'flag' },
   { value: 'communication', label: 'Communication summary', icon: 'chat' },
   { value: 'medical', label: 'Medical summary', icon: 'shield' },
-  { value: 'custodyExchange', label: 'Custody/exchange summary placeholder', icon: 'home' },
+  { value: 'custodyExchange', label: 'Exchange and missed-time summary', icon: 'home' },
+  { value: 'late', label: 'Late incident report', icon: 'clock' },
+  { value: 'expense', label: 'Expense report', icon: 'receipt' },
+  { value: 'benchBrief', label: 'Bench Brief — factual overview', icon: 'doc' },
 ];
-
 const CHECKLIST_ITEMS: Array<{ value: FilingChecklistKey; label: string; body: string }> = [
-  {
-    value: 'forms',
-    label: 'Forms',
-    body: 'Placeholder for required court forms and local form rules.',
-  },
-  {
-    value: 'exhibits',
-    label: 'Exhibits',
-    body: 'Placeholder for source entries, attachments, and exhibit labels.',
-  },
-  {
-    value: 'declarations',
-    label: 'Declarations',
-    body: 'Placeholder for declaration drafting. AI drafting is not enabled.',
-  },
-  {
-    value: 'service',
-    label: 'Service',
-    body: 'Placeholder for service tracking and proof of service.',
-  },
+  { value: 'forms', label: 'Forms reviewed', body: 'Prepare editable court forms and check the required forms for your court.' },
+  { value: 'exhibits', label: 'Sources reviewed', body: 'Review factual text and every original file you intend to share.' },
+  { value: 'declarations', label: 'Declaration reviewed', body: 'Review your own declaration text, supporting papers and signing requirements.' },
+  { value: 'service', label: 'Service requirements reviewed', body: 'Record only your preparation review here. This checkbox does not record or perform service.' },
 ];
-
-function getParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function statusLabel(status: string) {
-  if (status === 'in_progress') return 'In progress';
-  if (status === 'ready_for_review') return 'Ready for review';
-  return 'Draft';
-}
-
-function statusTone(status: string): ChipTone {
-  if (status === 'ready_for_review') return 'forest';
-  if (status === 'in_progress') return 'amber';
-  return 'mute';
-}
-
-function filingTypeLabel(value: string) {
-  return FILING_TYPES.find((option) => option.value === value)?.label ?? value.replace(/_/g, ' ');
-}
-
-function titleForEntry(entry: { title: string | null; entry_type: string }) {
-  return entry.title || getEntryTypeOption(entry.entry_type).defaultTitle;
-}
-
-function attachmentKind(attachment: EvidenceAttachment) {
-  if (attachment.file_type === 'voice_memo' || attachment.mime_type?.startsWith('audio/')) return 'Voice memo';
-  if (attachment.file_type === 'document') return 'Document';
-  if (attachment.file_type === 'screenshot') return 'Screenshot';
-  if (attachment.mime_type?.startsWith('image/')) return 'Photo';
-  return attachment.file_type || 'Attachment';
-}
-
-function attachmentIcon(attachment: EvidenceAttachment): IconName {
-  if (attachment.file_type === 'voice_memo' || attachment.mime_type?.startsWith('audio/')) return 'mic';
-  if (attachment.file_type === 'document') return 'doc';
-  return 'paperclip';
-}
-
-function attachmentCountForEntry(attachments: EvidenceAttachment[], entryId: string) {
-  return attachments.filter((attachment) => attachment.entry_id === entryId).length;
-}
-
-function linkedCount(state: FilingPackageLocalState | null) {
-  if (!state) return 0;
-  return state.linkedEntryIds.length + state.linkedAttachmentIds.length + state.linkedReportTypes.length;
-}
-
-function checklistProgress(state: FilingPackageLocalState | null) {
-  if (!state) return 0;
-  const completed = CHECKLIST_ITEMS.filter((item) => state.checklist[item.value]).length;
-  return Math.round((completed / CHECKLIST_ITEMS.length) * 100);
-}
-
-function PackageCard({
-  filingPackage,
-  packageState,
-  active,
-  onPress,
-}: {
-  filingPackage: FilingPackage;
-  packageState: FilingPackageLocalState | null;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={`Open filing package: ${filingPackage.title}`}
-      onPress={onPress}
-      style={({ pressed }) => [pressed && styles.pressed]}
-    >
-      <SoftCard p={14} style={[styles.packageCard, active && styles.packageCardActive]}>
-        <View style={styles.packageHeader}>
-          <View style={styles.packageTitleCopy}>
-            <Text style={styles.packageTitle}>{filingPackage.title}</Text>
-            <Text style={styles.packageMeta}>
-              {filingTypeLabel(filingPackage.filing_type)} · Due date placeholder:{' '}
-              {filingPackage.due_date || 'not set'}
-            </Text>
-          </View>
-          <Chip tone={statusTone(filingPackage.status)} outline={false}>
-            {statusLabel(filingPackage.status)}
-          </Chip>
-        </View>
-        <ProgressBar pct={filingPackage.completion_percent} label="Checklist progress" />
-        <View style={styles.packageMetricRow}>
-          <Text style={styles.packageMeta}>{packageState?.linkedEntryIds.length ?? 0} entries</Text>
-          <Text style={styles.packageMeta}>{packageState?.linkedReportTypes.length ?? 0} reports</Text>
-          <Text style={styles.packageMeta}>{linkedCount(packageState)} total links</Text>
-        </View>
-      </SoftCard>
-    </Pressable>
-  );
-}
-
-function ChecklistRow({
-  item,
-  completed,
-  onToggle,
-}: {
-  item: (typeof CHECKLIST_ITEMS)[number];
-  completed: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: completed }}
-      accessibilityLabel={`${item.label} checklist item`}
-      onPress={onToggle}
-      style={({ pressed }) => [styles.checklistRow, pressed && styles.pressed]}
-    >
-      <View style={[styles.checkbox, completed && styles.checkboxActive]}>
-        {completed ? <Icon name="check" size={14} color={fbColors.paper} /> : null}
-      </View>
-      <View style={styles.checklistCopy}>
-        <Text style={styles.rowTitle}>{item.label}</Text>
-        <Text style={styles.rowBody}>{item.body}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function ReportLinkRow({
-  report,
-  linked,
-  onToggle,
-}: {
-  report: (typeof REPORT_OPTIONS)[number];
-  linked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <View style={styles.linkRow}>
-      <View style={styles.rowIcon}>
-        <Icon name={report.icon} size={15} color={fbColors.ink} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text style={styles.rowTitle}>{report.label}</Text>
-        <Text style={styles.rowBody}>Report preview source. Final court PDF generation comes later.</Text>
-      </View>
-      <PillButton tone={linked ? 'soft' : 'primary'} size="sm" icon={linked ? 'check' : 'plus'} onPress={onToggle}>
-        {linked ? 'Linked' : 'Link'}
-      </PillButton>
-    </View>
-  );
-}
-
-function AttachmentLinkRow({
-  attachment,
-  linked,
-  onToggle,
-}: {
-  attachment: EvidenceAttachment;
-  linked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <View style={styles.linkRow}>
-      <View style={styles.rowIcon}>
-        <Icon name={attachmentIcon(attachment)} size={15} color={fbColors.ink} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text style={styles.rowTitle}>{attachment.file_name}</Text>
-        <Text style={styles.rowBody}>{attachmentKind(attachment)} · Local metadata only</Text>
-      </View>
-      <PillButton tone={linked ? 'soft' : 'primary'} size="sm" icon={linked ? 'check' : 'plus'} onPress={onToggle}>
-        {linked ? 'Linked' : 'Link'}
-      </PillButton>
-    </View>
-  );
-}
-
-function ExhibitPlaceholders({ packageState }: { packageState: FilingPackageLocalState }) {
-  return (
-    <View style={styles.exhibitStack}>
-      {packageState.exhibitGroups.map((group) => (
-        <View key={group.id} style={styles.exhibitGroup}>
-          <View style={styles.exhibitHeader}>
-            <Text style={styles.rowTitle}>{group.label}</Text>
-            <Chip tone="sand" outline={false}>
-              Placeholder
-            </Chip>
-          </View>
-          <Text style={styles.rowBody}>
-            {group.entryIds.length} entries · {group.attachmentIds.length} attachments. Ordering controls are
-            reserved for a later filing-package pass.
-          </Text>
-          <View style={styles.actionRow}>
-            <PillButton tone="ghost" size="sm" icon="caret" disabled>
-              Move up coming later
-            </PillButton>
-            <PillButton tone="ghost" size="sm" icon="caret" disabled>
-              Move down coming later
-            </PillButton>
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function FilingWorkstationRail({
-  packageCount,
-  selectedTitle,
-  selectedPackage,
-  selectedPackageState,
-  selectedLinkedCount,
-  linkedEntriesCount,
-  linkedAttachmentsCount,
-  linkedReportsCount,
-  nextKeyDate,
-  checklistPercent,
-  persistenceActive,
-  onToggleChecklist,
-}: {
-  packageCount: number;
-  selectedTitle?: string;
-  selectedPackage: FilingPackage | null;
-  selectedPackageState: FilingPackageLocalState | null;
-  selectedLinkedCount: number;
-  linkedEntriesCount: number;
-  linkedAttachmentsCount: number;
-  linkedReportsCount: number;
-  nextKeyDate: KeyDate | null;
-  checklistPercent?: number;
-  persistenceActive: boolean;
-  onToggleChecklist: (item: FilingChecklistKey) => void;
-}) {
-  return (
-    <SoftCard p={14} style={styles.railCard}>
-      <Text style={styles.sectionLabel}>WORKSTATION RAIL</Text>
-      <Text style={styles.railValue}>{packageCount} packages</Text>
-      <Text style={styles.railText}>{selectedTitle || 'No package selected'}</Text>
-      <Rule />
-      {selectedPackage && selectedPackageState ? (
-        <View style={styles.railSection}>
-          <Text style={styles.railSectionTitle}>Checklist</Text>
-          {CHECKLIST_ITEMS.map((item) => (
-            <Pressable
-              key={item.value}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: selectedPackageState.checklist[item.value] }}
-              accessibilityLabel={`${item.label} checklist item`}
-              onPress={() => onToggleChecklist(item.value)}
-              style={({ pressed }) => [styles.railChecklistRow, pressed && styles.pressed]}
-            >
-              <View style={[styles.railCheckbox, selectedPackageState.checklist[item.value] && styles.checkboxActive]}>
-                {selectedPackageState.checklist[item.value] ? (
-                  <Icon name="check" size={12} color={fbColors.paper} />
-                ) : null}
-              </View>
-              <Text style={styles.railChecklistText}>{item.label}</Text>
-            </Pressable>
-          ))}
-          <View style={styles.railChecklistRow}>
-            <View style={styles.railCheckbox} />
-            <Text style={styles.railChecklistText}>Review placeholder</Text>
-          </View>
-        </View>
-      ) : (
-        <Text style={styles.railText}>Select a package to review checklist and exhibit context.</Text>
-      )}
-      <Rule />
-      <View style={styles.railSection}>
-        <Text style={styles.railSectionTitle}>Exhibit context</Text>
-        <Text style={styles.railText}>
-          Exhibit groups are local placeholders. Drag ordering, final labels, court PDFs, and e-filing come later.
-        </Text>
-      </View>
-      <Rule />
-      <View style={styles.railSection}>
-        <Text style={styles.railSectionTitle}>Date context</Text>
-        <Text style={styles.railText}>
-          {nextKeyDate
-            ? `${nextKeyDate.title} · ${formatDateLabel(nextKeyDate.event_date, nextKeyDate.event_time)} · ${getRelativeDueLabel(nextKeyDate.event_date)}`
-            : 'No upcoming key date is recorded for this case.'}
-        </Text>
-      </View>
-      <Rule />
-      <View style={styles.warningBox}>
-        <Text style={styles.warningTitle}>Organization aid</Text>
-        <Text style={styles.warningText}>This is an organization aid, not a filed document.</Text>
-      </View>
-      <Rule />
-      <Text style={styles.railText}>
-        {selectedLinkedCount} linked source items: {linkedEntriesCount} entries, {linkedAttachmentsCount} attachments, {linkedReportsCount} report previews.
-      </Text>
-      <Text style={styles.railText}>
-        Checklist {typeof checklistPercent === 'number' ? `${checklistPercent}%` : 'not started'}. Local persistence {persistenceActive ? 'active' : 'inactive'}.
-      </Text>
-    </SoftCard>
-  );
-}
+const param = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+const filingTypeLabel = (value: string) => FILING_TYPES.find((type) => type.value === value)?.label ?? value.replace(/_/g, ' ');
+const statusLabel = (value: string) => value === 'ready_for_review' ? 'Ready for review' : value === 'in_progress' ? 'In progress' : 'Draft';
 
 export default function Filings() {
-  const params = useLocalSearchParams();
-  const packageIdParam = getParam(params.packageId);
-  const {
-    activeCase,
-    filingPackages,
-    selectedPackage,
-    selectedPackageState,
-    filingBuilderState,
-    entries,
-    attachments,
-    keyDates,
-    filingEntryLinkCounts,
-    createFilingPackage,
-    selectFilingPackage,
-    updateFilingPackageStatus,
-    toggleFilingPackageEntry,
-    toggleFilingPackageAttachment,
-    toggleFilingPackageReport,
-    toggleFilingPackageChecklist,
-    loading,
-    persistence,
-  } = useFilingBuilder();
-  const { isMobile, width } = useResponsive();
-  const [title, setTitle] = useState('');
-  const [filingType, setFilingType] = useState(FILING_TYPES[0].value);
-  const [dueDate, setDueDate] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const { home } = useCaseIntelligenceHome();
+  return <FilingWorkspace key={`${home.activeCase?.user_id ?? ''}:${home.activeCase?.id ?? ''}`} />;
+}
 
+function FilingWorkspace() {
+  const params = useLocalSearchParams(); const packageIdParam = param(params.packageId);
+  const { activeCase, snapshot, filingPackages, selectedPackage: storedPackage, selectedPackageState: storedPackageState, filingBuilderState, entries, attachments, filingEntryLinkCounts, createFilingPackage, selectFilingPackage, updateFilingPackageStatus, toggleFilingPackageEntry, toggleFilingPackageAttachment, toggleFilingPackageReport, toggleFilingPackageChecklist, loading } = useFilingBuilder();
+  const contextError = useCaseIntelligenceStore((state) => state.contextError);
+  const { isMobile } = useResponsive();
+  const [title, setTitle] = useState(''); const [filingType, setFilingType] = useState(FILING_TYPES[0].value); const [dueDate, setDueDate] = useState('');
+  const [draftId, setDraftId] = useState(() => Crypto.randomUUID());
+  const [busy, setBusy] = useState(false); const operation = useRef(false); const mounted = useRef(true);
+  const [notice, setNotice] = useState<string | null>(null); const [error, setError] = useState<string | null>(null);
+  const attemptedRoute = useRef<string | null>(null);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const routeUnavailable = Boolean(packageIdParam && !filingPackages.some((row) => row.id === packageIdParam));
+  const selectedPackage = packageIdParam && storedPackage?.id !== packageIdParam ? null : storedPackage;
+  const selectedPackageState = selectedPackage ? storedPackageState : null;
+  const selection = useMemo(() => activeCase && selectedPackage ? resolveFilingPackageSelection({ snapshot, ownerId: activeCase.user_id, caseId: activeCase.id, packageId: selectedPackage.id, packageState: selectedPackageState }) : null, [snapshot, activeCase, selectedPackage, selectedPackageState]);
+  const disabled = busy || loading || !activeCase || !!contextError;
+  const canReview = !disabled && !!selection?.entries.length && !selection.issues.length;
+
+  function pinContext() {
+    const generation = getWorkspaceGeneration(); const sessionGeneration = useAuthStore.getState().sessionGeneration;
+    return () => {
+      const current = useCaseIntelligenceStore.getState(); const auth = useAuthStore.getState();
+      if (!mounted.current || generation !== getWorkspaceGeneration() || auth.sessionGeneration !== sessionGeneration || auth.recovery
+        || auth.session?.user.id !== activeCase?.user_id || current.ownerId !== activeCase?.user_id || getActiveCase(current.snapshot)?.id !== activeCase?.id) throw new Error('The account or case changed. Reopen this package before continuing.');
+    };
+  }
+  async function run(action: () => Promise<void>, success?: string) {
+    if (operation.current) return;
+    const assertCurrent = pinContext(); operation.current = true; setBusy(true); setNotice(null); setError(null);
+    try { assertCurrent(); await action(); assertCurrent(); if (success) setNotice(success); }
+    catch (failure) { if (mounted.current) setError(failure instanceof Error ? failure.message : 'Unable to save this package. Try again.'); }
+    finally { operation.current = false; if (mounted.current) setBusy(false); }
+  }
   useEffect(() => {
-    if (packageIdParam && filingPackages.some((filingPackage) => filingPackage.id === packageIdParam)) {
-      selectFilingPackage(packageIdParam);
-    }
-  }, [filingPackages, packageIdParam, selectFilingPackage]);
+    if (!packageIdParam || loading || !activeCase || attemptedRoute.current === packageIdParam || routeUnavailable) return;
+    attemptedRoute.current = packageIdParam;
+    void run(() => selectFilingPackage(packageIdParam));
+  }, [packageIdParam, loading, activeCase?.id, routeUnavailable]);
 
-  const linkedEntries = useMemo(() => {
-    if (!selectedPackageState) return [];
-    const linkedIds = new Set(selectedPackageState.linkedEntryIds);
-    return entries.filter((entry) => linkedIds.has(entry.id));
-  }, [entries, selectedPackageState]);
-
-  async function createPackage() {
-    if (creating) return;
-    setCreating(true);
-    setNotice(null);
-
+  function choosePackage(id: string) {
+    const assertCurrent = pinContext();
+    void run(async () => { await selectFilingPackage(id); assertCurrent(); router.setParams({ packageId: id }); });
+  }
+  function createPackage() {
+    const assertCurrent = pinContext();
+    void run(async () => {
+      const result = await createFilingPackage({ id: draftId, title: title.trim() || `${filingTypeLabel(filingType)} package`, filingType, dueDate, status: 'draft' });
+      assertCurrent(); setTitle(''); setDueDate(''); setDraftId(Crypto.randomUUID()); router.setParams({ packageId: result.filingPackage.id });
+    }, 'Package saved on this device. Account sync status appears above.');
+  }
+  function navigate(pathname: '/export-prep' | '/reports', reportType?: ReportPreviewType) {
+    if (!canReview || !selectedPackage || !activeCase) return;
     try {
-      const result = await createFilingPackage({
-        title: title.trim() || `${filingTypeLabel(filingType)} package`,
-        filingType,
-        dueDate,
-        status: 'draft',
-      });
-      setTitle('');
-      setDueDate('');
-      setNotice(`${result.filingPackage.title} was saved locally. No remote write was made.`);
-      router.setParams({ packageId: result.filingPackage.id });
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Unable to create the filing package locally.');
-    } finally {
-      setCreating(false);
-    }
+      pinContext()();
+      const current = useCaseIntelligenceStore.getState();
+      const reviewed = resolveFilingPackageSelection({ snapshot: current.snapshot, ownerId: activeCase.user_id, caseId: activeCase.id, packageId: selectedPackage.id, packageState: current.filingBuilderState.packageStates[selectedPackage.id] });
+      if (reviewed.issues.length || !reviewed.entryIds.length) throw new Error(reviewed.issues[0] || 'Link at least one shareable source before reviewing.');
+      router.push({ pathname, params: { packageId: selectedPackage.id, ...(reportType ? { reportType } : {}) } } as never);
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Review the package selections.'); }
   }
 
-  const selectedLinkedCount = linkedCount(selectedPackageState);
-  const selectedEntryCount = selectedPackageState?.linkedEntryIds.length ?? 0;
-  const selectedAttachmentCount = selectedPackageState?.linkedAttachmentIds.length ?? 0;
-  const selectedReportCount = selectedPackageState?.linkedReportTypes.length ?? 0;
-  const nextKeyDate = keyDates.find((keyDate) => !keyDate.is_completed) ?? null;
-  const showDesktopRail = !isMobile && width >= 1280;
-
-  return (
-    <CaseScreen
-      desktopMaxWidth={1180}
-      contentStyle={!isMobile ? styles.filingDesktopContent : undefined}
-      rightRail={
-        showDesktopRail ? (
-          <FilingWorkstationRail
-            packageCount={filingPackages.length}
-            selectedTitle={selectedPackage?.title}
-            selectedPackage={selectedPackage}
-            selectedPackageState={selectedPackageState}
-            selectedLinkedCount={selectedLinkedCount}
-            linkedEntriesCount={selectedEntryCount}
-            linkedAttachmentsCount={selectedAttachmentCount}
-            linkedReportsCount={selectedReportCount}
-            nextKeyDate={nextKeyDate}
-            checklistPercent={checklistProgress(selectedPackageState)}
-            persistenceActive={persistence.active}
-            onToggleChecklist={(item) => {
-              if (selectedPackage) toggleFilingPackageChecklist(selectedPackage.id, item);
-            }}
-          />
-        ) : (
-          false
-        )
-      }
-    >
-      <View style={styles.header}>
-        <Display size={32} style={styles.title}>
-          Filing Builder
-        </Display>
-        <Text style={styles.subtitle}>
-          Group entries, attachments, and report previews into local filing-package structures.{' '}
-          {fbLegalCopy.legalInformationNotAdvice}
-        </Text>
-      </View>
-
-      <View style={!isMobile ? styles.desktopFilingsGrid : undefined}>
-        <View style={!isMobile ? styles.desktopListColumn : undefined}>
-      <SoftCard p={16} style={[styles.createCard, !isMobile && styles.desktopPanelCard]}>
-        <View style={styles.sectionTitleRow}>
-          <View style={styles.sectionTitleLeft}>
-            <Icon name="folder" size={16} color={fbColors.ink} />
-            <Text style={styles.sectionTitle}>New filing package</Text>
-          </View>
-          <Chip tone={persistence.active ? 'forest' : 'amber'} outline={false}>
-            Local persistence {persistence.active ? 'active' : 'inactive'}
-          </Chip>
-        </View>
-
-        <View style={styles.field}>
+  return <CaseScreen desktopMaxWidth={1180}>
+    <View style={styles.header}>
+      <Display size={32}>Filing Builder</Display>
+      <Text style={styles.subtitle}>Organize selected records, review factual reports, and prepare court forms. {fbLegalCopy.legalInformationNotAdvice}</Text>
+    </View>
+    <InfoCallout title="Preparation status" tone="ink">Package status and checklist marks are your preparation notes. They do not establish that a document is complete, filed, accepted by a court or served. Filing and service are not performed by the app.</InfoCallout>
+    <View style={styles.actionRow}>
+      <PillButton tone="ghost" icon="doc" disabled={busy} onPress={() => router.push('/forms' as never)}>Prepare court forms</PillButton>
+      <PillButton tone="ghost" icon="folder" disabled={busy} onPress={() => router.push('/briefcase' as never)}>Open hearing Briefcase</PillButton>
+    </View>
+    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+    {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
+    {routeUnavailable && !loading ? <InfoCallout title="Package unavailable" tone="ink">The requested package is not available in this case. Choose an available package below; no substitute selection will be exported.</InfoCallout> : null}
+    {!activeCase && !loading ? <PillButton onPress={() => router.push('/onboarding' as never)}>Set up a case</PillButton> : null}
+    <View style={!isMobile ? styles.desktopFilingsGrid : undefined}>
+      <View style={!isMobile ? styles.desktopListColumn : undefined}>
+        <SoftCard p={16} style={styles.createCard}>
+          <Text style={styles.sectionTitle}>New filing package</Text>
           <Text style={styles.label}>Title</Text>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Example: May hearing evidence packet"
-            placeholderTextColor={fbColors.inkFaint}
-            style={styles.input}
-          />
-        </View>
-
-        <View style={styles.field}>
+          <TextInput accessibilityLabel="Package title" value={title} onChangeText={setTitle} editable={!disabled} placeholder="Example: Hearing evidence packet" placeholderTextColor={fbColors.inkFaint} style={styles.input} />
           <Text style={styles.label}>Filing type</Text>
-          <View style={styles.chipWrap}>
-            {FILING_TYPES.map((option) => (
-              <Pressable
-                key={option.value}
-                accessibilityRole="button"
-                accessibilityState={{ selected: filingType === option.value }}
-                accessibilityLabel={`Filing type: ${option.label}`}
-                onPress={() => setFilingType(option.value)}
-                style={({ pressed }) => [
-                  styles.filterChip,
-                  filingType === option.value && styles.filterChipActive,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Chip tone={option.tone} outline={filingType !== option.value}>
-                  {option.label}
-                </Chip>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Due date placeholder</Text>
-          <TextInput
-            value={dueDate}
-            onChangeText={setDueDate}
-            placeholder="YYYY-MM-DD optional"
-            placeholderTextColor={fbColors.inkFaint}
-            autoCapitalize="none"
-            style={styles.input}
-          />
-        </View>
-
-        <PillButton tone="primary" size="lg" icon="plus" full disabled={creating} onPress={createPackage}>
-          {creating ? 'Saving locally' : 'Create filing package'}
-        </PillButton>
-        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-      </SoftCard>
-
-      <View style={styles.resultsHeader}>
-        <Text style={styles.sectionLabel}>FILING PACKAGES</Text>
-        <Text style={styles.resultCount}>
-          {loading ? 'Loading' : `${filingPackages.length} packages`} · {activeCase?.title || 'Current case'}
-        </Text>
-      </View>
-
-      {filingPackages.length ? (
-        <View style={styles.packageStack}>
-          {filingPackages.map((filingPackage) => (
-            <PackageCard
-              key={filingPackage.id}
-              filingPackage={filingPackage}
-              packageState={filingBuilderState.packageStates[filingPackage.id] ?? null}
-              active={selectedPackage?.id === filingPackage.id}
-              onPress={() => {
-                selectFilingPackage(filingPackage.id);
-                router.setParams({ packageId: filingPackage.id });
-              }}
-            />
-          ))}
-        </View>
-      ) : (
-        <SoftCard p={18} style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No filing packages yet</Text>
-          <Text style={styles.emptyBody}>
-            Create a draft package to group local entries, evidence metadata, and report previews. No PDF or e-filing is generated.
-          </Text>
+          <View style={styles.chipWrap}>{FILING_TYPES.map((option) => <PillButton key={option.value} tone={filingType === option.value ? 'soft' : 'ghost'} size="sm" disabled={disabled} onPress={() => setFilingType(option.value)}>{option.label}</PillButton>)}</View>
+          <Text style={styles.label}>Due date (optional)</Text>
+          <TextInput accessibilityLabel="Package due date" value={dueDate} onChangeText={setDueDate} editable={!disabled} placeholder="YYYY-MM-DD" autoCapitalize="none" placeholderTextColor={fbColors.inkFaint} style={styles.input} />
+          <PillButton icon="plus" disabled={disabled} onPress={createPackage}>{busy ? 'Saving…' : 'Create filing package'}</PillButton>
         </SoftCard>
-      )}
-        </View>
-
-        <View style={!isMobile ? styles.desktopDetailColumn : undefined}>
-      {selectedPackage && selectedPackageState ? (
-        <View style={[styles.detailStack, !isMobile && styles.desktopDetailStack]}>
-          <SoftCard p={16} style={styles.detailCard}>
-            <View style={styles.sectionTitleRow}>
-              <View style={styles.sectionTitleLeft}>
-                <Icon name="scales" size={16} color={fbColors.ink} />
-                <Text style={styles.sectionTitle}>{selectedPackage.title}</Text>
-              </View>
-              <Chip tone={statusTone(selectedPackage.status)} outline={false}>
-                {statusLabel(selectedPackage.status)}
-              </Chip>
-            </View>
-            <Text style={styles.sectionBody}>
-              {filingTypeLabel(selectedPackage.filing_type)} · Due date placeholder:{' '}
-              {selectedPackage.due_date || 'not set'}
-            </Text>
-            <Segment<FilingPackageStatus>
-              items={[
-                { v: 'draft', label: 'Draft' },
-                { v: 'in_progress', label: 'In progress' },
-                { v: 'ready_for_review', label: 'Ready for review' },
-              ]}
-              value={selectedPackage.status as FilingPackageStatus}
-              onChange={(status) => updateFilingPackageStatus(selectedPackage.id, status)}
-            />
-            <ProgressBar pct={selectedPackage.completion_percent} label="Checklist progress" />
+        <View style={styles.resultsHeader}><Text style={styles.sectionLabel}>FILING PACKAGES</Text><Text style={styles.resultCount}>{filingPackages.length} · {activeCase?.title ?? 'Current case'}</Text></View>
+        <View style={styles.packageStack}>{filingPackages.map((pkg) => <Pressable key={pkg.id} accessibilityRole="button" accessibilityLabel={`Open ${pkg.title}`} accessibilityState={{ selected: selectedPackage?.id === pkg.id, disabled }} disabled={disabled} onPress={() => choosePackage(pkg.id)}>
+          <SoftCard p={14} style={[styles.packageCard, selectedPackage?.id === pkg.id && styles.packageCardActive]}>
+            <Text style={styles.packageTitle}>{pkg.title}</Text><Text style={styles.packageMeta}>{filingTypeLabel(pkg.filing_type)} · {statusLabel(pkg.status)} · Due {pkg.due_date || 'not set'}</Text>
+            <Text style={styles.packageMeta}>{filingBuilderState.packageStates[pkg.id]?.linkedEntryIds.length ?? 0} entry links · {filingBuilderState.packageStates[pkg.id]?.linkedAttachmentIds.length ?? 0} original links</Text>
           </SoftCard>
-
-          {isMobile ? (
-            <SoftCard p={16} style={styles.detailCard}>
-              <Text style={styles.sectionLabel}>CHECKLIST PLACEHOLDER</Text>
-              {CHECKLIST_ITEMS.map((item) => (
-                <ChecklistRow
-                  key={item.value}
-                  item={item}
-                  completed={selectedPackageState.checklist[item.value]}
-                  onToggle={() => toggleFilingPackageChecklist(selectedPackage.id, item.value)}
-                />
-              ))}
-            </SoftCard>
-          ) : null}
-
+        </Pressable>)}</View>
+        {!filingPackages.length ? <Text style={styles.emptyBody}>Create a draft package, then choose its records and review its outputs.</Text> : null}
+      </View>
+      <View style={!isMobile ? styles.desktopDetailColumn : undefined}>
+        {selectedPackage && selectedPackageState ? <View style={styles.detailStack}>
+          <SoftCard p={16} style={styles.detailCard}>
+            <Text style={styles.sectionTitle}>{selectedPackage.title}</Text>
+            <Text style={styles.sectionBody}>Your preparation status</Text>
+            <Segment<FilingPackageStatus> disabled={disabled} items={[{ v: 'draft', label: 'Draft' }, { v: 'in_progress', label: 'In progress' }, { v: 'ready_for_review', label: 'Ready for review' }]} value={selectedPackage.status as FilingPackageStatus} onChange={(status) => void run(() => updateFilingPackageStatus(selectedPackage.id, status), 'Preparation status saved.')} />
+            <ProgressBar pct={selectedPackage.completion_percent} label="Your checklist marks" />
+            {CHECKLIST_ITEMS.map((item) => <Pressable key={item.value} accessibilityRole="checkbox" accessibilityLabel={item.label} accessibilityState={{ checked: selectedPackageState.checklist[item.value], disabled }} disabled={disabled} onPress={() => void run(() => toggleFilingPackageChecklist(selectedPackage.id, item.value), 'Checklist mark saved.')} style={styles.checklistRow}>
+              <Text style={styles.rowTitle}>{selectedPackageState.checklist[item.value] ? '☑' : '☐'}</Text><View style={styles.checklistCopy}><Text style={styles.rowTitle}>{item.label}</Text><Text style={styles.rowBody}>{item.body}</Text></View>
+            </Pressable>)}
+          </SoftCard>
+          <SoftCard p={16} style={styles.detailCard}>
+            <Text style={styles.sectionLabel}>REVIEW THIS PACKAGE</Text>
+            <Text style={styles.sectionBody}>{selection?.entryIds.length ?? 0} shareable entries · {selection?.attachments.length ?? 0} original files · {selection?.reportTypes.length ?? 0} linked report types.</Text>
+            <Text style={styles.sectionBody}>An original-file link includes its parent entry in the review. The evidence ZIP includes every live original attached to the reviewed entries, including sibling files you did not link individually. The PDF lists source references; it does not embed those original files.</Text>
+            {selection?.issues.map((issue) => <Text key={issue} accessibilityRole="alert" style={styles.error}>{issue}</Text>)}
+            {selection && (selection.unavailableEntryIds.length > 0 || selection.unavailableAttachmentIds.length > 0) ? <View style={styles.entryStack}>
+              <Text style={styles.sectionLabel}>UNAVAILABLE LINKED SOURCES</Text>
+              <Text style={styles.sectionBody}>These source records are no longer available in this case. Unlinking removes only the package reference; it does not delete a record or original file.</Text>
+              {selection.unavailableEntryIds.map((id, index) => <PillButton key={`entry-${id}`} tone="ghost" size="sm" disabled={disabled} onPress={() => void run(() => toggleFilingPackageEntry(selectedPackage.id, id), 'Unavailable entry link removed from this package.')}>
+                Unlink unavailable entry {index + 1}
+              </PillButton>)}
+              {selection.unavailableAttachmentIds.map((id, index) => <PillButton key={`original-${id}`} tone="ghost" size="sm" disabled={disabled} onPress={() => void run(() => toggleFilingPackageAttachment(selectedPackage.id, id), 'Unavailable original link removed from this package.')}>
+                Unlink unavailable original {index + 1}
+              </PillButton>)}
+            </View> : null}
+            {selection?.entries.map((entry) => <PillButton key={entry.id} tone="ghost" size="sm" icon="doc" disabled={busy} onPress={() => router.push({ pathname: '/entry/[id]', params: { id: entry.id } } as never)}>{entry.title || 'Untitled entry'}{selection.attachmentParentEntryIds.includes(entry.id) && !selectedPackageState.linkedEntryIds.includes(entry.id) ? ' · from original link' : ''}</PillButton>)}
+            {!selection?.entryIds.length ? <Text style={styles.emptyBody}>Link at least one shareable entry or original below. A report-type link alone does not select case records.</Text> : null}
+            <PillButton icon="doc" disabled={!canReview} onPress={() => navigate('/export-prep')}>Review timeline PDF / evidence ZIP</PillButton>
+            <Text style={styles.rowBody}>Private entries are blocked. Private notes and app metadata are excluded from shared outputs. Verify the content of every original before sharing.</Text>
+          </SoftCard>
           <SoftCard p={16} style={styles.detailCard}>
             <Text style={styles.sectionLabel}>LINK ENTRIES</Text>
-            <Text style={styles.sectionBody}>
-              Select factual source entries for this package. Private notes stay separate from court-ready material.
-            </Text>
-            <View style={styles.entryStack}>
-              {entries.map((entry) => {
-                const linked = selectedPackageState.linkedEntryIds.includes(entry.id);
-                return (
-                  <View key={entry.id} style={styles.entryLinkBlock}>
-                    <EntryCard
-                      entry={entry}
-                      attachmentCount={attachmentCountForEntry(attachments, entry.id)}
-                      filingLinkCount={filingEntryLinkCounts[entry.id] ?? 0}
-                      compact
-                      onPress={() => router.push({ pathname: '/entry/[id]', params: { id: entry.id } } as never)}
-                    />
-                    <PillButton
-                      tone={linked ? 'soft' : 'primary'}
-                      size="sm"
-                      icon={linked ? 'check' : 'plus'}
-                      onPress={() => toggleFilingPackageEntry(selectedPackage.id, entry.id)}
-                    >
-                      {linked ? 'Linked to filing' : 'Link entry'}
-                    </PillButton>
-                  </View>
-                );
-              })}
-            </View>
+            {entries.map((entry) => { const linked = selectedPackageState.linkedEntryIds.includes(entry.id); const privateEntry = isPrivateEntry(entry); return <View key={entry.id} style={styles.entryLinkBlock}>
+              <EntryCard entry={entry} attachmentCount={attachments.filter((file) => file.entry_id === entry.id).length} filingLinkCount={filingEntryLinkCounts[entry.id] ?? 0} compact onPress={() => router.push({ pathname: '/entry/[id]', params: { id: entry.id } } as never)} />
+              <PillButton tone={linked ? 'soft' : 'ghost'} size="sm" disabled={disabled || (!linked && privateEntry)} onPress={() => void run(() => toggleFilingPackageEntry(selectedPackage.id, entry.id), 'Entry selection saved.')}>{linked ? 'Unlink entry' : privateEntry ? 'Private entry — excluded' : 'Link entry'}</PillButton>
+            </View>; })}
           </SoftCard>
-
           <SoftCard p={16} style={styles.detailCard}>
-            <Text style={styles.sectionLabel}>LINK REPORT PREVIEWS</Text>
-            {REPORT_OPTIONS.map((report) => (
-              <ReportLinkRow
-                key={report.value}
-                report={report}
-                linked={selectedPackageState.linkedReportTypes.includes(report.value)}
-                onToggle={() => toggleFilingPackageReport(selectedPackage.id, report.value)}
-              />
-            ))}
+            <Text style={styles.sectionLabel}>LINK REPORT TYPES</Text>
+            <Text style={styles.sectionBody}>Each report uses this package’s selected entries and original-file parents. Review its report-specific subset before downloading a factual PDF.</Text>
+            {REPORT_OPTIONS.map((report) => { const linked = selectedPackageState.linkedReportTypes.includes(report.value); return <View key={report.value} style={styles.linkRow}>
+              <View style={styles.rowCopy}><Text style={styles.rowTitle}>{report.label}</Text></View>
+              <PillButton tone={linked ? 'soft' : 'ghost'} size="sm" disabled={disabled} onPress={() => void run(() => toggleFilingPackageReport(selectedPackage.id, report.value), 'Report link saved.')}>{linked ? 'Unlink' : 'Link'}</PillButton>
+              {linked ? <PillButton size="sm" tone="ghost" disabled={!canReview} onPress={() => navigate('/reports', report.value)}>Review</PillButton> : null}
+            </View>; })}
           </SoftCard>
-
           <SoftCard p={16} style={styles.detailCard}>
-            <Text style={styles.sectionLabel}>LINK ATTACHMENTS</Text>
-            <Text style={styles.sectionBody}>
-              Attachment links use local metadata only. Uploads and storage sync are not enabled.
-            </Text>
-            {attachments.length ? (
-              attachments.map((attachment) => (
-                <AttachmentLinkRow
-                  key={attachment.id}
-                  attachment={attachment}
-                  linked={selectedPackageState.linkedAttachmentIds.includes(attachment.id)}
-                  onToggle={() => toggleFilingPackageAttachment(selectedPackage.id, attachment.id)}
-                />
-              ))
-            ) : (
-              <Text style={styles.emptyBody}>No local attachment metadata is available yet.</Text>
-            )}
+            <Text style={styles.sectionLabel}>LINK ORIGINAL FILES</Text>
+            <Text style={styles.sectionBody}>Linking an original includes its parent entry and that entry’s other originals in package review. Files are verified again when generating the evidence ZIP.</Text>
+            {attachments.map((attachment) => { const linked = selectedPackageState.linkedAttachmentIds.includes(attachment.id); const privateSource = entries.some((entry) => entry.id === attachment.entry_id && isPrivateEntry(entry)); return <View key={attachment.id} style={styles.linkRow}>
+              <View style={styles.rowCopy}><Text style={styles.rowTitle}>{attachment.file_name}</Text><Text style={styles.rowBody}>{privateSource ? 'Private source — excluded' : attachment.mime_type || 'Original file'}</Text></View>
+              <PillButton size="sm" tone={linked ? 'soft' : 'ghost'} disabled={disabled || (!linked && privateSource)} onPress={() => void run(() => toggleFilingPackageAttachment(selectedPackage.id, attachment.id), 'Original link saved.')}>{linked ? 'Unlink' : 'Link'}</PillButton>
+            </View>; })}
+            {!attachments.length ? <Text style={styles.emptyBody}>Capture an original with a case entry to make it available here.</Text> : null}
           </SoftCard>
-
-          <SoftCard p={16} style={styles.detailCard}>
-            <Text style={styles.sectionLabel}>EXHIBIT GROUPING PLACEHOLDERS</Text>
-            <ExhibitPlaceholders packageState={selectedPackageState} />
-            {linkedEntries.length ? (
-              <Text style={styles.sectionBody}>
-                Current linked entries begin with {titleForEntry(linkedEntries[0])}. Exhibit labels and reordering are placeholders.
-              </Text>
-            ) : null}
-          </SoftCard>
-
-          <InfoCallout title="Filing limits" tone="ink">
-            This builder groups local records only. It does not draft declarations with AI, generate final court PDFs, e-file, upload evidence, or write to Supabase.
-          </InfoCallout>
-
-          <View style={styles.actionRow}>
-            <PillButton tone="ghost" size="md" icon="doc" disabled>
-              Final court PDF coming later
-            </PillButton>
-            <PillButton tone="ghost" size="md" icon="upload" disabled>
-              E-filing coming later
-            </PillButton>
-          </View>
-        </View>
-      ) : !isMobile ? (
-        <SoftCard p={18} style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Select a filing package</Text>
-          <Text style={styles.emptyBody}>
-            Choose a local filing package from the list, or create a draft package to start grouping source records.
-          </Text>
-        </SoftCard>
-      ) : null}
-        </View>
+          <InfoCallout title="Forms, filing and service" tone="ink">Court forms opens a separate editable MC-031 / FL-300 draft workflow for this case. Review and explicitly insert source text there; package links are not automatically inserted. The app does not submit filings, arrange service or determine whether your papers satisfy local requirements.</InfoCallout>
+        </View> : <Text style={styles.emptyBody}>{busy ? 'Opening package…' : 'Choose a package to review its sources and outputs.'}</Text>}
       </View>
-
-      <Rule style={styles.bottomRule} />
-      <Text style={styles.footerNote}>
-        Filing Builder is local-first and factual. It does not provide legal advice or determine which filing is appropriate.
-      </Text>
-    </CaseScreen>
-  );
+    </View>
+  </CaseScreen>;
 }
 
 const styles = StyleSheet.create({
+  error: { color: fbColors.ox, fontFamily: fbFonts.sansRegular, fontSize: fbType.body, lineHeight: 21 },
   header: {
     gap: fbSpacing.x2,
   },

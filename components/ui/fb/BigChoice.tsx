@@ -34,6 +34,7 @@ export function BigChoice({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={hint}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',

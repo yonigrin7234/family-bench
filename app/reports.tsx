@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
-import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { localCalendarDate } from '@/lib/utils/dateInput';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { resolveFilingPackageSelection } from '@/lib/filings/model';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
   Chip,
@@ -27,7 +29,6 @@ import {
 import {
   ENTRY_TYPE_OPTIONS,
   formatDateLabel,
-  getEntryMetadata,
   getEntryTypeOption,
   useCaseIntelligenceTimeline,
   useReportPreviewState,
@@ -39,227 +40,31 @@ import {
   type SavedReportVersion,
 } from '@/lib/case-intelligence';
 import { useResponsive } from '@/lib/hooks/useResponsive';
+import { validateDateRange } from '@/lib/export/model';
+import { buildFactualReports, exchangeCalculation, reportDateRange, selectReportEntries, type FactualReport } from '@/lib/reporting/reports';
+import { useCaseIntelligenceStore } from '@/lib/case-intelligence/useCaseIntelligence';
+import { getWorkspaceGeneration, useAuthStore } from '@/lib/auth/session';
+import { getActiveCase } from '@/lib/case-intelligence/selectors';
 
 type FlagFilter = ReportPreviewFlagFilter;
 type ReportType = ReportPreviewType;
 
-type ReportPreview = {
-  id: ReportType;
-  title: string;
-  description: string;
-  icon: IconName;
-  entries: Entry[];
-  keyFacts: string[];
-  placeholder?: string;
-};
+type ReportPreview = FactualReport;
 type AttachmentCountsByEntryId = Record<string, number>;
 
 const REPORT_TYPES: Array<{ value: ReportType; label: string; tone: ChipTone }> = [
-  { value: 'timeline', label: 'Timeline summary', tone: 'ink' },
+  { value: 'timeline', label: 'Full journal', tone: 'ink' },
   { value: 'flagged', label: 'Flagged entries', tone: 'ox' },
   { value: 'communication', label: 'Communication', tone: 'sand' },
   { value: 'medical', label: 'Medical', tone: 'forest' },
-  { value: 'custodyExchange', label: 'Exchange placeholder', tone: 'amber' },
+  { value: 'custodyExchange', label: 'Exchange and missed time', tone: 'amber' },
+  { value: 'late', label: 'Late incidents', tone: 'ox' },
+  { value: 'expense', label: 'Expenses', tone: 'sand' },
+  { value: 'benchBrief', label: 'Bench Brief', tone: 'ink' },
 ];
-
-function byEntryDateAsc(a: Entry, b: Entry) {
-  const left = `${a.event_date}T${a.event_time ?? '00:00:00'}`;
-  const right = `${b.event_date}T${b.event_time ?? '00:00:00'}`;
-  return left.localeCompare(right);
-}
 
 function titleForEntry(entry: Entry) {
   return entry.title || getEntryTypeOption(entry.entry_type).defaultTitle;
-}
-
-function bodyForFact(entry: Entry) {
-  return entry.body || entry.court_ready_summary || 'No body text recorded.';
-}
-
-function trimFact(value: string, max = 132) {
-  const compact = value.replace(/\s+/g, ' ').trim();
-  if (compact.length <= max) return compact;
-  return `${compact.slice(0, max - 1).trim()}...`;
-}
-
-function distinctTypes(entries: Entry[]) {
-  const labels = Array.from(
-    new Set(entries.map((entry) => getEntryTypeOption(entry.entry_type).shortLabel)),
-  );
-  return labels.length ? labels.join(', ') : 'No entry types in this preview';
-}
-
-function metadataString(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function minutesFromTime(value?: string | null) {
-  if (!value) return null;
-  const match = value.match(/(\d{1,2}):(\d{2})/);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-  return hours * 60 + minutes;
-}
-
-function getExchangeTimes(entry: Entry) {
-  const metadata = getEntryMetadata(entry);
-  const scheduled =
-    metadataString(metadata.scheduled_time) ??
-    metadataString(metadata.scheduled_exchange_time) ??
-    metadataString(metadata.scheduled_at);
-  const actual =
-    metadataString(metadata.actual_time) ??
-    metadataString(metadata.actual_exchange_time) ??
-    entry.event_time;
-  const scheduledMinutes = minutesFromTime(scheduled);
-  const actualMinutes = minutesFromTime(actual);
-
-  if (scheduledMinutes === null || actualMinutes === null) {
-    return { scheduled, actual, lateMinutes: null };
-  }
-
-  return {
-    scheduled,
-    actual,
-    lateMinutes: Math.max(0, actualMinutes - scheduledMinutes),
-  };
-}
-
-function buildCustodyCalculation(entries: Entry[]) {
-  const exchangeEntries = entries.filter((entry) =>
-    ['pickup_dropoff', 'visit_denied', 'schedule_change'].includes(entry.entry_type),
-  );
-  const calculatedRows = exchangeEntries
-    .map((entry) => ({ entry, ...getExchangeTimes(entry) }))
-    .filter((row) => row.lateMinutes !== null);
-  const totalLateMinutes = calculatedRows.reduce((total, row) => total + (row.lateMinutes ?? 0), 0);
-
-  return {
-    exchangeCount: exchangeEntries.length,
-    flaggedExchangeCount: exchangeEntries.filter((entry) => entry.is_flagged).length,
-    calculatedRows,
-    totalLateMinutes,
-    summary:
-      calculatedRows.length > 0
-        ? `${calculatedRows.length} entries have scheduled/actual time fields. Calculated late minutes total ${totalLateMinutes}.`
-        : 'Scheduled-vs-actual calculation placeholder: no entries currently include both scheduled and actual exchange times.',
-  };
-}
-
-function dateRangeLabel(entries: Entry[]) {
-  if (!entries.length) return 'Date range placeholder: no entries in the current preview.';
-
-  const sorted = [...entries].sort(byEntryDateAsc);
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-
-  if (first.event_date === last.event_date) {
-    return `Date range placeholder: ${formatDateLabel(first.event_date)}.`;
-  }
-
-  return `Date range placeholder: ${formatDateLabel(first.event_date)} to ${formatDateLabel(last.event_date)}.`;
-}
-
-function fallbackFacts(entries: Entry[]) {
-  if (!entries.length) return ['No matching entries are included in this preview.'];
-
-  return entries.slice(0, 4).map((entry) => {
-    const option = getEntryTypeOption(entry.entry_type);
-    return `${formatDateLabel(entry.event_date, entry.event_time)} · ${option.shortLabel}: ${trimFact(bodyForFact(entry))}`;
-  });
-}
-
-function buildReports(entries: Entry[]): Record<ReportType, ReportPreview> {
-  const flaggedEntries = entries.filter((entry) => entry.is_flagged);
-  const communicationEntries = entries.filter((entry) =>
-    ['message', 'schedule_change', 'child_statement'].includes(entry.entry_type),
-  );
-  const medicalEntries = entries.filter((entry) => entry.entry_type === 'medical');
-  const custodyExchangeEntries = entries.filter((entry) =>
-    ['pickup_dropoff', 'visit_denied', 'schedule_change'].includes(entry.entry_type),
-  );
-  const custodyCalculation = buildCustodyCalculation(custodyExchangeEntries);
-
-  return {
-    timeline: {
-      id: 'timeline',
-      title: 'Timeline summary',
-      description: 'A factual sequence of the entries currently shown by filters.',
-      icon: 'clock',
-      entries,
-      keyFacts: entries.length
-        ? [
-            `${entries.length} entries are included in the current preview.`,
-            `${flaggedEntries.length} included entries are flagged for review.`,
-            `Included entry types: ${distinctTypes(entries)}.`,
-            ...fallbackFacts(entries).slice(0, 2),
-          ]
-        : fallbackFacts(entries),
-    },
-    flagged: {
-      id: 'flagged',
-      title: 'Flagged entries report',
-      description: 'A list of entries marked for closer review.',
-      icon: 'flag',
-      entries: flaggedEntries,
-      keyFacts: flaggedEntries.length
-        ? [
-            `${flaggedEntries.length} flagged entries are included.`,
-            `Flag categories recorded: ${
-              Array.from(new Set(flaggedEntries.map((entry) => entry.flag_category).filter(Boolean))).join(', ') ||
-              'not specified'
-            }.`,
-            ...fallbackFacts(flaggedEntries).slice(0, 3),
-          ]
-        : ['No flagged entries match the current filters.'],
-    },
-    communication: {
-      id: 'communication',
-      title: 'Communication summary',
-      description: 'Messages, schedule changes, and child-statement notes from the filtered set.',
-      icon: 'chat',
-      entries: communicationEntries,
-      keyFacts: communicationEntries.length
-        ? [
-            `${communicationEntries.length} communication-related entries are included.`,
-            `Included categories: ${distinctTypes(communicationEntries)}.`,
-            ...fallbackFacts(communicationEntries).slice(0, 3),
-          ]
-        : ['No communication-related entries match the current filters.'],
-    },
-    medical: {
-      id: 'medical',
-      title: 'Medical summary',
-      description: 'Medical appointments, symptoms, medications, or health notes from entries.',
-      icon: 'shield',
-      entries: medicalEntries,
-      keyFacts: medicalEntries.length
-        ? [
-            `${medicalEntries.length} medical entries are included.`,
-            ...fallbackFacts(medicalEntries).slice(0, 4),
-          ]
-        : ['No medical entries match the current filters.'],
-    },
-    custodyExchange: {
-      id: 'custodyExchange',
-      title: 'Custody/exchange summary placeholder',
-      description: 'Exchange, missed-time, and schedule-change entries grouped for later drafting.',
-      icon: 'home',
-      entries: custodyExchangeEntries,
-      keyFacts: custodyExchangeEntries.length
-        ? [
-            `${custodyExchangeEntries.length} custody or exchange entries are included.`,
-            `${custodyCalculation.flaggedExchangeCount} included exchange entries are flagged.`,
-            custodyCalculation.summary,
-            `Included categories: ${distinctTypes(custodyExchangeEntries)}.`,
-            ...fallbackFacts(custodyExchangeEntries).slice(0, 3),
-          ]
-        : ['No custody or exchange entries match the current filters.'],
-      placeholder: 'This is a preview grouping only. Court PDF drafting comes later.',
-    },
-  };
 }
 
 function openEntry(entryId: string) {
@@ -389,6 +194,11 @@ function ReportPreviewCard({
   selectable,
   selectedEntryIds,
   onToggleEntry,
+  sourceEntries,
+  onExport,
+  exportDisabled,
+  onDownloadReport,
+  downloadingReport,
 }: {
   report: ReportPreview;
   attachmentCountsByEntryId: AttachmentCountsByEntryId;
@@ -397,13 +207,18 @@ function ReportPreviewCard({
   selectable?: boolean;
   selectedEntryIds?: Set<string>;
   onToggleEntry?: (entryId: string) => void;
+  sourceEntries?: Entry[];
+  onExport: () => void;
+  exportDisabled: boolean;
+  onDownloadReport: () => void;
+  downloadingReport: boolean;
 }) {
-  const references = report.entries.slice(0, 6);
+  const references = sourceEntries ?? report.entries;
   const attachmentCount = report.entries.reduce(
     (total, entry) => total + (attachmentCountsByEntryId[entry.id] ?? 0),
     0,
   );
-  const custodyCalculation = report.id === 'custodyExchange' ? buildCustodyCalculation(report.entries) : null;
+  const custodyCalculation = ['custodyExchange', 'late'].includes(report.id) ? exchangeCalculation(report.entries) : null;
 
   return (
     <SoftCard p={16} style={styles.reportCard}>
@@ -430,7 +245,7 @@ function ReportPreviewCard({
       <View style={[styles.metaGrid, dense && styles.desktopMetaGrid]}>
         <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
           <Text style={styles.metaLabel}>DATE RANGE</Text>
-          <Text style={styles.metaValue}>{dateRangeLabel(report.entries)}</Text>
+          <Text style={styles.metaValue}>{reportDateRange(report.entries)}</Text>
         </View>
         <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
           <Text style={styles.metaLabel}>INCLUDED ENTRIES</Text>
@@ -440,23 +255,17 @@ function ReportPreviewCard({
           <Text style={styles.metaLabel}>SOURCE ATTACHMENTS</Text>
           <Text style={styles.metaValue}>
             {attachmentCount
-              ? `${attachmentCount} local attachment metadata records`
-              : 'No attachment metadata in this preview'}
+              ? `${attachmentCount} linked file records`
+              : 'No linked originals in this selection'}
           </Text>
         </View>
       </View>
-
-      {report.placeholder ? (
-        <InfoCallout title="Placeholder" tone="ink">
-          {report.placeholder}
-        </InfoCallout>
-      ) : null}
 
       {custodyCalculation ? (
         <View style={styles.calculationPanel}>
           <View style={styles.calculationHeader}>
             <Icon name="clock" size={15} color={fbColors.ink} />
-            <Text style={styles.calculationTitle}>Custody calculation foundation</Text>
+            <Text style={styles.calculationTitle}>Recorded exchange timing</Text>
           </View>
           <View style={[styles.metaGrid, dense && styles.desktopMetaGrid]}>
             <View style={[styles.metaBox, dense && styles.desktopMetaBox]}>
@@ -472,7 +281,7 @@ function ReportPreviewCard({
               <Text style={styles.metaValue}>
                 {custodyCalculation.calculatedRows.length
                   ? `${custodyCalculation.totalLateMinutes} calculated minutes`
-                  : 'Placeholder until scheduled and actual times exist'}
+                  : 'No valid paired times recorded'}
               </Text>
             </View>
           </View>
@@ -492,6 +301,13 @@ function ReportPreviewCard({
         </View>
       </View>
 
+      {report.calculationRows.length ? <View style={styles.sectionBlock}>
+        <Text style={styles.sectionLabel}>CALCULATIONS AND SOURCES</Text>
+        {report.calculationRows.map((row) => <Pressable key={`${row.entryId}:${row.text}`} accessibilityRole="button" accessibilityLabel={`Open source for ${row.text}`} onPress={() => openEntry(row.entryId)} style={styles.metaBox}>
+          <Text style={styles.factText}>{row.text}</Text>
+          <Text style={styles.metaValue}>Source: {row.entryId}</Text>
+        </Pressable>)}
+      </View> : null}
       <Rule />
 
       <View style={styles.sectionBlock}>
@@ -518,17 +334,18 @@ function ReportPreviewCard({
         )}
       </View>
 
-      <PillButton tone="ghost" size="md" icon="doc" disabled full>
-        Export PDF coming later
+      <PillButton tone="primary" icon="doc" disabled={exportDisabled || downloadingReport} onPress={onDownloadReport}>
+        {downloadingReport ? 'Preparing report PDF…' : 'Download this report PDF'}
       </PillButton>
       <PillButton
         tone="soft"
         size="md"
         icon="doc"
         full
-        onPress={() => router.push({ pathname: '/export-prep', params: { mode: 'report' } } as never)}
+        disabled={exportDisabled}
+        onPress={onExport}
       >
-        Preview report export data
+        Prepare PDF or evidence ZIP
       </PillButton>
     </SoftCard>
   );
@@ -543,6 +360,8 @@ function ReportsContextRail({
   savedReportVersions,
   filingPackages,
   onSaveReport,
+  savingReport,
+  saveDisabled,
   onToggleReportFiling,
 }: {
   report: ReportPreview;
@@ -553,6 +372,8 @@ function ReportsContextRail({
   savedReportVersions: SavedReportVersion[];
   filingPackages: FilingPackage[];
   onSaveReport: () => void;
+  savingReport: boolean;
+  saveDisabled: boolean;
   onToggleReportFiling: (packageId: string) => void;
 }) {
   return (
@@ -561,8 +382,8 @@ function ReportsContextRail({
       <Text style={styles.railValue}>{report.entries.length} entries</Text>
       <Text style={styles.railText}>{report.title}</Text>
       <Rule />
-      <PillButton tone="primary" size="sm" icon="check" onPress={onSaveReport}>
-        Save report version
+      <PillButton tone="primary" size="sm" icon="check" disabled={saveDisabled || savingReport} onPress={onSaveReport}>
+        {savingReport ? 'Saving report…' : 'Save report version'}
       </PillButton>
       <View style={styles.railSection}>
         <Text style={styles.railSectionTitle}>Saved versions</Text>
@@ -578,14 +399,16 @@ function ReportsContextRail({
       </View>
       <Rule />
       <View style={styles.railSection}>
-        <Text style={styles.railSectionTitle}>Add to filing package</Text>
+        <Text style={styles.railSectionTitle}>Link report type to a package</Text>
+        <Text style={styles.railText}>This saves a report-type link. It does not add this preview’s entries to that package.</Text>
         {filingPackages.length ? (
           filingPackages.slice(0, 4).map((filingPackage) => (
             <PillButton
               key={filingPackage.id}
               tone="ghost"
               size="sm"
-              icon={filingLinkCount ? 'check' : 'plus'}
+              icon="plus"
+              disabled={saveDisabled || savingReport}
               onPress={() => onToggleReportFiling(filingPackage.id)}
             >
               {filingPackage.title}
@@ -597,7 +420,7 @@ function ReportsContextRail({
       </View>
       <Rule />
       <Text style={styles.railText}>
-        {attachmentCount} local attachment references · {filingLinkCount ? 'linked to a filing package' : 'not linked to a filing package'}.
+        {attachmentCount} original-file references · {filingLinkCount ? 'linked to a filing package' : 'not linked to a filing package'}.
       </Text>
       <Text style={styles.railText}>
         Persistence {persistenceActive ? 'active' : 'inactive'}. Source: {sourceLabel}.
@@ -607,7 +430,17 @@ function ReportsContextRail({
 }
 
 export default function Reports() {
-  const { snapshot, entries, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
+  const { snapshot, activeCase, source, loading, persistence } = useCaseIntelligenceTimeline();
+  const params = useLocalSearchParams();
+  const packageId = Array.isArray(params.packageId) ? params.packageId[0] : params.packageId;
+  const requestedReportType = Array.isArray(params.reportType) ? params.reportType[0] : params.reportType;
+  const hasPackageRequest = packageId !== undefined;
+  const filingBuilderState = useCaseIntelligenceStore((state) => state.filingBuilderState);
+  const contextError = useCaseIntelligenceStore((state) => state.contextError);
+  const packageSelection = useMemo(() => hasPackageRequest ? resolveFilingPackageSelection({ snapshot, ownerId: activeCase?.user_id || '', caseId: activeCase?.id || '', packageId: packageId || '', packageState: filingBuilderState.packageStates[packageId || ''] }) : null, [snapshot, activeCase, packageId, hasPackageRequest, filingBuilderState]);
+  const validRequestedReport = REPORT_TYPES.find((type) => type.value === requestedReportType)?.value;
+  const packageError = packageSelection ? (contextError ? 'Review the preserved working-context issue in Settings before preparing package reports.' : packageSelection.issues[0] || (!packageSelection.reportTypes.length ? 'Link a report type in Filing Builder before opening its package report.' : null) || (requestedReportType !== undefined && (!validRequestedReport || !packageSelection.reportTypes.includes(validRequestedReport)) ? 'This report is not linked to the selected package. Reopen it from Filing Builder.' : null)) : null;
+  const [packageFilters, setPackageFilters] = useState<{ typeFilter: EntryTypeFilterValue; flagFilter: ReportPreviewFlagFilter }>({ typeFilter: 'all', flagFilter: 'all' });
   const {
     reportPreviewState,
     setReportPreviewState,
@@ -619,25 +452,43 @@ export default function Reports() {
   } = useReportPreviewState();
   const { isMobile, width } = useResponsive();
   const [childFilter, setChildFilter] = useState<string>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const dateError = useMemo(() => {
+    try { validateDateRange(fromDate, toDate); return null; }
+    catch (failure) { return failure instanceof Error ? failure.message : 'Check the date range.'; }
+  }, [fromDate, toDate]);
   const [excludedEntryIds, setExcludedEntryIds] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const reportType = reportPreviewState.reportType;
-  const typeFilter = reportPreviewState.typeFilter;
-  const flagFilter = reportPreviewState.flagFilter;
+  const [savingReport, setSavingReport] = useState(false);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [linkingReport, setLinkingReport] = useState(false);
+  const reportOperation = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const storedReportType = REPORT_TYPES.some((option) => option.value === reportPreviewState.reportType) ? reportPreviewState.reportType : 'timeline';
+  const reportType = packageSelection ? validRequestedReport ?? packageSelection.reportTypes[0] ?? 'timeline' : storedReportType;
+  const typeFilter = hasPackageRequest ? packageFilters.typeFilter : reportPreviewState.typeFilter;
+  const flagFilter = hasPackageRequest ? packageFilters.flagFilter : reportPreviewState.flagFilter;
+  function updateFilters(patch: Partial<typeof reportPreviewState>) {
+    if (reportOperation.current) return;
+    if (hasPackageRequest) {
+      if (patch.reportType) router.setParams({ reportType: patch.reportType });
+      setPackageFilters((current) => ({ ...current, ...(patch.typeFilter ? { typeFilter: patch.typeFilter } : {}), ...(patch.flagFilter ? { flagFilter: patch.flagFilter } : {}) }));
+    } else setReportPreviewState(patch);
+  }
 
   const filteredEntries = useMemo(() => {
-    return entries.filter((entry) => {
-      if (typeFilter !== 'all' && entry.entry_type !== typeFilter) return false;
-      if (flagFilter === 'flagged' && !entry.is_flagged) return false;
-      if (childFilter !== 'all' && entry.child_id !== childFilter) return false;
-      return true;
-    });
-  }, [childFilter, entries, flagFilter, typeFilter]);
+    if (!activeCase || dateError || packageError) return [];
+    return selectReportEntries(packageSelection ? packageSelection.entries : snapshot.entries, { caseId: activeCase.id, userId: activeCase.user_id,
+      fromDate, toDate, childId: childFilter === 'all' ? undefined : childFilter,
+      entryType: typeFilter === 'all' ? undefined : typeFilter, flaggedOnly: flagFilter === 'flagged' });
+  }, [activeCase?.id, activeCase?.user_id, childFilter, dateError, snapshot.entries, flagFilter, typeFilter, fromDate, toDate, packageSelection, packageError]);
 
-  const reports = useMemo(() => buildReports(filteredEntries), [filteredEntries]);
+  const reports = useMemo(() => buildFactualReports(filteredEntries), [filteredEntries]);
   const activeSourceReport = reports[reportType];
   const includedEntries = activeSourceReport.entries.filter((entry) => !excludedEntryIds.includes(entry.id));
-  const activeReport = buildReports(includedEntries)[reportType];
+  const activeReport = buildFactualReports(includedEntries)[reportType];
   const selectedEntryIds = useMemo(() => new Set(includedEntries.map((entry) => entry.id)), [includedEntries]);
   const children = useMemo(() => {
     const caseId = activeCase?.id;
@@ -648,11 +499,11 @@ export default function Reports() {
   }, [activeCase?.id, snapshot.children]);
   const attachmentCountsByEntryId = useMemo(() => {
     return snapshot.evidenceAttachments.reduce<AttachmentCountsByEntryId>((counts, attachment) => {
-      if (!attachment.entry_id || attachment.deleted_at) return counts;
+      if (!attachment.entry_id || attachment.deleted_at || attachment.case_id !== activeCase?.id || attachment.user_id !== activeCase?.user_id) return counts;
       counts[attachment.entry_id] = (counts[attachment.entry_id] ?? 0) + 1;
       return counts;
     }, {});
-  }, [snapshot.evidenceAttachments]);
+  }, [snapshot.evidenceAttachments, activeCase?.id, activeCase?.user_id]);
   const activeReportAttachmentCount = activeReport.entries.reduce(
     (total, entry) => total + (attachmentCountsByEntryId[entry.id] ?? 0),
     0,
@@ -660,28 +511,70 @@ export default function Reports() {
   const activeReportFilingLinkCount = filingReportLinkCounts[activeReport.id] ?? 0;
   const showDesktopRail = !isMobile && width >= 1280;
   const sourceLabel =
-    source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data';
+    source === 'supabase' ? 'Account records' : source === 'local' ? 'Saved on this device' : 'Demo records';
+
+  async function downloadReportPdf() {
+    if (reportOperation.current || dateError || packageError || !activeCase || !activeReport.entries.length) return;
+    const start = useCaseIntelligenceStore.getState();
+    const startAuth = useAuthStore.getState();
+    const generation = getWorkspaceGeneration();
+    const assertCurrent = () => {
+      const current = useCaseIntelligenceStore.getState(); const auth = useAuthStore.getState();
+      if (!mounted.current || getWorkspaceGeneration() !== generation || getActiveCase(current.snapshot)?.id !== activeCase.id
+        || current.ownerId !== activeCase.user_id || auth.session?.user.id !== activeCase.user_id || auth.recovery
+        || auth.sessionGeneration !== startAuth.sessionGeneration || current.snapshot !== start.snapshot || (hasPackageRequest && current.filingBuilderState !== start.filingBuilderState)) {
+        throw new Error('The account or case records changed during export. Review the selection and try again.');
+      }
+    };
+    reportOperation.current = true; setDownloadingReport(true); setNotice(null);
+    try {
+      assertCurrent();
+      const [{ createFactualReportPdf }, { downloadArtifact, loadTimelineFonts }] = await Promise.all([
+        import('@/lib/reporting/pdf'), import('@/lib/export/download'),
+      ]);
+      const artifact = await createFactualReportPdf({ caseId: activeCase.id, caseTitle: activeCase.title || activeCase.case_number || 'Case record', entries: start.snapshot.entries,
+        attachments: start.snapshot.evidenceAttachments, includedEntryIds: activeReport.entries.map((entry) => entry.id), fromDate, toDate },
+        { reportType, ownerId: activeCase.user_id, fonts: await loadTimelineFonts(), assertCurrent });
+      assertCurrent();
+      await downloadArtifact(artifact, assertCurrent);
+      setNotice('Report PDF prepared. Review it before sharing. Original files are available separately in the evidence ZIP.');
+    } catch (failure) { setNotice(failure instanceof Error ? failure.message : 'The report PDF could not be prepared.'); }
+    finally { reportOperation.current = false; if (mounted.current) setDownloadingReport(false); }
+  }
 
   function toggleIncludedEntry(entryId: string) {
+    if (reportOperation.current) return;
     setNotice(null);
     setExcludedEntryIds((current) =>
       current.includes(entryId) ? current.filter((id) => id !== entryId) : [...current, entryId],
     );
   }
 
-  function saveCurrentReport() {
-    const saved = saveReportVersion({
-      reportType,
-      title: `${activeReport.title} - ${new Date().toISOString().slice(0, 10)}`,
-      includedEntryIds: activeReport.entries.map((entry) => entry.id),
-      filters: {
-        typeFilter,
-        flagFilter,
-        childFilter: childFilter === 'all' ? null : childFilter,
-        dateRangeLabel: dateRangeLabel(activeReport.entries),
-      },
-    });
-    setNotice(`${saved.title} was saved locally.`);
+  function pinReportContext() {
+    const generation = getWorkspaceGeneration(); const sessionGeneration = useAuthStore.getState().sessionGeneration;
+    return () => {
+      const current = useCaseIntelligenceStore.getState(); const auth = useAuthStore.getState();
+      if (!mounted.current || generation !== getWorkspaceGeneration() || auth.sessionGeneration !== sessionGeneration || auth.recovery
+        || auth.session?.user.id !== activeCase?.user_id || current.ownerId !== activeCase?.user_id || getActiveCase(current.snapshot)?.id !== activeCase?.id) throw new Error('The account or case changed. Reopen the report before continuing.');
+    };
+  }
+  async function saveCurrentReport() {
+    if (reportOperation.current || dateError || packageError || !activeReport.entries.length) return;
+    const assertCurrent = pinReportContext(); reportOperation.current = true; setSavingReport(true); setNotice(null);
+    try {
+      assertCurrent();
+      const saved = await saveReportVersion({ reportType, title: `${activeReport.title} - ${localCalendarDate()}`, includedEntryIds: activeReport.entries.map((entry) => entry.id),
+        filters: { typeFilter, flagFilter, childFilter: childFilter === 'all' ? null : childFilter, dateRangeLabel: `${fromDate || 'First recorded'} to ${toDate || 'Latest recorded'}` } });
+      assertCurrent(); setNotice(`${saved.title} was saved. Account sync status appears above.`);
+    } catch (failure) { if (mounted.current) setNotice(failure instanceof Error ? failure.message : 'The report version could not be saved. Please try again.'); }
+    finally { reportOperation.current = false; if (mounted.current) setSavingReport(false); }
+  }
+  async function toggleReportLink(id: string) {
+    if (reportOperation.current || packageError) return;
+    const assertCurrent = pinReportContext(); reportOperation.current = true; setLinkingReport(true); setNotice(null);
+    try { assertCurrent(); await toggleFilingPackageReport(id, activeReport.id); assertCurrent(); setNotice('Report-type link saved. This link does not add source entries; review the package selections in Filing Builder.'); }
+    catch (failure) { if (mounted.current) setNotice(failure instanceof Error ? failure.message : 'The report link could not be saved.'); }
+    finally { reportOperation.current = false; if (mounted.current) setLinkingReport(false); }
   }
 
   const filterPanel = (
@@ -696,8 +589,20 @@ export default function Reports() {
         </Text>
       </View>
 
+      <View style={styles.dateRow}>
+        <View style={styles.dateField}>
+          <Text style={styles.filterSubhead}>From</Text>
+          <TextInput accessibilityLabel="Report start date" placeholder="YYYY-MM-DD" value={fromDate} editable={!downloadingReport && !savingReport && !linkingReport} onChangeText={setFromDate} autoCapitalize="none" style={styles.dateInput} placeholderTextColor={fbColors.inkMute} />
+        </View>
+        <View style={styles.dateField}>
+          <Text style={styles.filterSubhead}>Through</Text>
+          <TextInput accessibilityLabel="Report end date" placeholder="YYYY-MM-DD" value={toDate} editable={!downloadingReport && !savingReport && !linkingReport} onChangeText={setToDate} autoCapitalize="none" style={styles.dateInput} placeholderTextColor={fbColors.inkMute} />
+        </View>
+      </View>
+      {dateError ? <Text accessibilityRole="alert" style={styles.dateError}>{dateError}</Text> : null}
+
       <View style={styles.typeFilters}>
-        {REPORT_TYPES.map((option) => (
+        {REPORT_TYPES.filter((option) => !packageSelection || packageSelection.reportTypes.includes(option.value)).map((option) => (
           <ReportTypeChip
             key={option.value}
             value={option.value}
@@ -705,14 +610,9 @@ export default function Reports() {
             tone={option.tone}
             active={reportType === option.value}
             filingLinkCount={filingReportLinkCounts[option.value] ?? 0}
-            onPress={() => setReportPreviewState({ reportType: option.value })}
+            onPress={() => updateFilters({ reportType: option.value })}
           />
         ))}
-      </View>
-
-      <View style={styles.placeholderBox}>
-        <Text style={styles.placeholderTitle}>Date range</Text>
-        <Text style={styles.placeholderBody}>Date range selector coming later. Current preview uses matching saved entries.</Text>
       </View>
 
       <Segment<FlagFilter>
@@ -721,7 +621,7 @@ export default function Reports() {
           { v: 'flagged', label: 'Flagged' },
         ]}
         value={flagFilter}
-        onChange={(value) => setReportPreviewState({ flagFilter: value })}
+        onChange={(value) => updateFilters({ flagFilter: value })}
       />
 
       <View style={styles.typeFilters}>
@@ -729,14 +629,14 @@ export default function Reports() {
         <TypeFilterChip
           value="all"
           active={typeFilter === 'all'}
-          onPress={() => setReportPreviewState({ typeFilter: 'all' })}
+          onPress={() => updateFilters({ typeFilter: 'all' })}
         />
         {ENTRY_TYPE_OPTIONS.map((option) => (
           <TypeFilterChip
             key={option.value}
             value={option.value}
             active={typeFilter === option.value}
-            onPress={() => setReportPreviewState({ typeFilter: option.value })}
+            onPress={() => updateFilters({ typeFilter: option.value })}
           />
         ))}
       </View>
@@ -748,7 +648,7 @@ export default function Reports() {
             accessibilityRole="button"
             accessibilityState={{ selected: childFilter === 'all' }}
             accessibilityLabel="Filter reports by all children"
-            onPress={() => setChildFilter('all')}
+            onPress={() => { if (!reportOperation.current) setChildFilter('all'); }}
             style={({ pressed }) => [
               styles.filterChip,
               childFilter === 'all' && styles.filterChipActive,
@@ -763,7 +663,7 @@ export default function Reports() {
               accessibilityRole="button"
               accessibilityState={{ selected: childFilter === child.id }}
               accessibilityLabel={`Filter reports by ${child.name}`}
-              onPress={() => setChildFilter(child.id)}
+              onPress={() => { if (!reportOperation.current) setChildFilter(child.id); }}
               style={({ pressed }) => [
                 styles.filterChip,
                 childFilter === child.id && styles.filterChipActive,
@@ -781,7 +681,7 @@ export default function Reports() {
   const previewPanel = (
     <>
       <InfoCallout title="Report limits" tone="ink">
-        These previews use existing local or synced entries only. They do not generate AI analysis, legal advice, uploads, database changes, or court PDFs. Local persistence is {persistence.active ? 'active' : 'inactive'}.
+        These reports summarize your selected records and identify missing calculation fields. Private entries and notes are excluded. Download the report PDF or prepare a separate timeline and original-file ZIP. Local persistence is {persistence.active ? 'active' : 'inactive'}.
       </InfoCallout>
 
       <View style={[styles.resultsHeader, !isMobile && styles.desktopResultsHeader]}>
@@ -796,9 +696,16 @@ export default function Reports() {
         attachmentCountsByEntryId={attachmentCountsByEntryId}
         filingLinkCount={activeReportFilingLinkCount}
         dense={!isMobile}
-        selectable={!isMobile}
+        selectable
         selectedEntryIds={selectedEntryIds}
         onToggleEntry={toggleIncludedEntry}
+        sourceEntries={activeSourceReport.entries}
+        exportDisabled={!!dateError || !!packageError || downloadingReport || savingReport || linkingReport || !activeReport.entries.length}
+        onDownloadReport={() => void downloadReportPdf()}
+        downloadingReport={downloadingReport}
+        onExport={() => router.push({ pathname: '/export-prep', params: {
+          mode: 'report', ...(hasPackageRequest ? { packageId } : {}), entryIds: JSON.stringify(activeReport.entries.map((entry) => entry.id)), fromDate, toDate,
+        } } as never)}
       />
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
     </>
@@ -818,8 +725,10 @@ export default function Reports() {
             sourceLabel={sourceLabel}
             savedReportVersions={savedReportVersions}
             filingPackages={filingPackages}
-            onSaveReport={saveCurrentReport}
-            onToggleReportFiling={(packageId) => toggleFilingPackageReport(packageId, activeReport.id)}
+            onSaveReport={() => void saveCurrentReport()}
+            savingReport={savingReport}
+            saveDisabled={!!dateError || !!packageError || downloadingReport || linkingReport || !activeReport.entries.length}
+            onToggleReportFiling={(id) => void toggleReportLink(id)}
           />
         ) : (
           false
@@ -845,6 +754,8 @@ export default function Reports() {
         </View>
       </View>
 
+      {hasPackageRequest ? <InfoCallout title="Selected filing package" tone="ink">This report is limited to the package’s linked entries and the parent entries of explicitly linked originals. Filters can narrow that scope. Original-file ZIPs include all originals attached to their selected entries.</InfoCallout> : null}
+      {packageError ? <Text accessibilityRole="alert" style={styles.dateError}>{packageError}</Text> : null}
       {isMobile ? (
         <>
           {filterPanel}
@@ -861,6 +772,10 @@ export default function Reports() {
 }
 
 const styles = StyleSheet.create({
+  dateRow: { gap: fbSpacing.x3 },
+  dateField: { gap: fbSpacing.x2 },
+  dateInput: { minHeight: fbTouch.min, borderWidth: fbBorder.hairline, borderColor: fbColors.rule, borderRadius: fbRadii.sm, padding: fbSpacing.x3, color: fbColors.ink, fontFamily: fbFonts.sansRegular, fontSize: fbType.body },
+  dateError: { color: fbColors.ox, fontFamily: fbFonts.sansRegular, fontSize: fbType.small, lineHeight: 20 },
   header: {
     gap: fbSpacing.x2,
   },

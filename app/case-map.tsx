@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import * as Crypto from 'expo-crypto';
 import { router } from 'expo-router';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
@@ -195,10 +196,10 @@ function CourtOrdersSection({
 }: {
   courtOrders: CourtOrder[];
   provisions: CourtOrderProvision[];
-  createCourtOrder: (input: CourtOrderInput) => CourtOrder;
-  updateCourtOrder: (orderId: string, input: CourtOrderInput) => void;
-  createCourtOrderProvision: (input: CourtOrderProvisionInput) => CourtOrderProvision;
-  updateCourtOrderProvision: (provisionId: string, input: CourtOrderProvisionInput) => void;
+  createCourtOrder: (input: CourtOrderInput) => Promise<CourtOrder>;
+  updateCourtOrder: (orderId: string, input: CourtOrderInput) => Promise<void>;
+  createCourtOrderProvision: (input: CourtOrderProvisionInput) => Promise<CourtOrderProvision>;
+  updateCourtOrderProvision: (provisionId: string, input: CourtOrderProvisionInput) => Promise<void>;
 }) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(courtOrders[0]?.id ?? null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -213,6 +214,10 @@ function CourtOrdersSection({
   const [provisionBody, setProvisionBody] = useState('');
   const [provisionEffectiveDate, setProvisionEffectiveDate] = useState('');
   const [provisionEndDate, setProvisionEndDate] = useState('');
+  const [saving, setSaving] = useState<'order' | 'provision' | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftOrderId, setDraftOrderId] = useState(() => Crypto.randomUUID());
+  const [draftProvisionId, setDraftProvisionId] = useState(() => Crypto.randomUUID());
   const selectedOrder = courtOrders.find((order) => order.id === selectedOrderId) ?? null;
   const selectedOrderProvisions = useMemo(
     () =>
@@ -234,6 +239,7 @@ function CourtOrdersSection({
   }, [courtOrders, selectedOrderId]);
 
   function resetOrderDraft() {
+    setDraftOrderId(Crypto.randomUUID());
     setEditingOrderId(null);
     setOrderTitle('');
     setOrderType('');
@@ -241,6 +247,7 @@ function CourtOrdersSection({
   }
 
   function resetProvisionDraft() {
+    setDraftProvisionId(Crypto.randomUUID());
     setEditingProvisionId(null);
     setProvisionCategory('custody');
     setProvisionStatus('active');
@@ -269,28 +276,35 @@ function CourtOrdersSection({
     setProvisionEndDate(provision.end_date ?? '');
   }
 
-  function saveOrder() {
+  async function saveOrder() {
+    if (saving) return;
     const input: CourtOrderInput = {
+      id: editingOrderId ?? draftOrderId,
       title: orderTitle,
       orderType,
       orderDate,
     };
 
-    if (editingOrderId) {
-      updateCourtOrder(editingOrderId, input);
-      setSelectedOrderId(editingOrderId);
-    } else {
-      const order = createCourtOrder(input);
-      setSelectedOrderId(order.id);
-    }
-
-    resetOrderDraft();
+    setSaving('order');
+    setSaveError(null);
+    try {
+      if (editingOrderId) {
+        await updateCourtOrder(editingOrderId, input);
+        setSelectedOrderId(editingOrderId);
+      } else {
+        const order = await createCourtOrder(input);
+        setSelectedOrderId(order.id);
+      }
+      resetOrderDraft();
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'The court order could not be saved. Your draft is still here.'); }
+    finally { setSaving(null); }
   }
 
-  function saveProvision() {
-    if (!selectedOrderId) return;
+  async function saveProvision() {
+    if (!selectedOrderId || saving) return;
 
     const input: CourtOrderProvisionInput = {
+      id: editingProvisionId ?? draftProvisionId,
       courtOrderId: selectedOrderId,
       category: provisionCategory,
       status: provisionStatus,
@@ -300,18 +314,20 @@ function CourtOrdersSection({
       endDate: provisionEndDate,
     };
 
-    if (editingProvisionId) {
-      updateCourtOrderProvision(editingProvisionId, input);
-    } else {
-      createCourtOrderProvision(input);
-    }
-
-    resetProvisionDraft();
+    setSaving('provision');
+    setSaveError(null);
+    try {
+      if (editingProvisionId) await updateCourtOrderProvision(editingProvisionId, input);
+      else await createCourtOrderProvision(input);
+      resetProvisionDraft();
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'The provision could not be saved. Your draft is still here.'); }
+    finally { setSaving(null); }
   }
 
   return (
     <SoftCard p={16} style={styles.section}>
       <SectionHeader icon="scales" title="Court orders" count={courtOrders.length} />
+      {saveError ? <InfoCallout title="Changes not saved" tone="ink">{saveError}</InfoCallout> : null}
       {courtOrders.length ? (
         <View style={styles.recordStack}>
           {courtOrders.map((order) => (
@@ -323,10 +339,10 @@ function CourtOrdersSection({
                 meta={order.id === selectedOrderId ? 'Selected' : order.order_type}
               />
               <View style={styles.inlineActions}>
-                <PillButton tone="ghost" size="sm" icon="scales" onPress={() => setSelectedOrderId(order.id)}>
+                <PillButton tone="ghost" size="sm" icon="scales" disabled={Boolean(saving)} onPress={() => setSelectedOrderId(order.id)}>
                   Select
                 </PillButton>
-                <PillButton tone="ghost" size="sm" icon="doc" onPress={() => editOrder(order)}>
+                <PillButton tone="ghost" size="sm" icon="doc" disabled={Boolean(saving)} onPress={() => editOrder(order)}>
                   Edit
                 </PillButton>
               </View>
@@ -335,15 +351,16 @@ function CourtOrdersSection({
         </View>
       ) : (
         <EmptyState>
-          No court orders have been added yet. Add a local manual shell; uploads and extraction come later.
+          No court orders have been added yet. Add the order details below. Direct order uploads and text extraction are not available yet.
         </EmptyState>
       )}
 
       <View style={styles.formPanel}>
         <Text style={styles.formTitle}>
-          {editingOrderId ? 'Edit local court order shell' : 'Add local court order shell'}
+          {editingOrderId ? 'Edit court order' : 'Add court order'}
         </Text>
         <TextInput
+          editable={!saving}
           value={orderTitle}
           onChangeText={setOrderTitle}
           placeholder="Order title"
@@ -352,6 +369,7 @@ function CourtOrdersSection({
         />
         <View style={styles.formGrid}>
           <TextInput
+            editable={!saving}
             value={orderType}
             onChangeText={setOrderType}
             placeholder="Order type"
@@ -359,6 +377,7 @@ function CourtOrdersSection({
             style={styles.textInput}
           />
           <TextInput
+            editable={!saving}
             value={orderDate}
             onChangeText={setOrderDate}
             placeholder="YYYY-MM-DD"
@@ -367,11 +386,11 @@ function CourtOrdersSection({
           />
         </View>
         <View style={styles.inlineActions}>
-          <PillButton tone="primary" size="md" icon="check" disabled={!orderTitle.trim()} onPress={saveOrder}>
-            {editingOrderId ? 'Update order' : 'Save order'}
+          <PillButton tone="primary" size="md" icon="check" disabled={Boolean(saving) || !orderTitle.trim()} onPress={saveOrder}>
+            {saving === 'order' ? 'Saving order' : editingOrderId ? 'Update order' : 'Save order'}
           </PillButton>
           {editingOrderId ? (
-            <PillButton tone="ghost" size="md" icon="x" onPress={resetOrderDraft}>
+            <PillButton tone="ghost" size="md" icon="x" disabled={Boolean(saving)} onPress={resetOrderDraft}>
               Cancel
             </PillButton>
           ) : null}
@@ -381,8 +400,8 @@ function CourtOrdersSection({
       <Rule />
 
       <SectionHeader icon="link" title="Order provisions" count={provisions.length} />
-      <InfoCallout title="Provision compliance placeholder" tone="ink">
-        Provisions can be linked to entries locally. Compliance assessment remains a placeholder and does not make a legal conclusion.
+      <InfoCallout title="Provision review" tone="ink">
+        Link entries to the relevant provision for your own review. Automated compliance assessment is not available.
       </InfoCallout>
       {selectedOrder ? (
         <Text style={styles.sourceText}>Selected order: {selectedOrder.order_title}</Text>
@@ -400,7 +419,7 @@ function CourtOrdersSection({
                   meta={`${provisionCategoryLabel(provision.category)} · ${status}`}
                 />
                 <View style={styles.inlineActions}>
-                  <PillButton tone="ghost" size="sm" icon="doc" onPress={() => editProvision(provision)}>
+                  <PillButton tone="ghost" size="sm" icon="doc" disabled={Boolean(saving)} onPress={() => editProvision(provision)}>
                     Edit
                   </PillButton>
                 </View>
@@ -410,13 +429,13 @@ function CourtOrdersSection({
         </View>
       ) : (
         <EmptyState>
-          No provisions are mapped for the selected order yet. Add a local provision shell below.
+          No provisions are mapped for the selected order yet. Add a provision below.
         </EmptyState>
       )}
 
       <View style={styles.formPanel}>
         <Text style={styles.formTitle}>
-          {editingProvisionId ? 'Edit local provision' : 'Add local provision'}
+          {editingProvisionId ? 'Edit provision' : 'Add provision'}
         </Text>
         <View style={styles.categoryGrid}>
           {COURT_ORDER_PROVISION_CATEGORIES.map((category) => (
@@ -425,6 +444,7 @@ function CourtOrdersSection({
               tone={provisionCategory === category ? 'primary' : 'ghost'}
               size="sm"
               icon="link"
+              disabled={Boolean(saving)}
               onPress={() => setProvisionCategory(category)}
             >
               {provisionCategoryLabel(category)}
@@ -434,9 +454,10 @@ function CourtOrdersSection({
         <Segment<CourtOrderProvisionStatus>
           items={PROVISION_STATUS_OPTIONS}
           value={provisionStatus}
-          onChange={setProvisionStatus}
+          onChange={(status) => { if (!saving) setProvisionStatus(status); }}
         />
         <TextInput
+          editable={!saving}
           value={provisionLabel}
           onChangeText={setProvisionLabel}
           placeholder="Provision label"
@@ -444,6 +465,7 @@ function CourtOrdersSection({
           style={styles.textInput}
         />
         <TextInput
+          editable={!saving}
           value={provisionBody}
           onChangeText={setProvisionBody}
           placeholder="Provision text or factual summary"
@@ -454,6 +476,7 @@ function CourtOrdersSection({
         />
         <View style={styles.formGrid}>
           <TextInput
+            editable={!saving}
             value={provisionEffectiveDate}
             onChangeText={setProvisionEffectiveDate}
             placeholder="Effective YYYY-MM-DD"
@@ -461,6 +484,7 @@ function CourtOrdersSection({
             style={styles.textInput}
           />
           <TextInput
+            editable={!saving}
             value={provisionEndDate}
             onChangeText={setProvisionEndDate}
             placeholder="End YYYY-MM-DD"
@@ -473,13 +497,13 @@ function CourtOrdersSection({
             tone="primary"
             size="md"
             icon="check"
-            disabled={!selectedOrderId || !provisionLabel.trim() || !provisionBody.trim()}
+            disabled={Boolean(saving) || !selectedOrderId || !provisionLabel.trim() || !provisionBody.trim()}
             onPress={saveProvision}
           >
-            {editingProvisionId ? 'Update provision' : 'Save provision'}
+            {saving === 'provision' ? 'Saving provision' : editingProvisionId ? 'Update provision' : 'Save provision'}
           </PillButton>
           {editingProvisionId ? (
-            <PillButton tone="ghost" size="md" icon="x" onPress={resetProvisionDraft}>
+            <PillButton tone="ghost" size="md" icon="x" disabled={Boolean(saving)} onPress={resetProvisionDraft}>
               Cancel
             </PillButton>
           ) : null}
@@ -495,8 +519,8 @@ function DatesSection({
   updateKeyDate,
 }: {
   keyDates: KeyDate[];
-  createKeyDate: (input: KeyDateInput) => KeyDate;
-  updateKeyDate: (keyDateId: string, input: KeyDateInput) => void;
+  createKeyDate: (input: KeyDateInput) => Promise<KeyDate>;
+  updateKeyDate: (keyDateId: string, input: KeyDateInput) => Promise<void>;
 }) {
   const [editingKeyDateId, setEditingKeyDateId] = useState<string | null>(null);
   const [category, setCategory] = useState<KeyDateCategory>('hearing');
@@ -505,8 +529,12 @@ function DatesSection({
   const [eventTime, setEventTime] = useState('');
   const [priority, setPriority] = useState(false);
   const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState(() => Crypto.randomUUID());
 
   function resetDraft() {
+    setDraftId(Crypto.randomUUID());
     setEditingKeyDateId(null);
     setCategory('hearing');
     setTitle('');
@@ -526,8 +554,10 @@ function DatesSection({
     setNotes(getKeyDateNotes(keyDate) ?? '');
   }
 
-  function saveKeyDate() {
+  async function saveKeyDate() {
+    if (saving) return;
     const input: KeyDateInput = {
+      id: editingKeyDateId ?? draftId,
       category,
       title,
       eventDate,
@@ -536,18 +566,20 @@ function DatesSection({
       notes,
     };
 
-    if (editingKeyDateId) {
-      updateKeyDate(editingKeyDateId, input);
-    } else {
-      createKeyDate(input);
-    }
-
-    resetDraft();
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (editingKeyDateId) await updateKeyDate(editingKeyDateId, input);
+      else await createKeyDate(input);
+      resetDraft();
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'The date could not be saved. Your draft is still here.'); }
+    finally { setSaving(false); }
   }
 
   return (
     <SoftCard p={16} style={styles.section}>
       <SectionHeader icon="clock" title="Key dates and deadlines" count={keyDates.length} />
+      {saveError ? <InfoCallout title="Changes not saved" tone="ink">{saveError}</InfoCallout> : null}
       {keyDates.length ? (
         <View style={styles.recordStack}>
           {keyDates.map((date) => {
@@ -566,7 +598,7 @@ function DatesSection({
                   meta={date.is_completed ? 'Complete' : isPriority ? `Priority · ${relative}` : relative}
                 />
                 <View style={styles.inlineActions}>
-                  <PillButton tone="ghost" size="sm" icon="doc" onPress={() => editKeyDate(date)}>
+                  <PillButton tone="ghost" size="sm" icon="doc" disabled={Boolean(saving)} onPress={() => editKeyDate(date)}>
                     Edit
                   </PillButton>
                 </View>
@@ -580,7 +612,7 @@ function DatesSection({
 
       <View style={styles.formPanel}>
         <Text style={styles.formTitle}>
-          {editingKeyDateId ? 'Edit local key date' : 'Add local key date'}
+          {editingKeyDateId ? 'Edit key date' : 'Add key date'}
         </Text>
         <View style={styles.categoryGrid}>
           {KEY_DATE_CATEGORIES.map((item) => (
@@ -589,6 +621,7 @@ function DatesSection({
               tone={category === item ? 'primary' : 'ghost'}
               size="sm"
               icon="clock"
+              disabled={Boolean(saving)}
               onPress={() => setCategory(item)}
             >
               {keyDateCategoryLabel(item)}
@@ -596,6 +629,7 @@ function DatesSection({
           ))}
         </View>
         <TextInput
+          editable={!saving}
           value={title}
           onChangeText={setTitle}
           placeholder="Date title"
@@ -604,6 +638,7 @@ function DatesSection({
         />
         <View style={styles.formGrid}>
           <TextInput
+            editable={!saving}
             value={eventDate}
             onChangeText={setEventDate}
             placeholder="YYYY-MM-DD"
@@ -611,6 +646,7 @@ function DatesSection({
             style={styles.textInput}
           />
           <TextInput
+            editable={!saving}
             value={eventTime}
             onChangeText={setEventTime}
             placeholder="HH:MM optional"
@@ -619,6 +655,7 @@ function DatesSection({
           />
         </View>
         <TextInput
+          editable={!saving}
           value={notes}
           onChangeText={setNotes}
           placeholder="Notes"
@@ -632,6 +669,7 @@ function DatesSection({
             tone={priority ? 'primary' : 'ghost'}
             size="md"
             icon="clock"
+            disabled={Boolean(saving)}
             onPress={() => setPriority((current) => !current)}
           >
             {priority ? 'Priority on' : 'Priority off'}
@@ -640,13 +678,13 @@ function DatesSection({
             tone="primary"
             size="md"
             icon="check"
-            disabled={!title.trim() || !eventDate.trim()}
+            disabled={Boolean(saving) || !title.trim() || !eventDate.trim()}
             onPress={saveKeyDate}
           >
-            {editingKeyDateId ? 'Update date' : 'Save date'}
+            {saving ? 'Saving date' : editingKeyDateId ? 'Update date' : 'Save date'}
           </PillButton>
           {editingKeyDateId ? (
-            <PillButton tone="ghost" size="md" icon="x" onPress={resetDraft}>
+            <PillButton tone="ghost" size="md" icon="x" disabled={Boolean(saving)} onPress={resetDraft}>
               Cancel
             </PillButton>
           ) : null}
@@ -964,6 +1002,7 @@ export default function CaseMap() {
   const peopleSection = <PeopleSection people={people} />;
   const courtOrdersSection = (
     <CourtOrdersSection
+      key={`${activeCase?.user_id}:${activeCase?.id}`}
       courtOrders={courtOrders}
       provisions={courtOrderProvisions}
       createCourtOrder={createCourtOrder}
@@ -974,6 +1013,7 @@ export default function CaseMap() {
   );
   const datesSection = (
     <DatesSection
+      key={`${activeCase?.user_id}:${activeCase?.id}`}
       keyDates={keyDates}
       createKeyDate={createKeyDate}
       updateKeyDate={updateKeyDate}
@@ -998,10 +1038,10 @@ export default function CaseMap() {
     <SoftCard p={16} style={styles.section}>
       <SectionHeader icon="shield" title="Data source" />
       <Text style={styles.sourceText}>
-        This view is reading the current {sourceLabel} case-intelligence snapshot. No remote writes are made from Case Map.
+        Court orders, provisions, and dates are saved to your encrypted case on this device and queued for your account’s cloud backup.
       </Text>
       <Text style={styles.sourceText}>
-        Local persistence: {persistence.active ? 'active' : 'inactive'} · Hydration: {persistence.hydrationCompleted ? 'complete' : 'pending'} · Sync: {persistence.syncMode === 'remote_write_enabled' ? 'remote writes enabled by env' : persistence.syncMode === 'local_first' ? 'local-first, remote writes disabled' : 'disabled demo mode'}
+        Check the case status above for saving, pending changes, and cloud backup errors.
       </Text>
       {persistence.error ? <Text style={styles.sourceWarning}>{persistence.error}</Text> : null}
       <PillButton tone="ghost" size="md" icon="link" disabled full>

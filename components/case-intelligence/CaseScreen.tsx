@@ -10,9 +10,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Icon,
   Label,
-  Mono,
   fbBorder,
   fbColors,
   fbFonts,
@@ -24,6 +22,7 @@ import {
 } from '@/components/ui/fb';
 import { useResponsive } from '@/lib/hooks/useResponsive';
 import { BottomNav, DesktopSidebar } from './BottomNav';
+import { WorkspaceStatus } from './WorkspaceStatus';
 
 const centeredMobileWidth = {
   width: '100%' as const,
@@ -49,7 +48,7 @@ export function CaseScreen({
   const bottomInset = Math.max(insets.bottom, fbSpacing.x3);
   const footerReserve = footer ? fbTouch.primary + fbSpacing.x8 : 0;
   const showDesktopShell = !isMobile;
-  const showContextRail = showDesktopShell && width >= 1180 && rightRail !== false;
+  const showContextRail = showDesktopShell && width >= 1440 && rightRail !== false;
 
   if (showDesktopShell) {
     return (
@@ -59,6 +58,7 @@ export function CaseScreen({
           <DesktopSidebar />
           <View style={styles.desktopWorkspace}>
             <DesktopWorkspaceBar />
+            <WorkspaceStatus />
             <ScrollView
               style={styles.desktopMain}
               contentContainerStyle={[
@@ -66,6 +66,7 @@ export function CaseScreen({
                 {
                   maxWidth: desktopMaxWidth,
                   paddingTop: fbSpacing.x6,
+                  paddingHorizontal: width < 1024 ? fbSpacing.x5 : fbSpacing.x8,
                   paddingBottom: bottomInset + fbSpacing.x8,
                 },
                 contentStyle,
@@ -98,11 +99,12 @@ export function CaseScreen({
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
+      <View style={{ paddingTop: insets.top }}><WorkspaceStatus /></View>
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + fbSpacing.x4,
+              paddingTop: fbSpacing.x4,
             paddingBottom:
               bottomInset + fbTouch.bottomNavHeight + footerReserve + fbSpacing.x6,
           },
@@ -141,17 +143,7 @@ function DesktopWorkspaceBar() {
   return (
     <View style={styles.workspaceBar}>
       <View style={styles.workspaceTitleGroup}>
-        <Icon name="search" size={14} color={fbColors.inkMute} />
-        <Text style={styles.workspaceTitle}>Family Bench workspace</Text>
-      </View>
-      <View style={styles.workspaceMetaGroup}>
-        <Mono dim size={10}>
-          LOCAL-FIRST
-        </Mono>
-        <View style={styles.workspaceDivider} />
-        <Mono dim size={10}>
-          NO REMOTE WRITES
-        </Mono>
+        <Text style={styles.workspaceTitle}>Your case workspace</Text>
       </View>
     </View>
   );
@@ -160,16 +152,15 @@ function DesktopWorkspaceBar() {
 function DefaultContextRail() {
   return (
     <View style={styles.contextRail}>
-      <Label color={fbColors.ox}>Desktop Context</Label>
-      <Text style={styles.railTitle}>Case context</Text>
+      <Label color={fbColors.ox}>CASE RECORDS</Label>
+      <Text style={styles.railTitle}>Preparing your records</Text>
       <Text style={styles.railBody}>
-        Current case status, key dates, linked records, and review notes can be surfaced here as
-        desktop workflows mature.
+        Review an entry’s original text and attachments before including it in a report.
       </Text>
       <View style={styles.railRule} />
-      <Text style={styles.railStatusTitle}>Shared platform</Text>
+      <Text style={styles.railStatusTitle}>Before sharing</Text>
       <Text style={styles.railStatusBody}>
-        Mobile and desktop use the same local-first case-intelligence store.
+        Private notes are excluded from factual exports. Review original files for sensitive content.
       </Text>
     </View>
   );
@@ -212,16 +203,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontFamily: fbFonts.sansRegular,
-  },
-  workspaceMetaGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: fbSpacing.x3,
-  },
-  workspaceDivider: {
-    width: fbBorder.hairline,
-    height: 16,
-    backgroundColor: fbColors.rule,
   },
   desktopMain: {
     flex: 1,

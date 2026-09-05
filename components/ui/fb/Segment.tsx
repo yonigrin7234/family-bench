@@ -8,11 +8,13 @@ export function Segment<V extends string = string>({
   value,
   onChange,
   full = true,
+  disabled = false,
 }: {
   items: SegmentItem<V>[];
   value: V;
   onChange?: (v: V) => void;
   full?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <View
@@ -29,9 +31,10 @@ export function Segment<V extends string = string>({
         return (
           <Pressable
             key={it.v}
+            disabled={disabled}
             onPress={() => onChange?.(it.v)}
             accessibilityRole="button"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled }}
             accessibilityLabel={it.label}
             style={{
               flex: full ? 1 : 0,

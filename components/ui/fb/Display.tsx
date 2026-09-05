@@ -1,4 +1,4 @@
-import { Text, type TextStyle, type StyleProp } from 'react-native';
+import { Text, type TextProps, type TextStyle, type StyleProp } from 'react-native';
 import type { ReactNode } from 'react';
 import { fbColors, fbFonts, fbWeights } from './tokens';
 
@@ -15,18 +15,21 @@ export function Display({
   weight = '500',
   italic = false,
   style,
+  accessibilityRole,
 }: {
   children: ReactNode;
   size?: number;
   weight?: TextStyle['fontWeight'];
   italic?: boolean;
   style?: StyleProp<TextStyle>;
+  accessibilityRole?: TextProps['accessibilityRole'];
 }) {
   const fontFamily = italic
     ? fbFonts.serifItalic
     : interFamily(weight);
   return (
     <Text
+      accessibilityRole={accessibilityRole}
       className={italic ? 'font-serif' : 'font-sans'}
       style={[
         {

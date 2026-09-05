@@ -48,7 +48,7 @@ function ChromeButton({
 }: {
   icon: IconName;
   label: string;
-  onPress?: () => void;
+  onPress: () => void;
 }) {
   return (
     <Pressable
@@ -65,16 +65,7 @@ function ChromeButton({
 function TopChrome() {
   return (
     <View style={styles.topChrome}>
-      <ChromeButton icon="grip" label="Open menu" />
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Open case workspace"
-        style={({ pressed }) => [styles.casePill, pressed && styles.pressed]}
-      >
-        <Text style={styles.casePillText}>Family Bench</Text>
-        <Icon name="caretDown" size={13} color={fbColors.inkMute} />
-      </Pressable>
+      <Text style={styles.brandLabel}>Family Bench</Text>
 
       <ChromeButton
         icon="folder"
@@ -455,7 +446,7 @@ function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
       <View style={[styles.setupHero, !isMobile && styles.setupHeroDesktop]}>
         <View style={styles.kickerRow}>
           <Chip tone="forest" outline={false}>
-            Local setup
+            Case setup
           </Chip>
           {demoCase ? (
             <Chip tone="amber" outline={false}>
@@ -464,22 +455,21 @@ function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
           ) : null}
         </View>
         <Display size={32} style={styles.setupTitle}>
-          Set up your local case
+          Set up your case
         </Display>
         <Text style={styles.setupBody}>
           Add the basic case, party, child, and hearing details that Family Bench will use across
-          Home, Case Map, Advisor, Timeline, and Reports. This stays on this device.
+          Home, Case Map, Advisor, Timeline, and Reports. Your records save on this device and sync to your account.
         </Text>
       </View>
 
       <SoftCard p={16} style={styles.setupCard}>
         <View style={styles.setupCardHeader}>
           <Icon name="shield" size={17} color={fbColors.ink} />
-          <Text style={styles.setupCardTitle}>No remote writes</Text>
+          <Text style={styles.setupCardTitle}>Your private account</Text>
         </View>
         <Text style={styles.setupCardBody}>
-          Demo seed data remains available until a local case is saved. This setup records factual
-          case details only and does not provide legal advice.
+          Add factual details about your case. The status bar shows when your changes are saved and synced.
         </Text>
         <PillButton
           tone="primary"
@@ -490,20 +480,19 @@ function FirstRunSetup({ demoCase }: { demoCase: boolean }) {
         >
           Start case setup
         </PillButton>
+        <PillButton tone="ghost" full onPress={() => router.push('/welcome' as never)}>See how Family Bench works</PillButton>
       </SoftCard>
     </CaseScreen>
   );
 }
 
 export default function Home() {
-  const { home, snapshot, filingEntryLinkCounts, hasUserCaseSetup, hasHydrated, isDemoCase } =
+  const { home, snapshot, filingEntryLinkCounts, hasUserCaseSetup, hasHydrated, isDemoCase, loading } =
     useCaseIntelligenceHome();
   const { activePatterns } = useCasePatterns();
   const { isMobile } = useResponsive();
 
-  // Block on FirstRunSetup only when neither real nor demo data exists.
-  // With demo data loaded, fall through to the parity-aligned home so
-  // we can actually preview the design.
+  if (loading || !hasHydrated) return <CaseScreen><Text style={styles.setupBody}>Opening your case…</Text></CaseScreen>;
   if (hasHydrated && !hasUserCaseSetup && !isDemoCase) {
     return <FirstRunSetup demoCase={false} />;
   }
@@ -641,18 +630,7 @@ const styles = StyleSheet.create({
     borderWidth: fbBorder.hairline,
     borderColor: fbColors.ruleSoft,
   },
-  casePill: {
-    minHeight: fbTouch.min,
-    paddingHorizontal: fbSpacing.x4,
-    borderRadius: fbRadii.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: fbColors.surface,
-    borderWidth: fbBorder.hairline,
-    borderColor: fbColors.ruleSoft,
-  },
-  casePillText: {
+  brandLabel: {
     color: fbColors.ink,
     fontSize: 13,
     fontFamily: fbFonts.sansSemi,

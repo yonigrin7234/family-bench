@@ -8,7 +8,7 @@ export const fbColors = {
 
   ink: '#14181F',
   inkSoft: '#2B323D',
-  inkMute: 'rgba(20,24,31,0.58)',
+  inkMute: 'rgba(20,24,31,0.61)',
   inkFaint: 'rgba(20,24,31,0.34)',
 
   rule: 'rgba(20,24,31,0.10)',

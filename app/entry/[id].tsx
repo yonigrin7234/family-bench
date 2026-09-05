@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { Image, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
 import {
   LocalAudioRecorder,
@@ -31,6 +31,11 @@ import {
   type IconName,
 } from '@/components/ui/fb';
 import { useResponsive } from '@/lib/hooks/useResponsive';
+import { resolveEvidenceUri } from '@/lib/evidence';
+import { pickEvidenceFile, discardPickedEvidence } from '@/lib/evidence/picker';
+import { getWorkspaceGeneration, useAuthStore } from '@/lib/auth/session';
+import { useCaseIntelligenceStore } from '@/lib/case-intelligence/useCaseIntelligence';
+import { getActiveCase } from '@/lib/case-intelligence/selectors';
 import {
   formatDateLabel,
   getCapturedBody,
@@ -39,10 +44,8 @@ import {
   getEntryTypeOption,
   isEntryReviewed,
   useCreateLocalAttachment,
-  useCreatePlaceholderAttachment,
   useEntryDetail,
   useUpdateEntryReview,
-  type AttachmentKind,
   type CreateLocalAttachmentInput,
   type EvidenceAttachment,
 } from '@/lib/case-intelligence';
@@ -96,17 +99,6 @@ function ComingLaterButton({
   );
 }
 
-const ATTACHMENT_OPTIONS: Array<{
-  kind: AttachmentKind;
-  label: string;
-  icon: IconName;
-}> = [
-  { kind: 'photo', label: 'Add photo placeholder', icon: 'camera' },
-  { kind: 'document', label: 'Add document placeholder', icon: 'doc' },
-  { kind: 'voice_memo', label: 'Add voice memo placeholder', icon: 'mic' },
-  { kind: 'screenshot', label: 'Add screenshot placeholder', icon: 'camera' },
-];
-
 type LocalAttachmentPick = Omit<CreateLocalAttachmentInput, 'entryId'>;
 
 function attachmentMeta(attachment: EvidenceAttachment): Record<string, unknown> {
@@ -154,17 +146,6 @@ function formatDuration(ms?: number | null) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function filenameFromUri(uri: string, fallback: string) {
-  const cleaned = uri.split('?')[0]?.split('#')[0] ?? '';
-  const name = cleaned.split('/').filter(Boolean).pop();
-  return name || fallback;
-}
-
-function kindFromMime(mimeType?: string | null): AttachmentKind {
-  if (mimeType?.startsWith('image/')) return 'photo';
-  return 'document';
-}
-
 function provisionCategoryLabel(category?: string | null) {
   if (category === 'custody') return 'Custody';
   if (category === 'support') return 'Support';
@@ -174,99 +155,31 @@ function provisionCategoryLabel(category?: string | null) {
   return 'Other';
 }
 
-async function pickImageAttachment(): Promise<LocalAttachmentPick | null> {
-  if (Platform.OS !== 'web') {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      throw new Error('Photo library permission is required to select an image.');
-    }
-  }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    allowsMultipleSelection: false,
-    quality: 1,
-  });
-
-  if (result.canceled || !result.assets[0]) return null;
-
-  const asset = result.assets[0];
-  const mimeType = asset.mimeType ?? (asset.fileName?.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-  const filename = asset.fileName ?? filenameFromUri(asset.uri, `photo-${Date.now()}.jpg`);
-
-  return {
-    kind: filename.toLowerCase().includes('screenshot') ? 'screenshot' : 'photo',
-    filename,
-    mimeType,
-    fileSizeBytes: asset.fileSize ?? asset.file?.size ?? null,
-    localUri: asset.uri,
-    localReference:
-      asset.assetId ??
-      (asset.file ? `web-image:${asset.file.name}:${asset.file.size}:${asset.file.lastModified}` : asset.uri),
-    sourceLabel: 'Photo library selection',
-  };
-}
-
-async function pickWebDocumentAttachment(): Promise<LocalAttachmentPick | null> {
-  if (Platform.OS !== 'web' || typeof document === 'undefined') {
-    throw new Error('Document selection is available in the web preview for this PR.');
-  }
-
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    let settled = false;
-    const settle = (value: LocalAttachmentPick | null) => {
-      if (settled) return;
-      settled = true;
-      input.remove();
-      resolve(value);
-    };
-    input.type = 'file';
-    input.accept = [
-      'application/pdf',
-      'image/*',
-      'text/plain',
-      'text/csv',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ].join(',');
-    input.style.display = 'none';
-    input.addEventListener('cancel', () => settle(null), { once: true });
-    input.onchange = () => {
-      const file = input.files?.[0] ?? null;
-
-      if (!file) {
-        settle(null);
-        return;
-      }
-
-      const localUri = URL.createObjectURL(file);
-
-      settle({
-        kind: kindFromMime(file.type),
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        fileSizeBytes: file.size,
-        localUri,
-        localReference: `web-file:${file.name}:${file.size}:${file.lastModified}`,
-        sourceLabel: 'Local file selection',
-      });
-    };
-    document.body.appendChild(input);
-    input.click();
-  });
-}
-
 function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
   const exif = attachmentMeta(attachment);
+  const storageStatus = stringMeta(exif.storage_status);
   const syncStatus = stringMeta(exif.sync_status) ?? 'pending';
   const sourceLabel = stringMeta(exif.source_label) ?? attachment.source_device;
-  const localUri = stringMeta(exif.local_uri);
-  const localReference = stringMeta(exif.local_reference);
+  const [localUri, setLocalUri] = useState<string | null>(null);
+  const [originalError, setOriginalError] = useState<string | null>(null);
   const selectedAt = stringMeta(exif.selected_at);
   const durationMs = numberMeta(exif.duration_ms);
-  const isLocalSelection = stringMeta(exif.selection_source) === 'local_picker';
   const canPreviewImage = Boolean(localUri && attachment.mime_type?.startsWith('image/'));
+
+  useEffect(() => {
+    let cancelled = false;
+    let release: (() => void) | undefined;
+    setLocalUri(null);
+    setOriginalError(null);
+    resolveEvidenceUri(attachment).then((resolved) => {
+      if (cancelled) { resolved.release(); return; }
+      release = resolved.release;
+      setLocalUri(resolved.uri);
+    }).catch((error) => {
+      if (!cancelled) setOriginalError(error instanceof Error ? error.message : 'The original is unavailable.');
+    });
+    return () => { cancelled = true; release?.(); };
+  }, [attachment.id, attachment.file_hash, attachment.storage_path, attachment.user_id, attachment.deleted_at]);
 
   return (
     <View style={styles.attachmentRecord}>
@@ -276,7 +189,7 @@ function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
         <View style={styles.attachmentFilePreview}>
           <Icon name={attachmentIconName(attachment)} size={20} color={fbColors.ink} />
           <Text style={styles.attachmentFilePreviewText}>
-            {attachment.mime_type?.startsWith('image/') ? 'Image metadata' : 'File metadata'}
+            {originalError ? 'Original unavailable' : localUri ? 'Original verified' : 'Checking original'}
           </Text>
         </View>
       )}
@@ -295,33 +208,27 @@ function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
           </View>
         </View>
         <Chip
-          tone={syncStatus === 'error' ? 'ox' : syncStatus === 'synced' ? 'forest' : 'amber'}
+          tone={originalError || syncStatus === 'error' ? 'ox' : storageStatus === 'remote_verified' ? 'forest' : 'amber'}
           outline={false}
         >
-          {syncStatus}
+          {originalError ? 'Needs attention' : storageStatus === 'remote_verified' ? 'Cloud verified' : 'Saved on device'}
         </Chip>
       </View>
       <Text style={styles.attachmentBody}>
-        {isLocalSelection
-          ? 'Original evidence reference is preserved locally. Cloud uploads, OCR, AI extraction, and derived files come later.'
-          : 'Original evidence is preserved. Uploads, previews, and derived files come later.'}
+        {originalError || (storageStatus === 'remote_verified'
+          ? 'The cloud copy was downloaded and matched the original SHA-256 hash.'
+          : 'The original bytes are saved on this device. Cloud backup is pending until sync succeeds.')}
       </Text>
       <View style={styles.attachmentDetails}>
         <DetailRow label="MIME type" value={attachment.mime_type} />
         <DetailRow
           label="File size"
-          value={
-            numberMeta(attachment.file_size_bytes) === null && !isLocalSelection
-              ? '0 bytes placeholder'
-              : formatFileSize(attachment.file_size_bytes)
-          }
+          value={formatFileSize(attachment.file_size_bytes)}
         />
         <DetailRow label="Duration" value={durationMs === null ? null : formatDuration(durationMs)} />
-        <DetailRow label="Local reference" value={localReference || localUri} />
-        <DetailRow label="Storage bucket" value={attachment.storage_bucket || 'Not assigned'} />
-        <DetailRow label="Storage path" value={attachment.storage_path} />
-        <DetailRow label="Hash" value={attachment.file_hash} />
-        <DetailRow label="Captured" value={attachment.captured_at ?? selectedAt} />
+        <DetailRow label="SHA-256" value={attachment.file_hash} />
+        <DetailRow label="Captured" value={attachment.captured_at} />
+        <DetailRow label="Added" value={selectedAt || attachment.created_at} />
         <DetailRow label="Source label" value={sourceLabel} />
       </View>
     </View>
@@ -331,9 +238,13 @@ function AttachmentRecord({ attachment }: { attachment: EvidenceAttachment }) {
 export default function EntryDetail() {
   const params = useLocalSearchParams();
   const entryId = getParam(params.id);
+  const { entry } = useEntryDetail(entryId);
+  return <EntryDetailContent key={entry ? `${entry.user_id}:${entry.case_id}:${entry.id}` : 'unavailable'} entryId={entryId} />;
+}
+
+function EntryDetailContent({ entryId }: { entryId?: string }) {
   const { isMobile } = useResponsive();
   const updateEntryReview = useUpdateEntryReview();
-  const createPlaceholderAttachment = useCreatePlaceholderAttachment();
   const createLocalAttachment = useCreateLocalAttachment();
   const {
     entry,
@@ -349,19 +260,38 @@ export default function EntryDetail() {
   const [mode, setMode] = useState<'read' | 'edit'>('read');
   const [bodyDraft, setBodyDraft] = useState('');
   const [visibility, setVisibility] = useState<ReviewVisibility>('court_ready');
-  const [addingAttachmentKind, setAddingAttachmentKind] = useState<AttachmentKind | null>(null);
-  const [pickingAttachment, setPickingAttachment] = useState<'photo' | 'document' | null>(null);
+  const [pickingAttachment, setPickingAttachment] = useState<'photo' | 'document' | 'camera' | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<LocalAttachmentPick | null>(null);
+  const pendingAttachmentRef = useRef<LocalAttachmentPick | null>(null);
+  const voiceIds = useRef(new Map<string, string>());
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const option = getEntryTypeOption(entry?.entry_type);
   const metadata = entry ? getEntryMetadata(entry) : {};
+  const importProvenance = metadata.import_provenance && typeof metadata.import_provenance === 'object' && !Array.isArray(metadata.import_provenance) ? metadata.import_provenance as Record<string, unknown> : null;
+  const isCsvSource = importProvenance?.kind === 'csv_source';
+  const csvSourceEntryId = importProvenance?.kind === 'csv_row' && typeof importProvenance.sourceEntryId === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(importProvenance.sourceEntryId) ? importProvenance.sourceEntryId : null;
   const capturedBody = entry ? getCapturedBody(entry) : null;
   const reviewed = entry ? isEntryReviewed(entry) : false;
+  const mounted = useRef(true);
+
+  useEffect(() => { mounted.current = true; return () => {
+    mounted.current = false;
+    if (pendingAttachmentRef.current) void discardPickedEvidence(pendingAttachmentRef.current).catch(() => { /* Retained by global cleanup notice. */ });
+  }; }, []);
+
+  function pinEntryContext() {
+    const generation = getWorkspaceGeneration(); const owner = entry?.user_id; const caseId = entry?.case_id;
+    return () => mounted.current && generation === getWorkspaceGeneration() && useAuthStore.getState().session?.user.id === owner
+      && useCaseIntelligenceStore.getState().ownerId === owner && getActiveCase(useCaseIntelligenceStore.getState().snapshot)?.id === caseId;
+  }
 
   useEffect(() => {
     if (!entry) return;
     setBodyDraft(entry.body ?? '');
-    setVisibility(metadata.review_visibility === 'private' ? 'private' : 'court_ready');
-  }, [entry?.id, entry?.body, metadata.review_visibility]);
+    setVisibility(isCsvSource || metadata.review_visibility === 'private' ? 'private' : 'court_ready');
+  }, [entry?.id, entry?.body, isCsvSource, metadata.review_visibility]);
 
   const changed = entry ? bodyDraft.trim() !== (entry.body ?? '').trim() : false;
   const statusLabel = useMemo(() => {
@@ -370,77 +300,114 @@ export default function EntryDetail() {
     return 'Not flagged';
   }, [entry]);
 
-  function saveBody() {
-    if (!entry) return;
-    updateEntryReview(entry.id, { body: bodyDraft });
-    setMode('read');
-  }
-
-  function markReviewed() {
-    if (!entry) return;
-    updateEntryReview(entry.id, { reviewed: true });
-  }
-
-  function changeVisibility(next: ReviewVisibility) {
-    setVisibility(next);
-    if (entry) {
-      updateEntryReview(entry.id, { reviewVisibility: next });
-    }
-  }
-
-  async function addAttachmentPlaceholder(kind: AttachmentKind) {
-    if (!entry || addingAttachmentKind || pickingAttachment) return;
-    setAddingAttachmentKind(kind);
-    setAttachmentNotice(null);
-
+  async function saveBody() {
+    if (!entry || reviewSaving) return;
+    setReviewSaving(true);
+    setReviewError(null);
     try {
-      const result = await createPlaceholderAttachment({
-        entryId: entry.id,
-        kind,
-        sourceLabel: 'Family Bench local placeholder',
-      });
-      setAttachmentNotice(result.warning);
-    } catch (err) {
-      setAttachmentNotice(
-        err instanceof Error ? err.message : 'Unable to create attachment metadata locally.',
-      );
-    } finally {
-      setAddingAttachmentKind(null);
-    }
+      await updateEntryReview(entry.id, { body: bodyDraft });
+      setMode('read');
+    } catch (error) { setReviewError(error instanceof Error ? error.message : 'Your edits could not be saved.'); }
+    finally { setReviewSaving(false); }
   }
 
-  async function addSelectedAttachment(source: 'photo' | 'document') {
-    if (!entry || addingAttachmentKind || pickingAttachment) return;
+  async function markReviewed() {
+    if (!entry || reviewSaving) return;
+    setReviewSaving(true);
+    setReviewError(null);
+    try { await updateEntryReview(entry.id, { reviewed: true }); }
+    catch (error) { setReviewError(error instanceof Error ? error.message : 'The review could not be saved.'); }
+    finally { setReviewSaving(false); }
+  }
+
+  async function changeVisibility(next: ReviewVisibility) {
+    if (!entry || reviewSaving || isCsvSource) return;
+    setReviewSaving(true);
+    setReviewError(null);
+    try {
+      await updateEntryReview(entry.id, { reviewVisibility: next });
+      setVisibility(next);
+    } catch (error) { setReviewError(error instanceof Error ? error.message : 'Visibility could not be saved.'); }
+    finally { setReviewSaving(false); }
+  }
+
+  async function saveProvisionLink(provisionId: string | null) {
+    if (!entry || reviewSaving) return;
+    setReviewSaving(true);
+    setReviewError(null);
+    try { await linkEntryToCourtOrderProvision(entry.id, provisionId); }
+    catch (error) { setReviewError(error instanceof Error ? error.message : 'The provision link could not be saved.'); }
+    finally { setReviewSaving(false); }
+  }
+
+  async function addSelectedAttachment(source: 'photo' | 'document' | 'camera') {
+    if (!entry || pickingAttachment || pendingAttachment) return;
     setPickingAttachment(source);
     setAttachmentNotice(null);
-
+    const current = pinEntryContext();
     try {
-      const selected =
-        source === 'photo' ? await pickImageAttachment() : await pickWebDocumentAttachment();
+      const picked = await pickEvidenceFile(source);
+      if (!current()) { if (picked) await discardPickedEvidence(picked); return; }
+      const selected = picked ? { ...picked, attachmentId: Crypto.randomUUID() } : null;
       if (!selected) {
         setAttachmentNotice('No attachment was selected.');
         return;
       }
 
-      const result = await createLocalAttachment({
-        entryId: entry.id,
-        ...selected,
-      });
-      setAttachmentNotice(result.warning);
+      pendingAttachmentRef.current = selected;
+      setPendingAttachment(selected);
+      await persistSelectedAttachment(selected);
     } catch (err) {
+      if (!mounted.current) return;
       setAttachmentNotice(
-        err instanceof Error ? err.message : 'Unable to save selected attachment metadata locally.',
+        err instanceof Error ? err.message : 'Unable to preserve the selected original file.',
       );
     } finally {
-      setPickingAttachment(null);
+      if (mounted.current) setPickingAttachment(null);
     }
   }
 
+  async function persistSelectedAttachment(selected: LocalAttachmentPick) {
+    if (!entry) throw new Error('Reopen the entry before attaching its original.');
+    const current = pinEntryContext();
+    if (!current()) throw new Error('The account or entry changed before saving.');
+    const result = await createLocalAttachment({ entryId: entry.id, ...selected });
+    await discardPickedEvidence(selected);
+    if (!current()) return;
+    pendingAttachmentRef.current = null;
+    setPendingAttachment(null);
+    setAttachmentNotice(result.warning);
+  }
+
+  async function retrySelectedAttachment() {
+    if (!pendingAttachment || pickingAttachment) return;
+    setPickingAttachment('document');
+    setAttachmentNotice(null);
+    try { await persistSelectedAttachment(pendingAttachment); }
+    catch (error) { setAttachmentNotice(error instanceof Error ? error.message : 'The original could not be saved. Retry this attachment.'); }
+    finally { setPickingAttachment(null); }
+  }
+
+  async function discardSelectedAttachment() {
+    if (!pendingAttachment || pickingAttachment) return;
+    setPickingAttachment('document');
+    try {
+      await discardPickedEvidence(pendingAttachment);
+      pendingAttachmentRef.current = null;
+      setPendingAttachment(null);
+      setAttachmentNotice('The pending selection was discarded.');
+    } catch (error) { setAttachmentNotice(error instanceof Error ? error.message : 'The temporary copy could not be removed.'); }
+    finally { setPickingAttachment(null); }
+  }
+
   async function saveEntryVoiceMemo(memo: RecordedAudioMemo) {
-    if (!entry) return;
+    if (!entry) throw new Error('Reopen the entry before attaching the voice memo.');
+    const attachmentId = voiceIds.current.get(memo.uri) ?? Crypto.randomUUID();
+    voiceIds.current.set(memo.uri, attachmentId);
 
     const result = await createLocalAttachment({
       entryId: entry.id,
+      attachmentId,
       kind: 'voice_memo',
       filename: memo.filename,
       mimeType: memo.mimeType,
@@ -449,6 +416,7 @@ export default function EntryDetail() {
       localUri: memo.uri,
       localReference: memo.localReference,
       sourceLabel: 'Local voice memo recording',
+      capturedAt: memo.capturedAt,
     });
     setAttachmentNotice(result.warning);
   }
@@ -509,7 +477,7 @@ export default function EntryDetail() {
           full
           icon="check"
           onPress={markReviewed}
-          disabled={reviewed}
+          disabled={reviewed || reviewSaving}
         >
           {reviewed ? 'Reviewed' : 'Mark reviewed'}
         </PillButton>
@@ -531,7 +499,7 @@ export default function EntryDetail() {
           icon="doc"
           onPress={() => router.push({ pathname: '/export-prep', params: { entryId: entry.id } } as never)}
         >
-          Preview JSON export
+          Prepare PDF or evidence ZIP
         </PillButton>
       </View>
 
@@ -549,13 +517,14 @@ export default function EntryDetail() {
       footer={
         mode === 'edit' ? (
           <View style={styles.footer}>
-            <PillButton tone="primary" size="lg" full icon="check" disabled={!changed} onPress={saveBody}>
-              Save review edits
+            <PillButton tone="primary" size="lg" full icon="check" disabled={!changed || reviewSaving} onPress={saveBody}>
+              {reviewSaving ? 'Saving review edits' : 'Save review edits'}
             </PillButton>
           </View>
         ) : null
       }
     >
+      {reviewError ? <InfoCallout title="Changes not saved" tone="ink">{reviewError}</InfoCallout> : null}
       <View style={styles.header}>
         <PillButton tone="ghost" size="sm" icon="caret" onPress={() => router.back()}>
           Back
@@ -642,14 +611,19 @@ export default function EntryDetail() {
             </Chip>
           }
         />
-        <Segment<ReviewVisibility>
+        {isCsvSource ? <Text style={styles.sourceBody}>Private CSV source — contains the complete original, including any private fields. Only the separately reviewed imported entries may be shared.</Text> : <Segment<ReviewVisibility>
           items={[
             { v: 'court_ready', label: 'Court-ready' },
             { v: 'private', label: 'Private' },
           ]}
           value={visibility}
+          disabled={reviewSaving}
           onChange={changeVisibility}
-        />
+        />}
+        {csvSourceEntryId ? <View style={{ gap: 8, marginTop: 12 }}>
+          <Text style={styles.sourceBody}>Imported from CSV{typeof importProvenance?.rowIndex === 'number' ? `, data row ${importProvenance.rowIndex}` : ''}. Review this entry against the preserved original before sharing it.</Text>
+          <PillButton tone="ghost" onPress={() => router.push({ pathname: '/entry/[id]', params: { id: csvSourceEntryId } } as never)}>Open private CSV source</PillButton>
+        </View> : null}
       </SoftCard>
 
       <SoftCard p={16} style={styles.section}>
@@ -661,6 +635,7 @@ export default function EntryDetail() {
               tone={mode === 'edit' ? 'accentSoft' : 'ghost'}
               size="sm"
               icon={mode === 'edit' ? 'x' : 'doc'}
+              disabled={reviewSaving}
               onPress={() => setMode(mode === 'edit' ? 'read' : 'edit')}
             >
               {mode === 'edit' ? 'Cancel' : 'Edit'}
@@ -675,6 +650,7 @@ export default function EntryDetail() {
           <TextInput
             value={bodyDraft}
             onChangeText={setBodyDraft}
+            editable={!reviewSaving}
             multiline
             textAlignVertical="top"
             placeholder="Add reviewed body text"
@@ -716,19 +692,21 @@ export default function EntryDetail() {
         />
         <Text style={styles.sectionBody}>
           {attachments.length
-            ? `${attachments.length} local attachment metadata records are linked to this entry.`
-            : 'No evidence metadata is attached yet. Select a local file or image to save metadata on this device.'}
+            ? `${attachments.length} attachments are linked to this entry.`
+            : 'Attach an original photo, document, or voice memo to this entry.'}
         </Text>
         <Text style={styles.sectionBody}>
-          Original evidence stays local. Cloud uploads, OCR, AI extraction, and derived files are
-          not created in this PR.
+          Originals are preserved without modification and checked with SHA-256. Maximum 25 MiB per file.
+          Keep your source files until cloud backup is verified.
         </Text>
         <LocalAudioRecorder
           title="Record voice memo"
-          body="Record a local audio source for this entry. It is saved as attachment metadata only; transcription and upload come later."
+          body="Record a voice memo and attach the original audio to this entry. Maximum 25 MiB; no automatic transcription."
           saveLabel="Attach voice memo to entry"
-          savedLabel="Voice memo metadata attached to this entry."
+          savedLabel="Original voice memo saved and verified on this device."
           onSave={saveEntryVoiceMemo}
+          clearAfterSave
+          disabled={Boolean(pickingAttachment || pendingAttachment)}
         />
         <View style={styles.attachmentActionGrid}>
           <PillButton
@@ -736,7 +714,7 @@ export default function EntryDetail() {
             size="md"
             icon="camera"
             full
-            disabled={Boolean(addingAttachmentKind || pickingAttachment)}
+            disabled={Boolean(pickingAttachment || pendingAttachment)}
             onPress={() => addSelectedAttachment('photo')}
           >
             {pickingAttachment === 'photo' ? 'Opening picker' : 'Select photo or image'}
@@ -746,36 +724,20 @@ export default function EntryDetail() {
             size="md"
             icon="doc"
             full
-            disabled={Platform.OS !== 'web' || Boolean(addingAttachmentKind || pickingAttachment)}
+            disabled={Boolean(pickingAttachment || pendingAttachment)}
             onPress={() => addSelectedAttachment('document')}
           >
             {pickingAttachment === 'document'
               ? 'Opening picker'
-              : Platform.OS === 'web'
-                ? 'Select file or document'
-                : 'Document picker coming later'}
+              : 'Select file or document'}
           </PillButton>
         </View>
-        <View style={styles.placeholderBlock}>
-          <Text style={styles.sourceLabel}>PLACEHOLDER METADATA</Text>
-          <Text style={styles.sectionBody}>
-            Use placeholders only when the original evidence is not ready to select yet.
-          </Text>
-          {ATTACHMENT_OPTIONS.map((option) => (
-            <PillButton
-              key={option.kind}
-              tone="soft"
-              size="md"
-              icon={option.icon}
-              full
-              disabled={Boolean(addingAttachmentKind || pickingAttachment)}
-              onPress={() => addAttachmentPlaceholder(option.kind)}
-            >
-              {addingAttachmentKind === option.kind ? 'Saving metadata' : option.label}
-            </PillButton>
-          ))}
-        </View>
         {attachmentNotice ? <Text style={styles.attachmentNotice}>{attachmentNotice}</Text> : null}
+        {pendingAttachment ? <View style={styles.attachmentStack}>
+          <Text style={styles.sectionBody}>{pendingAttachment.filename} is pending. Retry to preserve the same attachment.</Text>
+          <PillButton tone="primary" disabled={Boolean(pickingAttachment)} onPress={retrySelectedAttachment}>Retry attachment</PillButton>
+          <PillButton tone="ghost" disabled={Boolean(pickingAttachment)} onPress={discardSelectedAttachment}>Discard pending selection</PillButton>
+        </View> : null}
         {attachments.length ? (
           <View style={styles.attachmentStack}>
             {attachments.map((attachment) => (
@@ -785,8 +747,9 @@ export default function EntryDetail() {
         ) : null}
         <Rule />
         <View style={styles.attachmentActionGrid}>
-          <ComingLaterButton icon="upload">Upload to storage</ComingLaterButton>
-          <ComingLaterButton icon="camera">Capture photo</ComingLaterButton>
+          <PillButton tone="soft" icon="camera" disabled={Boolean(pickingAttachment || pendingAttachment)} onPress={() => addSelectedAttachment('camera')}>
+            {pickingAttachment === 'camera' ? 'Opening camera' : 'Capture photo'}
+          </PillButton>
         </View>
       </SoftCard>
 
@@ -816,14 +779,15 @@ export default function EntryDetail() {
               size="md"
               icon="x"
               full
-              onPress={() => linkEntryToCourtOrderProvision(entry.id, null)}
+              disabled={reviewSaving}
+              onPress={() => saveProvisionLink(null)}
             >
               Remove local provision link
             </PillButton>
           </View>
         ) : (
           <Text style={styles.sectionBody}>
-            No court-order provision is linked yet. Select a local provision below to connect this entry to specific order language.
+            No court-order provision is linked yet. Select a provision below to connect this entry to specific order language.
           </Text>
         )}
         {courtOrderProvisionOptions.length ? (
@@ -842,8 +806,8 @@ export default function EntryDetail() {
                     tone={selected ? 'soft' : 'primary'}
                     size="sm"
                     icon="link"
-                    disabled={selected}
-                    onPress={() => linkEntryToCourtOrderProvision(entry.id, provision.id)}
+                    disabled={selected || reviewSaving}
+                    onPress={() => saveProvisionLink(provision.id)}
                   >
                     {selected ? 'Linked' : 'Link'}
                   </PillButton>
@@ -867,8 +831,8 @@ export default function EntryDetail() {
         </PillButton>
       </SoftCard>
 
-      <InfoCallout title="Future AI interpretation" tone="ink">
-        AI summaries and pattern notes are not generated in this PR. Future AI output must cite source entries and evidence separately.
+      <InfoCallout title="Your recorded facts" tone="ink">
+        This entry contains your recorded and reviewed text. AI summaries and pattern analysis are not available.
       </InfoCallout>
 
       <SoftCard p={16} style={styles.section}>
@@ -885,7 +849,7 @@ export default function EntryDetail() {
           full
           onPress={() => router.push({ pathname: '/export-prep', params: { entryId: entry.id } } as never)}
         >
-          Preview entry JSON export
+          Prepare PDF or evidence ZIP
         </PillButton>
       </SoftCard>
 
@@ -897,7 +861,7 @@ export default function EntryDetail() {
             full
             icon="check"
             onPress={markReviewed}
-            disabled={reviewed}
+            disabled={reviewed || reviewSaving}
           >
             {reviewed ? 'Reviewed' : 'Mark reviewed'}
           </PillButton>

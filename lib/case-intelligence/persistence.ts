@@ -1,9 +1,18 @@
+import { sanitizeCourtFormValues, type CourtFormDraft } from '../forms/model';
+import { extractWorkspaceContext, type PreservedWorkspaceContext } from './contextIntegrity';
+import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { assertSnapshotOwner, workspaceStorageKey } from './ownership';
+import { createWriteQueue } from './writeQueue';
+import type { ResolvedSyncConflict } from './syncModel';
+import { captureWorkspaceLease } from './workspaceLease';
+import { sealLocalBytes, openLocalBytes } from '@/lib/security/localEncryption';
 import type { Json } from '@/lib/supabase/database.types';
 import type {
   AdvisorConversationState,
   CaseIntelligenceSnapshot,
+  CaseWorkspaceContext,
   Entry,
   EvidenceAttachment,
   FilingBuilderState,
@@ -17,10 +26,11 @@ import type {
   SavedReportVersion,
 } from './types';
 
-const PERSISTENCE_VERSION = 1;
-const STORAGE_KEY = 'family-bench.case-intelligence.v1';
+const PERSISTENCE_VERSION = 2;
+const enqueueWrite = createWriteQueue();
+const sequences = new Map<string, number>();
 const FILE_DIRECTORY = `${FileSystem.documentDirectory ?? ''}family-bench/`;
-const FILE_URI = `${FILE_DIRECTORY}case-intelligence-v1.json`;
+
 
 export const DEFAULT_REPORT_PREVIEW_STATE: ReportPreviewState = {
   reportType: 'timeline',
@@ -60,20 +70,31 @@ export type LocalPersistenceAdapter = 'localStorage' | 'fileSystem' | 'memory';
 
 export type PersistedCaseIntelligenceDocument = {
   version: typeof PERSISTENCE_VERSION;
+  /** Read-time original context, before display normalization. Never written as a second copy. */
+  unvalidatedWorkspaceState?: unknown;
   savedAt: string;
+  sequence?: number;
+  ownerId: string;
   snapshot: CaseIntelligenceSnapshot;
+  selectedCaseId?: string | null;
+  caseWorkspaceStates?: Record<string, CaseWorkspaceContext>;
+  contextRecovery?: PreservedWorkspaceContext[];
+  contextError?: string | null;
   reportPreviewState: ReportPreviewState;
   savedReportVersions: SavedReportVersion[];
+  courtFormDrafts?: CourtFormDraft[];
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
   patternReviewState: PatternReviewState;
+  conflictHistory: ResolvedSyncConflict[];
   localRecords: Record<string, LocalRecordMeta>;
 };
 
-let memoryDocument: PersistedCaseIntelligenceDocument | null = null;
+
 
 function hasWebStorage() {
-  return Platform.OS === 'web' && typeof window !== 'undefined' && Boolean(window.localStorage);
+  try { return Platform.OS === 'web' && typeof window !== 'undefined' && Boolean(window.localStorage); }
+  catch { return false; }
 }
 
 export function getLocalPersistenceAdapter(): LocalPersistenceAdapter {
@@ -108,6 +129,8 @@ export function createLocalRecordMeta({
     local_updated_at: now,
     sync_status: status,
     error,
+    server_version: previous?.server_version ?? 0,
+    mutation_id: Crypto.randomUUID(),
   };
 }
 
@@ -153,7 +176,7 @@ function normalizeReportPreviewState(value: unknown): ReportPreviewState {
   const flagFilter = candidate.flagFilter ?? DEFAULT_REPORT_PREVIEW_STATE.flagFilter;
 
   return {
-    reportType,
+    reportType: REPORT_TYPES.includes(reportType) ? reportType : 'timeline',
     typeFilter,
     flagFilter,
   };
@@ -168,6 +191,7 @@ function normalizeSavedReportVersions(value: unknown): SavedReportVersion[] {
     .filter((item) => typeof item.id === 'string' && typeof item.reportType === 'string')
     .map((item) => ({
       id: item.id as string,
+      caseId: typeof item.caseId === 'string' ? item.caseId : null,
       reportType: item.reportType as ReportPreviewType,
       title: typeof item.title === 'string' ? item.title : 'Saved report',
       createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
@@ -219,6 +243,7 @@ const REPORT_TYPES: ReportPreviewType[] = [
   'communication',
   'medical',
   'custodyExchange',
+  'late', 'expense', 'benchBrief',
 ];
 
 function stringArray(value: unknown) {
@@ -317,102 +342,170 @@ function parseDocument(raw: string): PersistedCaseIntelligenceDocument | null {
   const parsed = JSON.parse(raw) as Partial<PersistedCaseIntelligenceDocument>;
   if (parsed.version !== PERSISTENCE_VERSION || !parsed.snapshot) return null;
 
+  const rawWorkspace = extractWorkspaceContext(parsed as Record<string, unknown>);
+  let workspace;
+  try { workspace = normalizeWorkspaceState(rawWorkspace); } catch { workspace = normalizeWorkspaceState({}); }
   return {
     version: PERSISTENCE_VERSION,
+    ...workspace,
+    unvalidatedWorkspaceState: rawWorkspace,
+    contextRecovery: parsed.contextRecovery ?? [],
+    contextError: parsed.contextError ?? null,
+    ownerId: typeof parsed.ownerId === 'string' ? parsed.ownerId : '',
+    sequence: typeof parsed.sequence === 'number' ? parsed.sequence : 0,
     savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString(),
     snapshot: parsed.snapshot,
-    reportPreviewState: normalizeReportPreviewState(parsed.reportPreviewState),
-    savedReportVersions: normalizeSavedReportVersions(parsed.savedReportVersions),
-    advisorState: normalizeAdvisorState(parsed.advisorState),
-    filingBuilderState: normalizeFilingBuilderState(parsed.filingBuilderState),
-    patternReviewState: normalizePatternReviewState(parsed.patternReviewState),
+    selectedCaseId: typeof parsed.selectedCaseId === 'string' ? parsed.selectedCaseId : parsed.snapshot.selectedCaseId ?? null,
     localRecords: parsed.localRecords ?? {},
   };
 }
 
-export async function readPersistedCaseIntelligence(): Promise<{
-  adapter: LocalPersistenceAdapter;
-  document: PersistedCaseIntelligenceDocument | null;
-}> {
-  const adapter = getLocalPersistenceAdapter();
-
-  if (adapter === 'localStorage') {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return { adapter, document: raw ? parseDocument(raw) : null };
-  }
-
-  if (adapter === 'fileSystem') {
-    const info = await FileSystem.getInfoAsync(FILE_URI);
-    if (!info.exists) return { adapter, document: null };
-    return { adapter, document: parseDocument(await FileSystem.readAsStringAsync(FILE_URI)) };
-  }
-
-  return { adapter, document: memoryDocument };
+function normalizeConflictHistory(value: unknown): ResolvedSyncConflict[] {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.some((row) => !row || typeof row.resolutionId !== 'string' || typeof row.key !== 'string' || !row.local)) throw new Error('Conflict history could not be read. The saved workspace has not been changed.');
+  return value as ResolvedSyncConflict[];
 }
 
-export async function writePersistedCaseIntelligence({
-  snapshot,
-  reportPreviewState,
-  savedReportVersions,
-  advisorState,
-  filingBuilderState,
-  patternReviewState,
-  localRecords,
-}: {
+function normalizeCaseWorkspaceStates(value: unknown): Record<string, CaseWorkspaceContext> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([id]) => /^[0-9a-f-]{36}$/i.test(id)).map(([id, context]) => {
+    const item = context && typeof context === 'object' ? context as Record<string, unknown> : {};
+    return [id, {
+      reportPreviewState: normalizeReportPreviewState(item.reportPreviewState),
+      advisorState: normalizeAdvisorState(item.advisorState),
+      filingBuilderState: normalizeFilingBuilderState(item.filingBuilderState),
+      patternReviewState: normalizePatternReviewState(item.patternReviewState),
+    }];
+  }));
+}
+
+function normalizeCourtFormDrafts(value: unknown): CourtFormDraft[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => ({ id: item.id, userId: item.userId, caseId: item.caseId, formId: item.formId, values: sanitizeCourtFormValues(item.formId, item.values), sourceEntryIds: stringArray(item.sourceEntryIds), createdAt: item.createdAt, updatedAt: item.updatedAt }));
+}
+
+export function normalizeWorkspaceState(value: unknown) {
+  const candidate = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    selectedCaseId: typeof candidate.selectedCaseId === 'string' ? candidate.selectedCaseId : null,
+    caseWorkspaceStates: normalizeCaseWorkspaceStates(candidate.caseWorkspaceStates),
+    reportPreviewState: normalizeReportPreviewState(candidate.reportPreviewState),
+    savedReportVersions: normalizeSavedReportVersions(candidate.savedReportVersions),
+    courtFormDrafts: normalizeCourtFormDrafts(candidate.courtFormDrafts),
+    advisorState: normalizeAdvisorState(candidate.advisorState),
+    filingBuilderState: normalizeFilingBuilderState(candidate.filingBuilderState),
+    patternReviewState: normalizePatternReviewState(candidate.patternReviewState),
+    conflictHistory: normalizeConflictHistory(candidate.conflictHistory),
+  };
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function fromHex(text: string): Uint8Array {
+  if (!/^(?:[0-9a-f]{2})+$/i.test(text)) throw new Error('Saved workspace is damaged. It has not been overwritten.');
+  return Uint8Array.from(text.match(/../g)!, (byte) => parseInt(byte, 16));
+}
+
+async function decodeDocument(raw: string, ownerId: string): Promise<PersistedCaseIntelligenceDocument> {
+  const bytes = await openLocalBytes(ownerId, fromHex(raw));
+  const document = parseDocument(new TextDecoder().decode(bytes));
+  if (!document || document.ownerId !== ownerId) throw new Error('Saved workspace could not be verified. It has not been overwritten.');
+  assertSnapshotOwner(document.snapshot, ownerId);
+  if (!Array.isArray(document.contextRecovery) || document.contextRecovery.some((copy) => copy.ownerId !== ownerId || typeof copy.id !== 'string' || !Array.isArray(copy.issues))) throw new Error('Saved context recovery copies could not be verified. The original file has been preserved.');
+  return document;
+}
+
+export async function readPersistedCaseIntelligence(ownerId: string): Promise<{
+  adapter: LocalPersistenceAdapter;
+  document: PersistedCaseIntelligenceDocument | null;
+  warning?: string;
+}> {
+  const key = workspaceStorageKey(ownerId);
+  // A reopened native session must observe any prior session's pending save.
+  // Queue reads and sequence initialization with writes and clears so a stale
+  // hydrated snapshot cannot subsequently overwrite the newer disk copy.
+  return enqueueWrite(key, async () => {
+    const adapter = getLocalPersistenceAdapter();
+    if (adapter === 'localStorage') {
+      const raw = window.localStorage.getItem(key);
+      return { adapter, document: raw ? await decodeDocument(raw, ownerId) : null };
+    }
+    if (adapter === 'fileSystem') {
+      const candidates: PersistedCaseIntelligenceDocument[] = [];
+      let damaged = false;
+      for (const slot of ['a', 'b']) {
+        const uri = `${FILE_DIRECTORY}${key}.${slot}.enc`;
+        const info = await FileSystem.getInfoAsync(uri);
+        if (!info.exists) continue;
+        try { candidates.push(await decodeDocument(await FileSystem.readAsStringAsync(uri), ownerId)); }
+        catch { damaged = true; }
+      }
+      candidates.sort((a, b) => (b.sequence ?? 0) - (a.sequence ?? 0));
+      const document = candidates[0] ?? null;
+      if (damaged && !document) throw new Error('Saved workspace is damaged. Its files have been preserved for recovery.');
+      sequences.set(key, document?.sequence ?? 0);
+      return { adapter, document, warning: damaged ? 'An interrupted save was recovered from the previous verified copy. Review your latest changes.' : undefined };
+    }
+    throw new Error('Durable storage is unavailable on this device. Case records cannot be saved.');
+  });
+}
+
+export async function writePersistedCaseIntelligence(input: {
+  ownerId: string;
   snapshot: CaseIntelligenceSnapshot;
+  selectedCaseId?: string | null;
+  caseWorkspaceStates?: Record<string, CaseWorkspaceContext>;
+  contextRecovery?: PreservedWorkspaceContext[];
+  contextError?: string | null;
   reportPreviewState: ReportPreviewState;
   savedReportVersions: SavedReportVersion[];
+  courtFormDrafts?: CourtFormDraft[];
   advisorState: AdvisorConversationState;
   filingBuilderState: FilingBuilderState;
   patternReviewState: PatternReviewState;
+  conflictHistory: ResolvedSyncConflict[];
   localRecords: Record<string, LocalRecordMeta>;
 }): Promise<{ adapter: LocalPersistenceAdapter; savedAt: string }> {
-  const adapter = getLocalPersistenceAdapter();
-  const document: PersistedCaseIntelligenceDocument = {
-    version: PERSISTENCE_VERSION,
-    savedAt: new Date().toISOString(),
-    snapshot,
-    reportPreviewState,
-    savedReportVersions,
-    advisorState,
-    filingBuilderState,
-    patternReviewState,
-    localRecords,
-  };
-  const serialized = JSON.stringify(document);
-
-  if (adapter === 'localStorage') {
-    window.localStorage.setItem(STORAGE_KEY, serialized);
-    return { adapter, savedAt: document.savedAt };
-  }
-
-  if (adapter === 'fileSystem') {
-    await FileSystem.makeDirectoryAsync(FILE_DIRECTORY, { intermediates: true });
-    await FileSystem.writeAsStringAsync(FILE_URI, serialized);
-    return { adapter, savedAt: document.savedAt };
-  }
-
-  memoryDocument = document;
-  return { adapter, savedAt: document.savedAt };
+  const key = workspaceStorageKey(input.ownerId);
+  const assertLease = captureWorkspaceLease(input.ownerId);
+  assertSnapshotOwner(input.snapshot, input.ownerId);
+  if ((input.contextRecovery ?? []).some((copy) => copy.ownerId !== input.ownerId)) throw new Error('Context recovery copies cannot be moved between accounts.');
+  // Capture now: callers can mutate their state again while this write waits.
+  const captured = JSON.parse(JSON.stringify(input)) as typeof input;
+  return enqueueWrite(key, async () => {
+    const adapter = getLocalPersistenceAdapter();
+    const savedAt = new Date().toISOString();
+    const sequence = (sequences.get(key) ?? 0) + 1;
+    const document: PersistedCaseIntelligenceDocument = { ...captured, version: PERSISTENCE_VERSION, savedAt, sequence };
+    const encoded = toHex(await sealLocalBytes(input.ownerId, new TextEncoder().encode(JSON.stringify(document))));
+    assertLease();
+    if (adapter === 'localStorage') {
+      window.localStorage.setItem(key, encoded);
+      if (window.localStorage.getItem(key) !== encoded) throw new Error('Workspace write could not be verified. Please retry.');
+    } else if (adapter === 'fileSystem') {
+      await FileSystem.makeDirectoryAsync(FILE_DIRECTORY, { intermediates: true });
+      // Alternate complete encrypted documents. A process termination during a
+      // write leaves the other generation available for explicit recovery.
+      const uri = `${FILE_DIRECTORY}${key}.${sequence % 2 ? 'a' : 'b'}.enc`;
+      await FileSystem.writeAsStringAsync(uri, encoded);
+      if (await FileSystem.readAsStringAsync(uri) !== encoded) throw new Error('Workspace write could not be verified. Please retry.');
+    } else throw new Error('Durable storage is unavailable. Your changes have not been saved.');
+    sequences.set(key, sequence);
+    return { adapter, savedAt };
+  });
 }
 
-export async function clearPersistedCaseIntelligence(): Promise<{ adapter: LocalPersistenceAdapter; clearedAt: string }> {
-  const adapter = getLocalPersistenceAdapter();
-  const clearedAt = new Date().toISOString();
-
-  if (adapter === 'localStorage') {
-    window.localStorage.removeItem(STORAGE_KEY);
-    return { adapter, clearedAt };
-  }
-
-  if (adapter === 'fileSystem') {
-    const info = await FileSystem.getInfoAsync(FILE_URI);
-    if (info.exists) {
-      await FileSystem.deleteAsync(FILE_URI, { idempotent: true });
+export async function clearPersistedCaseIntelligence(ownerId: string): Promise<{ adapter: LocalPersistenceAdapter; clearedAt: string }> {
+  const key = workspaceStorageKey(ownerId);
+  return enqueueWrite(key, async () => {
+    const adapter = getLocalPersistenceAdapter();
+    if (adapter === 'localStorage') window.localStorage.removeItem(key);
+    else if (adapter === 'fileSystem') {
+      for (const slot of ['a', 'b']) await FileSystem.deleteAsync(`${FILE_DIRECTORY}${key}.${slot}.enc`, { idempotent: true });
     }
-    return { adapter, clearedAt };
-  }
-
-  memoryDocument = null;
-  return { adapter, clearedAt };
+    sequences.delete(key);
+    return { adapter, clearedAt: new Date().toISOString() };
+  });
 }

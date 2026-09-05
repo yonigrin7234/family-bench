@@ -53,11 +53,17 @@ export type SurfaceRouteId =
   | 'calculator'
   | 'advisor'
   | 'filings'
+  | 'forms'
+  | 'import'
   | 'patterns'
   | 'onboarding'
   | 'exportPrep'
   | 'practitioners'
   | 'safety'
+  | 'cases'
+  | 'more'
+  | 'trustCenter'
+  | 'briefcase'
   | 'settings';
 
 export type SurfaceRouteDefinition = {
@@ -214,7 +220,7 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     desktopComplexity: 'high',
     mobileBehavior: ['Keep case sections stacked and easy to scan.'],
     desktopBehavior: ['Use two-column organization with a case context rail where available.'],
-    appearsInMobileNav: true,
+    appearsInMobileNav: false,
     appearsInDesktopNav: true,
     mobileNavOrder: 60,
     desktopNavOrder: 60,
@@ -233,7 +239,7 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     desktopComplexity: 'high',
     mobileBehavior: ['Keep report type, filters, and preview stacked.'],
     desktopBehavior: ['Keep report filters beside the preview and summarize active report context.'],
-    appearsInMobileNav: true,
+    appearsInMobileNav: false,
     appearsInDesktopNav: true,
     mobileNavOrder: 50,
     desktopNavOrder: 70,
@@ -400,6 +406,63 @@ export const SURFACE_ROUTES: readonly SurfaceRouteDefinition[] = [
     appearsInDesktopNav: true,
     desktopNavOrder: 130,
     futureNotes: ['Full privacy controls, account deletion, and billing settings remain future work.'],
+  },
+  {
+    id: 'cases', path: '/cases', label: 'Cases', icon: 'scales',
+    surfaceClass: 'shared', primaryFeatureSections: [2, 40],
+    mobileRole: 'Choose or create a case.', desktopRole: 'Choose or create a case.',
+    mobileComplexity: 'low', desktopComplexity: 'low',
+    mobileBehavior: ['Select a saved case before working with its records.'],
+    desktopBehavior: ['Switch case context without mixing records or selections.'],
+    appearsInMobileNav: false, appearsInDesktopNav: true, desktopNavOrder: 5, futureNotes: [],
+  },
+  {
+    id: 'briefcase', path: '/briefcase', label: 'Briefcase', icon: 'folder',
+    surfaceClass: 'shared', primaryFeatureSections: [8, 19, 20, 35],
+    mobileRole: 'Find hearing records and selected orders.', desktopRole: 'Prepare hearing records and verify selected originals.',
+    mobileComplexity: 'medium', desktopComplexity: 'medium',
+    mobileBehavior: ['Keep hearing, order and record retrieval together.'],
+    desktopBehavior: ['Review hearing records and send selected entries to factual export.'],
+    appearsInMobileNav: false, appearsInDesktopNav: true, desktopNavOrder: 65,
+    futureNotes: ['A successful file check does not guarantee offline app or account availability.'],
+  },
+  {
+    id: 'trustCenter', path: '/trust-center', label: 'Trust Center', icon: 'shield',
+    surfaceClass: 'shared', primaryFeatureSections: [7, 30, 34],
+    mobileRole: 'Understand account and evidence controls.', desktopRole: 'Review account, evidence and sharing controls.',
+    mobileComplexity: 'low', desktopComplexity: 'medium',
+    mobileBehavior: ['Use factual product guarantees and visible checks.'],
+    desktopBehavior: ['Review source-file integrity and open related data controls.'],
+    appearsInMobileNav: false, appearsInDesktopNav: true, desktopNavOrder: 125, futureNotes: [],
+  },
+  {
+    id: 'forms', path: '/forms', label: 'Court forms', icon: 'doc',
+    surfaceClass: 'shared', primaryFeatureSections: [12],
+    mobileRole: 'Review and save guided court-form drafts.', desktopRole: 'Prepare and download reviewed, unsigned official forms.',
+    mobileComplexity: 'high', desktopComplexity: 'high',
+    mobileBehavior: ['Keep draft fields stacked and preserve all entered text.'],
+    desktopBehavior: ['Provide guided official templates with source versions and explicit supported sections.'],
+    appearsInMobileNav: false, appearsInDesktopNav: true, desktopNavOrder: 96, futureNotes: ['Additional jurisdictions, signatures and e-filing require separate integrations.'],
+  },
+  {
+    id: 'import', path: '/import', label: 'Import records', icon: 'folder',
+    surfaceClass: 'shared', primaryFeatureSections: [4, 22],
+    mobileRole: 'Review records from a selected CSV file.', desktopRole: 'Preserve a source CSV and review its records before importing.',
+    mobileComplexity: 'medium', desktopComplexity: 'medium',
+    mobileBehavior: ['Pick one file, confirm case and child, and review validation before saving.'],
+    desktopBehavior: ['Show validated rows, exact duplicate counts, and recoverable import progress.'],
+    appearsInMobileNav: false, appearsInDesktopNav: true, desktopNavOrder: 55, futureNotes: ['Provider-specific formats and account connections are separate integrations.'],
+  },
+  {
+    id: 'more', path: '/more', label: 'More', icon: 'grip',
+    surfaceClass: 'shared', primaryFeatureSections: [27, 30],
+    mobileRole: 'Reach every secondary workspace and account control.', desktopRole: 'Browse workspace destinations.',
+    mobileComplexity: 'low', desktopComplexity: 'low',
+    mobileBehavior: ['Keep the primary tab bar at five destinations without hiding other workspaces.'],
+    desktopBehavior: ['Use the same route inventory as the sidebar.'],
+    appearsInMobileNav: true, appearsInDesktopNav: false, mobileNavOrder: 50,
+    mobileActivePathPrefixes: ['/welcome', '/cases', '/onboarding', '/case-map', '/reports', '/calculator', '/briefcase', '/trust-center', '/export-prep', '/advisor', '/filings', '/forms', '/import', '/patterns', '/practitioners', '/safety', '/settings'],
+    futureNotes: [],
   },
 ] as const;
 

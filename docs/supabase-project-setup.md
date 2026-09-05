@@ -2,7 +2,7 @@
 
 Family Bench must know exactly which Supabase project it is targeting before any schema, migration, RLS, storage, or generated-type work happens.
 
-Do not run migrations against production unless the active project has been explicitly confirmed for that change.
+Current status: the exact project is confirmed and the tested composite migration was applied after explicit user approval. Ledger version `20260905032608` and the resulting RPCs/private evidence bucket were verified. The frontend and complete managed-service workflow are not yet release-verified. See [production foundation status](production-foundation-status.md).
 
 ## Required Environment
 
@@ -40,16 +40,19 @@ https://<project-ref>.supabase.co
 
 If the project ref in the URL does not match the intended environment, stop.
 
-Current intended project for later verification:
+Confirmed target, inspected September 4, 2026:
 
 ```text
 URL: https://aeeovmnhfxobeqpczjvt.supabase.co
 Project ref: aeeovmnhfxobeqpczjvt
-Migration target: not confirmed
-Environment: not classified
+Project name: Family Bench
+Organization ID: epelsraplgfepkesvsdt
+Status: ACTIVE_HEALTHY
+Migration target: identity confirmed; composite applied as 20260905032608
+Release status: existing managed project; database foundation deployed, app not launched
 ```
 
-This project is identified for later setup work, but it is not approved for migrations until the environment is classified and confirmed in the task thread.
+Read-only verification after the approved deployment found zero Auth users, 45 migration records ending at `20260905032608`, the `case_sync_versions` table, both new read/sync RPCs, and the private `evidence-originals` bucket. Its 44 original migration records are unchanged. Do not relabel this managed project as a disposable staging environment based on the empty user count.
 
 ## Link The Project
 
@@ -74,29 +77,26 @@ Do not overwrite generated types until the project is verified.
 Preview to stdout first:
 
 ```bash
-supabase gen types typescript --project-id <project-ref> --schema public
+supabase gen types --lang typescript --project-id <project-ref> --schema public
 ```
 
-After review, write to the app type file:
+After the migration is applied, generate to a separate local file and review the result before merging it into the app types:
 
 ```bash
-supabase gen types typescript --project-id <project-ref> --schema public > lib/supabase/database.types.ts
+supabase gen types --lang typescript --project-id <project-ref> --schema public > /tmp/family-bench-database.types.ts
 ```
 
-Use `--project-id` with the confirmed ref when there is any doubt about the linked target.
+Use `--project-id` with the confirmed ref when there is any doubt about the linked target. Generation is read-only. The deployed schema now includes the new workflow tables/RPCs as well as historical product tables; review the generated output against the app's maintained contract before replacing it.
 
 ## Verify Migrations Before Applying
 
 Inspect local migration files:
 
 ```bash
-ls supabase/migrations
+rg --files supabase/migrations
 ```
 
-Migration split:
-
-- `20260506150506_case_intelligence_foundation.sql` is schema-only.
-- `20260506211725_case_intelligence_deferred_rls_policies.sql` is deferred and must not be applied until RLS inspection is complete.
+The sole active artifact is [`20260905032608_authenticated_case_foundation.sql`](../supabase/migrations/20260905032608_authenticated_case_foundation.sql). It combines schema enrichment, the earlier RLS input and current hardening inside one transaction. The May schema/RLS files and September hardening source are preserved unchanged under [migration inputs](../supabase/migration-inputs/README.md). **Never apply the archived inputs independently.** The former separate schema-then-RLS deployment instructions are superseded.
 
 Check linked migration history:
 
@@ -104,29 +104,18 @@ Check linked migration history:
 supabase migration list --linked
 ```
 
-For local verification, start local Supabase and inspect local migration state:
+The target's 44 historical managed migrations are not reproduced in this repository. Do not blindly run `supabase db push`, rewrite history, or reset the remote database to make those histories look alike. The exact composite was applied once through the Supabase migration tool using name `authenticated_case_foundation`; its generated ledger version was read and the uncommitted file renamed to match without changing its SQL. Do not apply it again. No historical ledger rows were inserted, removed, or rewritten.
+
+For reproducible local verification with PostgreSQL 14+, run:
 
 ```bash
-supabase start
-supabase migration list --local
+bash scripts/test-db.sh
 ```
 
-Before applying any migration remotely, confirm:
+The script creates isolated temporary databases with synthetic Auth/Storage fixtures, applies the exact composite, and runs ownership, integrity, conflict and concurrency tests against both fresh and inspected-schema fixtures. It uses no remote connection. Full local Supabase services and native devices remain separate integration environments.
 
-- the linked project ref
-- the environment classification
-- the migration filenames
-- whether the target is production
-- whether the migration changes RLS, storage policies, auth, or user data
-
-For the deferred RLS migration, also run and review:
-
-```bash
-docs/supabase-rls-inspection.sql
-```
-
-If any of those are unclear, stop.
+For future schema changes, confirm the target and inspect the actual schema/data difference. Catalog inspection results and the compatibility/restriction design are described in [authenticated sync notes](authenticated-case-sync.md). The foundation is deployed, but the managed-service workflow still needs verification before inviting users with real records.
 
 ## Production Safety Rule
 
-Never run `supabase db push`, remote migration commands, storage policy changes, or type generation against an ambiguous or production Supabase project without explicit confirmation in the task thread.
+Keep read-only inspection separate from remote schema/access mutations. The user approved this exact foundation migration and it is complete. Preserve the managed project's history and data. An available project, a successful migration, a passing local build or a passing SQL fixture suite does not establish production readiness.

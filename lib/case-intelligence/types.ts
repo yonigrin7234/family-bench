@@ -50,6 +50,8 @@ export type LocalRecordMeta = {
   local_updated_at: string;
   sync_status: LocalSyncStatus;
   error?: string | null;
+  server_version?: number;
+  mutation_id?: string;
 };
 
 export type AttachmentKind = 'photo' | 'document' | 'voice_memo' | 'screenshot';
@@ -59,7 +61,10 @@ export type ReportPreviewType =
   | 'flagged'
   | 'communication'
   | 'medical'
-  | 'custodyExchange';
+  | 'custodyExchange'
+  | 'late'
+  | 'expense'
+  | 'benchBrief';
 
 export type ReportPreviewFlagFilter = 'all' | 'flagged';
 
@@ -71,6 +76,7 @@ export type ReportPreviewState = {
 
 export type SavedReportVersion = {
   id: string;
+  caseId?: string | null;
   reportType: ReportPreviewType;
   title: string;
   createdAt: string;
@@ -170,7 +176,16 @@ export type LocalPersistenceDiagnostics = {
   error: string | null;
 };
 
+export type CaseWorkspaceContext = {
+  reportPreviewState: ReportPreviewState;
+  advisorState: AdvisorConversationState;
+  filingBuilderState: FilingBuilderState;
+  patternReviewState: PatternReviewState;
+};
+
 export type CaseIntelligenceSnapshot = {
+  /** User selection, persisted in workspace JSON; never a cases lifecycle flag. */
+  selectedCaseId?: string | null;
   cases: FamilyBenchCase[];
   children: Child[];
   people: Person[];

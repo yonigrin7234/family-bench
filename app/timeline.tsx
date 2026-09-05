@@ -387,7 +387,7 @@ export default function Timeline() {
   const groupedRows = useMemo(() => groupRowsByDate(rows), [rows]);
 
   const sourceLabel =
-    source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data';
+    source === 'supabase' ? 'Account records' : source === 'local' ? 'Saved on this device' : 'Demo records';
   const attachmentCount = snapshot.evidenceAttachments.filter((attachment) => !attachment.deleted_at).length;
   const voiceMemoCount = snapshot.evidenceAttachments.filter(
     (attachment) => !attachment.deleted_at && isVoiceMemoAttachment(attachment),

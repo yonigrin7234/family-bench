@@ -1,0 +1,42 @@
+{
+  "format": "family-bench-court-templates-v1",
+  "derivation": "Original government downloads are untouched. Working copies retain the official page artwork and editable AcroForm field tree; permission encryption, XFA, Adobe Reader usage rights and active JavaScript actions are removed. No user or judicial signature is created. Reproduce with scripts/prepare-court-forms.py.",
+  "forms": [
+    {
+      "id": "FL-300",
+      "revision": "2025-07-01",
+      "original": "originals/fl-300.2025-07-01.pdf",
+      "template": "fl-300.acroform.pdf",
+      "sourceUrl": "https://courts.ca.gov/system/files?file=2025-07%2Ffl300.pdf",
+      "informationUrl": "https://selfhelp.courts.ca.gov/jcc-form/FL-300",
+      "sha256": "1213b5a991672c67f906c56339dc755ed33e6c088cbf8644d75f95fd57985452",
+      "pages": 4,
+      "checkedAt": "2026-09-05",
+      "templateSha256": "7fb59fef7a4bc816f3804c605a2806f9423be31ecdb82b50903d0a8d71cf72c7",
+      "renderComparison": "All original and derived blank pages have identical PDFium 1.5x RGBA pixel hashes",
+      "pagePixelHashes": [
+        "7e43797c544701fef9f06aec6357612948261a0699e934d7e898fec4dcff736d",
+        "14df36e9c72b9a4cad5c2843c5c8ba7b39cad63a59d6f16a9289e8bef517c5ca",
+        "fa65ebb8fe0dcc8c852fd9f18946d4681d2051c47715637fd33b2f18c44447fd",
+        "582c2880d695ce8b179e6a7f9706b26e160d7bb9964bbf29adadbc4e4773ac6c"
+      ]
+    },
+    {
+      "id": "MC-031",
+      "revision": "2005-07-01",
+      "original": "originals/mc-031.2005-07-01.pdf",
+      "template": "mc-031.acroform.pdf",
+      "sourceUrl": "https://www.courts.ca.gov/documents/mc031.pdf",
+      "resolvedUrl": "https://courts.ca.gov/sites/default/files/courts/default/2024-11/mc031.pdf",
+      "informationUrl": "https://selfhelp.courts.ca.gov/jcc-form/MC-031",
+      "sha256": "defc9108f6baa4c2ca444c1571d737d841af78289bef337f874f51e595191075",
+      "pages": 1,
+      "checkedAt": "2026-09-05",
+      "templateSha256": "9f52acb4b114323ea0099f1f9f717bc384a6793eb5f37dd74a67392c203bdf12",
+      "renderComparison": "All original and derived blank pages have identical PDFium 1.5x RGBA pixel hashes",
+      "pagePixelHashes": [
+        "141be9fbbaee9f5bd4c0d1c372653af70e0563f52e39f5ac031a6b1bb0cfd3e3"
+      ]
+    }
+  ]
+}

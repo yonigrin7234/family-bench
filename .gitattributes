@@ -1,0 +1,2 @@
+# Official and generated working PDF templates must retain their exact bytes.
+*.pdf binary

@@ -12,7 +12,15 @@ export function ProgressBar({
 }) {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
-    <View style={style}>
+    <View
+      style={style}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label || 'Progress'}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clamped}
+    >
       {label && (
         <View
           style={{

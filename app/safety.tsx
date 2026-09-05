@@ -1,232 +1,88 @@
+import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
-import {
-  Chip,
-  Display,
-  Icon,
-  InfoCallout,
-  PillButton,
-  Rule,
-  SoftCard,
-  fbBorder,
-  fbColors,
-  fbFonts,
-  fbLegalCopy,
-  fbRadii,
-  fbSpacing,
-  fbTouch,
-  fbType,
-  fbWeights,
-  type IconName,
-} from '@/components/ui/fb';
+import { Chip, Display, PillButton, SoftCard, fbColors, fbFonts, fbSpacing, fbType } from '@/components/ui/fb';
+import { SAFETY_ACTIONS, SAFETY_RESOURCES_CHECKED, openSafetyAction, type SafetyActionId } from '@/lib/safety/resources';
 
-const RESOURCE_PLACEHOLDERS: Array<{ title: string; body: string; icon: IconName }> = [
-  {
-    title: 'Emergency resources placeholder',
-    body: 'Future versions can show jurisdiction-aware hotlines, shelters, legal aid, and court resources. This MVP does not call or message anyone.',
-    icon: 'phone',
-  },
-  {
-    title: 'Evidence preservation mode',
-    body: 'Future preservation mode can strengthen hashing, backups, and timestamp review. Current evidence remains local metadata and source entries only.',
-    icon: 'shield',
-  },
-  {
-    title: 'Confidential address reminder',
-    body: 'Before sharing or exporting, review whether addresses or contact details should remain private. No automatic redaction is performed yet.',
-    icon: 'home',
-  },
-];
+export default function Safety() {
+  const [busy, setBusy] = useState<SafetyActionId | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
-const COMING_LATER = [
-  'Panic mode',
-  'Stealth or disguised app presentation',
-  'Emergency contact notification',
-  'Location-aware resource directory',
-  'Automated evidence backup',
-];
+  async function open(id: SafetyActionId) {
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(id); setError(null);
+    try { await openSafetyAction(id, (url) => Linking.openURL(url)); }
+    catch (failure) { if (mounted.current) setError(failure instanceof Error ? failure.message : 'Use the listed number or website directly.'); }
+    finally { inFlight.current = false; if (mounted.current) setBusy(null); }
+  }
+  function action(id: SafetyActionId, primary = false) {
+    const resource = SAFETY_ACTIONS.find((row) => row.id === id)!;
+    return <PillButton key={id} tone={primary ? 'primary' : 'ghost'} disabled={Boolean(busy)} accessibilityLabel={resource.label} onPress={() => void open(id)}>{busy === id ? 'Opening…' : resource.label}</PillButton>;
+  }
 
-export default function SafetyPlaceholder() {
-  return (
-    <CaseScreen desktopMaxWidth={980}>
+  return <CaseScreen desktopMaxWidth={960} rightRail={false}>
+    <View style={styles.page}>
       <View style={styles.header}>
-        <PillButton tone="ghost" size="sm" icon="caret" onPress={() => router.back()}>
-          Back
-        </PillButton>
-        <View style={styles.kickerRow}>
-          <Chip tone="amber" outline={false}>
-            Placeholder
-          </Chip>
-          <Chip tone="mute" outline={false}>
-            No automation
-          </Chip>
-        </View>
-        <Display italic size={32} style={styles.title}>
-          Safety
-        </Display>
-        <Text style={styles.subtitle}>
-          Calm safety planning placeholders for future protected workflows. {fbLegalCopy.legalInformationNotAdvice}
-        </Text>
+        <View style={styles.row}><Chip tone="amber">United States resources</Chip><PillButton size="sm" tone="ghost" onPress={() => router.back()}>Back</PillButton></View>
+        <Display size={34} accessibilityRole="header">Safety and support</Display>
+        <Text style={styles.intro}>Choose the support that fits your situation. Outside the United States, use your local emergency number and local support services.</Text>
+        <Text style={styles.body}>Buttons open a provider website, your phone app, or a text composer. If a phone or text link does not open, use the displayed number directly. No message is sent from this page.</Text>
+        {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
       </View>
 
-      <InfoCallout title="Safety limits" tone="ink">
-        This page does not contact emergency services, notify anyone, hide the app, erase data, or create remote backups. Use local emergency services or qualified support when immediate safety is at issue.
-      </InfoCallout>
-
-      <View style={styles.grid}>
-        {RESOURCE_PLACEHOLDERS.map((resource) => (
-          <SoftCard key={resource.title} p={16} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardIcon}>
-                <Icon name={resource.icon} size={17} color={fbColors.ink} />
-              </View>
-              <Text style={styles.cardTitle}>{resource.title}</Text>
-            </View>
-            <Text style={styles.cardBody}>{resource.body}</Text>
-          </SoftCard>
-        ))}
-      </View>
-
-      <SoftCard p={16} style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Icon name="paperclip" size={16} color={fbColors.ink} />
-            <Text style={styles.sectionTitle}>Evidence preservation explanation</Text>
-          </View>
-        </View>
-        <Text style={styles.bodyText}>
-          Family Bench separates source evidence from reviewed notes and future interpretations. Current local records preserve source text, attachment metadata, local references, timestamps, and sync status fields where available.
-        </Text>
-        <Text style={styles.bodyText}>
-          Future preservation features should keep original files intact, record hashes, and maintain a clear chain between source entries, attachments, reports, and filing packages.
-        </Text>
+      <SoftCard p={18} style={[styles.card, styles.emergency]}>
+        <Text accessibilityRole="header" style={styles.title}>Immediate danger or a life-threatening emergency</Text>
+        <Text selectable style={styles.number}>911</Text>
+        <Text style={[styles.body, styles.emergencyBody]}>Call 911 for immediate police, fire, or ambulance help. Tell the dispatcher where you are and what is happening.</Text>
+        <View style={styles.row}>{action('emergency-call', true)}{action('emergency-guide')}</View>
       </SoftCard>
 
-      <SoftCard p={16} style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Icon name="clock" size={16} color={fbColors.ink} />
-            <Text style={styles.sectionTitle}>Coming later</Text>
-          </View>
-        </View>
-        <View style={styles.stack}>
-          {COMING_LATER.map((item) => (
-            <View key={item} style={styles.row}>
-              <Icon name="dot" size={10} color={fbColors.ox} />
-              <Text style={styles.rowText}>{item}</Text>
-            </View>
-          ))}
-        </View>
-        <Rule />
-        <PillButton tone="ghost" size="md" icon="phone" disabled full>
-          Emergency calling automation not enabled
-        </PillButton>
+      <SoftCard p={18} style={styles.card}>
+        <Text accessibilityRole="header" style={styles.title}>National Domestic Violence Hotline</Text>
+        <Text style={styles.body}>Support for relationship abuse, safety planning, and local referrals. The Hotline offers confidential support around the clock; connection times can vary.</Text>
+        <Text selectable style={styles.number}>800-799-7233</Text>
+        <Text selectable style={styles.body}>Text START to 88788. Message and data rates may apply.</Text>
+        <View style={styles.row}>{action('hotline-call', true)}{action('hotline-text')}{action('hotline-help')}</View>
       </SoftCard>
-    </CaseScreen>
-  );
+
+      <SoftCard p={18} style={styles.card}>
+        <Text accessibilityRole="header" style={styles.title}>988 Suicide &amp; Crisis Lifeline</Text>
+        <Text style={styles.body}>For emotional distress or a mental health crisis, the 988 Lifeline provides confidential support 24/7 in the United States and its territories.</Text>
+        <Text selectable style={styles.number}>Call or text 988</Text>
+        <View style={styles.row}>{action('lifeline-call', true)}{action('lifeline-text')}{action('lifeline-help')}</View>
+      </SoftCard>
+
+      <SoftCard p={18} style={styles.card}>
+        <Text accessibilityRole="header" style={styles.title}>Plan with support</Text>
+        <Text style={styles.body}>The Hotline’s guides and provider directory can help you explore safety planning, shelters, counseling, and legal advocacy. You choose what to share with a provider.</Text>
+        <View style={styles.row}>{action('safety-plan')}{action('local-providers')}</View>
+      </SoftCard>
+
+      <SoftCard p={18} style={styles.card}>
+        <Text accessibilityRole="header" style={styles.title}>Consider the device you are using</Text>
+        <Text style={styles.body}>Internet, phone, and text activity may be monitored. Private browsing does not erase every trace. If you are concerned, consider a device or account that the other person cannot access and review The Hotline’s internet safety guidance.</Text>
+        {action('digital-safety')}
+        <Text style={styles.body}>Before sharing a Family Bench report, review addresses, contact details, and original files. Private notes are excluded from factual exports, but sensitive details inside an original file remain in that file.</Text>
+        <PillButton tone="ghost" onPress={() => router.push('/trust-center' as never)}>Review record and sharing controls</PillButton>
+      </SoftCard>
+      <Text style={styles.source}>Resource details checked against the linked provider pages on {SAFETY_RESOURCES_CHECKED}. Opening a link can leave browser or device activity records. Family Bench cannot confirm whether a call connects or a provider responds.</Text>
+    </View>
+  </CaseScreen>;
 }
 
 const styles = StyleSheet.create({
-  header: {
-    gap: fbSpacing.x3,
-  },
-  kickerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: fbSpacing.x2,
-  },
-  title: {
-    lineHeight: 34,
-  },
-  subtitle: {
-    color: fbColors.inkMute,
-    fontSize: fbType.body,
-    lineHeight: 21,
-    fontFamily: fbFonts.sansRegular,
-  },
-  grid: {
-    marginTop: fbSpacing.x4,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: fbSpacing.x4,
-  },
-  card: {
-    flex: 1,
-    minWidth: 240,
-    gap: fbSpacing.x3,
-  },
-  cardHeader: {
-    minHeight: fbTouch.min,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: fbSpacing.x3,
-  },
-  cardIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: fbRadii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: fbColors.paperDeep,
-  },
-  cardTitle: {
-    flex: 1,
-    color: fbColors.ink,
-    fontSize: fbType.body,
-    lineHeight: 21,
-    fontFamily: fbFonts.sansSemi,
-    fontWeight: fbWeights.semi,
-  },
-  cardBody: {
-    color: fbColors.inkMute,
-    fontSize: fbType.body,
-    lineHeight: 21,
-    fontFamily: fbFonts.sansRegular,
-  },
-  section: {
-    marginTop: fbSpacing.x4,
-    gap: fbSpacing.x4,
-  },
-  sectionHeader: {
-    minHeight: fbTouch.min,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: fbSpacing.x3,
-  },
-  sectionTitleRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: fbSpacing.x2,
-  },
-  sectionTitle: {
-    color: fbColors.ink,
-    fontSize: fbType.body,
-    fontFamily: fbFonts.sansSemi,
-    fontWeight: fbWeights.semi,
-  },
-  bodyText: {
-    color: fbColors.inkMute,
-    fontSize: fbType.body,
-    lineHeight: 21,
-    fontFamily: fbFonts.sansRegular,
-  },
-  stack: {
-    gap: fbSpacing.x2,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: fbSpacing.x2,
-    paddingVertical: fbSpacing.x1,
-  },
-  rowText: {
-    flex: 1,
-    color: fbColors.inkSoft,
-    fontSize: fbType.small,
-    lineHeight: 18,
-    fontFamily: fbFonts.sansRegular,
-  },
+  page: { gap: fbSpacing.x5 }, header: { gap: fbSpacing.x3 }, card: { gap: fbSpacing.x3 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: fbSpacing.x2 },
+  emergency: { backgroundColor: fbColors.oxWash },
+  emergencyBody: { color: fbColors.inkSoft },
+  intro: { fontFamily: fbFonts.sansRegular, fontSize: 16, lineHeight: 24, color: fbColors.inkSoft },
+  title: { fontFamily: fbFonts.sansSemi, fontSize: fbType.h2, color: fbColors.ink },
+  number: { fontFamily: fbFonts.sansSemi, fontSize: 22, lineHeight: 29, color: fbColors.ink },
+  body: { fontFamily: fbFonts.sansRegular, fontSize: fbType.body, lineHeight: 21, color: fbColors.inkMute },
+  source: { fontFamily: fbFonts.sansRegular, fontSize: fbType.body, lineHeight: 21, color: fbColors.inkMute },
+  error: { fontFamily: fbFonts.sansRegular, fontSize: fbType.body, lineHeight: 21, color: fbColors.oxDeep },
 });

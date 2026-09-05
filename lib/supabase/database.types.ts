@@ -236,6 +236,8 @@ type UserJoinRow = {
 export type Database = {
   public: {
     Tables: {
+      case_sync_versions: TableDefinition<{ user_id: string; table_name: string; record_id: string; version: number; mutation_id: string }>;
+      case_workspace_state: TableDefinition<{ id: string; user_id: string; state: Json; created_at: string; updated_at: string }>;
       cases: TableDefinition<CaseRow>;
       children: TableDefinition<ChildRow>;
       people: TableDefinition<PersonRow>;
@@ -267,7 +269,7 @@ export type Database = {
       >;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: { sync_case_records: { Args: { changes: Json }; Returns: Json }; read_case_workspace: { Args: Record<string, never>; Returns: Json } };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

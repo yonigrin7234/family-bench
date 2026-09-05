@@ -46,6 +46,7 @@ export function MoodPicker({
             accessibilityRole="button"
             accessibilityState={{ selected: sel }}
             accessibilityLabel={`Mood: ${m.label}`}
+            accessibilityHint={m.note}
             style={({ pressed }) => ({
               width: '48%',
               flexDirection: 'row',

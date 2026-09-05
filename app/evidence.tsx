@@ -970,7 +970,7 @@ export default function Evidence() {
         </Display>
         <Text style={styles.subtitle}>
           {activeCase?.title || 'Current case'} · {entries.length} entries ·{' '}
-          {source === 'supabase' ? 'Supabase data' : source === 'local' ? 'Local persisted data' : 'Local demo data'}
+          {source === 'supabase' ? 'Account records' : source === 'local' ? 'Saved on this device' : 'Demo records'}
         </Text>
       </View>
 
@@ -995,7 +995,7 @@ export default function Evidence() {
 
       <Rule style={styles.bottomRule} />
       <Text style={styles.footerNote}>
-        Evidence search is local to this device. OCR, AI search, remote storage sync, and cloud uploads are not enabled in this PR.
+        Search covers the records loaded in this workspace. Check each original’s status to confirm its cloud backup. OCR and AI search are not available.
       </Text>
     </CaseScreen>
   );

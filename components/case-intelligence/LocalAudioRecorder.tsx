@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Audio, type AVPlaybackStatus } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
+import { discardTemporarySource, registerTemporarySource } from '@/lib/evidence/sourceCleanup';
 import {
   Chip,
   Icon,
@@ -81,15 +82,28 @@ export function LocalAudioRecorder({
   saveLabel = 'Save voice memo attachment',
   savedLabel = 'Voice memo ready',
   onSave,
+  disabled = false,
+  onRecordingChange,
+  clearAfterSave = false,
+  onRecorded,
 }: {
   title?: string;
   body: string;
   saveLabel?: string;
   savedLabel?: string;
   onSave: (memo: RecordedAudioMemo) => Promise<void> | void;
+  disabled?: boolean;
+  onRecordingChange?: (recording: boolean) => void;
+  clearAfterSave?: boolean;
+  onRecorded?: (memo: RecordedAudioMemo) => void;
 }) {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const mountedRef = useRef(true);
+  const startingRef = useRef(false);
+  const capturedAtRef = useRef<string | null>(null);
+  const sourcesRef = useRef(new Set<string>());
+  const [starting, setStarting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [durationMs, setDurationMs] = useState(0);
@@ -97,19 +111,51 @@ export function LocalAudioRecorder({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
+  useEffect(() => { onRecordingChange?.(isRecording || starting); }, [isRecording, starting, onRecordingChange]);
+
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      void recordingRef.current?.stopAndUnloadAsync().catch(() => undefined);
+      mountedRef.current = false;
       void soundRef.current?.unloadAsync().catch(() => undefined);
+      const recording = recordingRef.current;
+      void (async () => {
+        await recording?.stopAndUnloadAsync().catch(() => undefined);
+        const uri = recording?.getURI();
+        if (uri) sourcesRef.current.add(uri);
+        for (const source of sourcesRef.current) {
+          await discardTemporarySource({ localUri: source }).catch(() => { /* Global cleanup notice keeps failed paths retryable. */ });
+        }
+      })();
     };
   }, []);
 
+  async function registerSource(uri: string) {
+    sourcesRef.current.add(uri);
+    await registerTemporarySource({ localUri: uri });
+    if (!mountedRef.current) { await discardTemporarySource({ localUri: uri }); return false; }
+    return true;
+  }
+
+  async function stopAbandoned(recording: Audio.Recording) {
+    await recording.stopAndUnloadAsync().catch(() => undefined);
+    const uri = recording.getURI();
+    if (uri) await discardTemporarySource({ localUri: uri });
+  }
+
   async function startRecording() {
-    if (isRecording) return;
+    if (isRecording || disabled || saving || startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
     setNotice(null);
 
     try {
+      await soundRef.current?.unloadAsync();
+      soundRef.current = null;
+      if (!mountedRef.current) return;
+      setIsPlaying(false);
       const permission = await Audio.requestPermissionsAsync();
+      if (!mountedRef.current) return;
       if (!permission.granted) {
         setNotice('Microphone permission is required to record a local voice memo.');
         return;
@@ -119,23 +165,36 @@ export function LocalAudioRecorder({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
+      if (!mountedRef.current) return;
 
       const recording = new Audio.Recording();
+      recordingRef.current = recording;
       recording.setProgressUpdateInterval(250);
       recording.setOnRecordingStatusUpdate((status) => {
+        if (!mountedRef.current) return;
         setIsRecording(status.isRecording);
         setDurationMs(status.durationMillis);
       });
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      if (!mountedRef.current) { await stopAbandoned(recording); return; }
+      const sourceUri = recording.getURI();
+      if (sourceUri && !await registerSource(sourceUri)) { await stopAbandoned(recording); return; }
+      capturedAtRef.current = new Date().toISOString();
       await recording.startAsync();
-      recordingRef.current = recording;
+      if (!mountedRef.current) { await stopAbandoned(recording); return; }
       setMemo(null);
       setIsRecording(true);
       setDurationMs(0);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Unable to start local audio recording.');
-      setIsRecording(false);
+      if (recordingRef.current) await stopAbandoned(recordingRef.current).catch(() => { /* Global notice exposes cleanup failure. */ });
+      if (mountedRef.current) {
+        setNotice(err instanceof Error ? err.message : 'Unable to start local audio recording.');
+        setIsRecording(false);
+      }
       recordingRef.current = null;
+    } finally {
+      startingRef.current = false;
+      if (mountedRef.current) setStarting(false);
     }
   }
 
@@ -147,16 +206,19 @@ export function LocalAudioRecorder({
       const status = await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       recordingRef.current = null;
-      setIsRecording(false);
+      if (mountedRef.current) setIsRecording(false);
+      if (uri && !await registerSource(uri)) return;
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      if (!mountedRef.current) { if (uri) await discardTemporarySource({ localUri: uri }); return; }
 
       if (!uri) {
         setNotice('Recording stopped, but no local audio URI was returned.');
         return;
       }
 
-      const capturedAt = new Date().toISOString();
+      const capturedAt = capturedAtRef.current ?? new Date().toISOString();
       const fileSizeBytes = await getFileSize(uri);
+      if (!mountedRef.current) { await discardTemporarySource({ localUri: uri }); return; }
       const nextMemo: RecordedAudioMemo = {
         uri,
         filename: `${compactTimestamp(capturedAt)}-voice-memo.${audioExtension()}`,
@@ -169,47 +231,62 @@ export function LocalAudioRecorder({
 
       setDurationMs(nextMemo.durationMs ?? 0);
       setMemo(nextMemo);
+      onRecorded?.(nextMemo);
       setNotice('Local voice memo recorded. Transcription is not generated.');
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Unable to stop local audio recording.');
+      if (mountedRef.current) setNotice(err instanceof Error ? err.message : 'Unable to stop local audio recording.');
     }
   }
 
   async function playMemo() {
-    if (!memo?.uri || isPlaying) return;
+    if (!memo?.uri || isPlaying || disabled || saving || starting) return;
     setNotice(null);
 
     try {
       await soundRef.current?.unloadAsync();
+      if (!mountedRef.current) return;
       const { sound } = await Audio.Sound.createAsync(
         { uri: memo.uri },
-        { shouldPlay: true },
+        { shouldPlay: false },
         (status: AVPlaybackStatus) => {
-          if (status.isLoaded && status.didJustFinish) {
+          if (mountedRef.current && status.isLoaded && status.didJustFinish) {
             setIsPlaying(false);
           }
         },
       );
+      if (!mountedRef.current) { await sound.unloadAsync(); return; }
       soundRef.current = sound;
+      await sound.playAsync();
+      if (!mountedRef.current) { await sound.unloadAsync(); return; }
       setIsPlaying(true);
     } catch (err) {
-      setIsPlaying(false);
-      setNotice(err instanceof Error ? err.message : 'Unable to play this local voice memo.');
+      if (mountedRef.current) { setIsPlaying(false); setNotice(err instanceof Error ? err.message : 'Unable to play this local voice memo.'); }
     }
   }
 
   async function saveMemo() {
-    if (!memo || saving) return;
+    if (!memo || saving || disabled || isRecording || starting) return;
     setSaving(true);
     setNotice(null);
 
     try {
+      await soundRef.current?.unloadAsync();
+      if (!mountedRef.current) return;
+      soundRef.current = null;
+      setIsPlaying(false);
       await onSave(memo);
-      setNotice(savedLabel);
+      if (clearAfterSave) {
+        await discardTemporarySource({ localUri: memo.uri });
+        sourcesRef.current.delete(memo.uri);
+        if (!mountedRef.current) return;
+        setMemo(null);
+        setDurationMs(0);
+      }
+      if (mountedRef.current) setNotice(savedLabel);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Unable to save local voice memo metadata.');
+      if (mountedRef.current) setNotice(err instanceof Error ? err.message : 'Unable to preserve the original voice memo.');
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
   }
 
@@ -227,7 +304,7 @@ export function LocalAudioRecorder({
 
       <View style={styles.timerRow}>
         <Text style={styles.timer}>{formatDuration(isRecording ? durationMs : memo?.durationMs ?? durationMs)}</Text>
-        <Text style={styles.timerMeta}>No upload · no transcription</Text>
+        <Text style={styles.timerMeta}>Original audio · no transcription</Text>
       </View>
 
       <Waveform active={isRecording} />
@@ -239,15 +316,16 @@ export function LocalAudioRecorder({
           size="md"
           icon={isRecording ? 'x' : 'mic'}
           full
+          disabled={starting || ((disabled || saving) && !isRecording)}
           onPress={isRecording ? stopRecording : startRecording}
         >
-          {isRecording ? 'Stop recording' : 'Start recording'}
+          {isRecording ? 'Stop recording' : starting ? 'Starting recording' : 'Start recording'}
         </PillButton>
-        <PillButton tone="soft" size="md" icon="clock" full disabled={!memo || isPlaying} onPress={playMemo}>
+        <PillButton tone="soft" size="md" icon="clock" full disabled={!memo || isPlaying || saving || disabled || starting || isRecording} onPress={playMemo}>
           {isPlaying ? 'Playing' : 'Play back'}
         </PillButton>
-        <PillButton tone="soft" size="md" icon="check" full disabled={!memo || saving} onPress={saveMemo}>
-          {saving ? 'Saving metadata' : saveLabel}
+        <PillButton tone="soft" size="md" icon="check" full disabled={!memo || saving || disabled || isRecording || starting} onPress={saveMemo}>
+          {saving ? 'Saving voice memo' : saveLabel}
         </PillButton>
       </View>
 

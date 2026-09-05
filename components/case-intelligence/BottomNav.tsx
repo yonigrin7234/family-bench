@@ -1,5 +1,5 @@
 import { router, usePathname } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   Icon,
   fbAlpha,
@@ -12,6 +12,9 @@ import {
   fbWeights,
 } from '@/components/ui/fb';
 import { getSurfaceNavRoutes, isSurfaceRouteActive } from '@/lib/surface/surfaceRegistry';
+import { getActiveCase } from '@/lib/case-intelligence/selectors';
+import { useCaseIntelligenceStore } from '@/lib/case-intelligence/useCaseIntelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
 
 const BOTTOM_NAV_ITEMS = getSurfaceNavRoutes('mobile');
 const DESKTOP_NAV_ITEMS = getSurfaceNavRoutes('desktop');
@@ -51,27 +54,32 @@ export function BottomNav() {
 
 export function DesktopSidebar() {
   const pathname = usePathname();
+  const { isTablet } = useResponsive();
+  const activeCase = useCaseIntelligenceStore((state) => getActiveCase(state.snapshot));
 
   return (
-    <View style={styles.sidebar}>
+    <View style={[styles.sidebar, isTablet && styles.sidebarCompact]}>
       <View style={styles.sidebarBrand}>
         <View style={styles.brandMark}>
           <Text style={styles.brandMarkText}>FB</Text>
         </View>
-        <View style={styles.brandCopy}>
+        {!isTablet && <View style={styles.brandCopy}>
           <Text style={styles.brandTitle}>Family Bench</Text>
           <Text style={styles.brandSubtitle}>Case War Room</Text>
-        </View>
+        </View>}
       </View>
 
-      <View style={styles.caseSpine}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Switch case. Current case: ${activeCase?.title || activeCase?.case_number || 'None'}`} onPress={() => router.push('/cases' as never)} style={styles.caseSpine}>
+        {isTablet ? <Icon name="scales" size={22} /> : <>
         <Text style={styles.caseSpineLabel}>ACTIVE CASE</Text>
-        <Text style={styles.caseSpineTitle}>Local case workspace</Text>
-        <Text style={styles.caseSpineMeta}>Shared store · offline first</Text>
-      </View>
+        <Text style={styles.caseSpineTitle}>{activeCase?.title || activeCase?.case_number || (activeCase ? 'Your case' : 'No case selected')}</Text>
+        <Text style={styles.caseSpineMeta}>{activeCase?.case_number && activeCase.title ? activeCase.case_number : activeCase ? 'Case records and evidence' : 'Set up a case to begin recording.'}</Text>
+        <Text style={styles.caseSpineMeta}>Switch or add a case →</Text>
+        </>}
+      </Pressable>
 
-      <View style={styles.sidebarNav}>
-        <Text style={styles.navSectionLabel}>WORKSPACE</Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.sidebarNav} showsVerticalScrollIndicator={false}>
+        {!isTablet && <Text style={styles.navSectionLabel}>WORKSPACE</Text>}
         {DESKTOP_NAV_ITEMS.map((item) => {
           const active = isSurfaceRouteActive(pathname, item, 'desktop');
 
@@ -86,6 +94,7 @@ export function DesktopSidebar() {
               }}
               style={({ pressed }) => [
                 styles.sidebarItem,
+                isTablet && styles.sidebarItemCompact,
                 active && styles.sidebarItemActive,
                 pressed && styles.pressed,
               ]}
@@ -95,18 +104,14 @@ export function DesktopSidebar() {
                 size={17}
                 color={active ? fbColors.ink : fbColors.inkMute}
               />
-              <Text style={[styles.sidebarLabel, active && styles.sidebarLabelActive]}>
+              {!isTablet && <Text style={[styles.sidebarLabel, active && styles.sidebarLabelActive]}>
                 {item.label}
-              </Text>
+              </Text>}
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
-      <View style={styles.sidebarStatus}>
-        <Text style={styles.statusLabel}>LOCAL-FIRST</Text>
-        <Text style={styles.statusText}>Shared store - no shell-level remote writes</Text>
-      </View>
     </View>
   );
 }
@@ -132,8 +137,8 @@ const styles = StyleSheet.create({
   },
   label: {
     color: fbColors.inkMute,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 11,
+    lineHeight: 14,
     fontFamily: fbFonts.sansSemi,
     fontWeight: fbWeights.semi,
   },
@@ -148,12 +153,14 @@ const styles = StyleSheet.create({
     backgroundColor: fbColors.ox,
   },
   sidebar: {
-    width: 276,
-    minHeight: '100%',
+    width: 240,
+    height: '100%',
     borderRightWidth: fbBorder.hairline,
     borderRightColor: fbColors.rule,
     backgroundColor: fbColors.paperDeep,
   },
+  sidebarCompact: { width: 76 },
+  sidebarItemCompact: { justifyContent: 'center', paddingHorizontal: 0 },
   sidebarBrand: {
     minHeight: 68,
     flexDirection: 'row',
@@ -223,9 +230,9 @@ const styles = StyleSheet.create({
     fontFamily: fbFonts.sansRegular,
   },
   sidebarNav: {
-    flex: 1,
     paddingHorizontal: fbSpacing.x3,
     paddingTop: fbSpacing.x4,
+    paddingBottom: fbSpacing.x5,
     gap: fbSpacing.x1,
   },
   navSectionLabel: {
@@ -239,7 +246,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   sidebarItem: {
-    minHeight: 38,
+    minHeight: 44,
     borderRadius: fbRadii.sm,
     flexDirection: 'row',
     alignItems: 'center',
@@ -267,28 +274,5 @@ const styles = StyleSheet.create({
     color: fbColors.ink,
     fontFamily: fbFonts.sansSemi,
     fontWeight: fbWeights.semi,
-  },
-  sidebarStatus: {
-    margin: fbSpacing.x3,
-    padding: fbSpacing.x3,
-    borderRadius: fbRadii.sm,
-    backgroundColor: fbColors.surface,
-    borderWidth: fbBorder.hairline,
-    borderColor: fbColors.ruleSoft,
-  },
-  statusLabel: {
-    color: fbColors.ox,
-    fontSize: 10,
-    lineHeight: 14,
-    fontFamily: fbFonts.sansSemi,
-    fontWeight: fbWeights.semi,
-    letterSpacing: 1,
-  },
-  statusText: {
-    marginTop: fbSpacing.x1,
-    color: fbColors.inkMute,
-    fontSize: 11,
-    lineHeight: 16,
-    fontFamily: fbFonts.sansRegular,
   },
 });

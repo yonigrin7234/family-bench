@@ -1,8 +1,10 @@
 # Case Intelligence Data Model
 
-This PR adds the Family Bench case-intelligence data foundation using the existing Supabase client and PowerSync setup. It does not replace auth, change the Supabase project connection, add real AI, or generate filings.
+This document preserves the earlier PR 2.5 data-model design and findings. Its baseline schema map and historical verification remain useful context; its original deployment sequence has been superseded. See [production foundation status](production-foundation-status.md) for the implementation built on September 4, 2026 and [authenticated sync notes](authenticated-case-sync.md) for the current RPC and access model.
 
-## Current Supabase Setup
+The active deployment artifact is the single [authenticated case foundation](../supabase/migrations/20260905032608_authenticated_case_foundation.sql), which combines schema enrichment, old policy inputs and current hardening in one transaction. It was implemented, tested locally and applied after explicit user approval as ledger version `20260905032608` in the confirmed Family Bench project. The app and managed-service workflow still need release verification. Archived [migration inputs](../supabase/migration-inputs/README.md) must never be applied independently.
+
+## Historical PR 2.5 Supabase Setup
 
 - Client: `lib/supabase/client.ts`
 - Auth storage: Expo SecureStore on native, `localStorage` on web
@@ -12,7 +14,7 @@ This PR adds the Family Bench case-intelligence data foundation using the existi
 - Existing SQL migrations before this PR: none found
 - Existing generated Supabase types before this PR: none found
 
-## Current Schema Map
+## Historical Schema Map
 
 | Current table/source | Intended model | Status |
 |---|---|---|
@@ -82,12 +84,15 @@ Selectors and hook:
 - `getNextStepForCase`
 - `useCaseIntelligenceHome`
 
-The home screen now reads from Supabase when a session and case data exist. If no session or case data exists, it uses a local non-persistent fallback snapshot.
+At the PR 2.5 baseline, the home screen read from Supabase when a session and case data existed and otherwise used a local fallback snapshot. The current implementation separates demo and authenticated owner workspaces and uses the atomic workspace-read RPC; it does not retain that baseline fallback as the authenticated account model.
 
-## Migrations Added
+## Preserved Migration Inputs
 
-- `supabase/migrations/20260506150506_case_intelligence_foundation.sql`
-- `supabase/migrations/20260506211725_case_intelligence_deferred_rls_policies.sql`
+- [May schema foundation](../supabase/migration-inputs/20260506150506_case_intelligence_foundation.sql)
+- [May deferred RLS policies](../supabase/migration-inputs/20260506211725_case_intelligence_deferred_rls_policies.sql)
+- [September sync hardening](../supabase/migration-inputs/20260905023317_authenticated_case_sync.sql)
+
+The two May files were not present in the restored target's migration history. They have been moved out of the active migrations directory with their contents unchanged. The following descriptions explain their historical split, not a current instruction to apply them separately.
 
 The foundation migration:
 
@@ -105,9 +110,9 @@ The deferred RLS migration is intentionally separated and labeled:
 DO NOT APPLY UNTIL RLS INSPECTION IS COMPLETE.
 ```
 
-It contains the planned RLS enablement, authenticated grants, and owner policies, but it should not be applied until current live policies and RLS status are inspected.
+It contains the earlier RLS enablement, authenticated grants, and owner policies. Current target inspection is complete, but this input remains archived: never apply it separately. The composite adds restrictive verified-owner policies, denies direct client DML and writes through a fixed version-checked RPC, so the older permissive grants cannot define the final deployed access model.
 
-## Remote Verification Notes
+## Historical Remote Verification Notes
 
 PR 2.5B performed read-only verification against the confirmed project ref `aeeovmnhfxobeqpczjvt` using the local anon key and Supabase REST schema cache. MCP OAuth was configured, but catalog-level MCP inspection was blocked by a token-refresh initialization failure in the active Codex session. Supabase CLI project inspection was also unavailable in this session.
 
@@ -155,7 +160,7 @@ PR 2.5C revised the migration so intended columns are also covered by `alter tab
 
 PR 2.5E split schema work from RLS work. The schema foundation migration now contains tables, columns, foreign-key references, and indexes only. RLS enablement, grants, and policies are deferred to a separate migration that is not approved for apply.
 
-## Revised Migration Safety Notes
+## Historical Migration Safety Notes, Superseded Deployment Instructions
 
 The revised migration is safer for the currently observed schema because:
 
@@ -164,25 +169,11 @@ The revised migration is safer for the currently observed schema because:
 - `attachments` now includes `storage_bucket` and `storage_path` linkage for the storage plan
 - new tables are still created when missing
 
-The schema foundation migration may be reviewed for apply separately from RLS because it no longer changes table access policy. It still needs normal migration review against the live project before apply.
+The earlier recommendation to deploy schema and RLS separately is superseded. The active composite includes schema additions, restrictive policies, the private original-evidence bucket, version receipts, original-capture protection and server entry revisions in one transaction. This prevents an externally visible interval with only the old permissive policy grants. See [authenticated sync notes](authenticated-case-sync.md) for compatibility checks against the restored schema, including required profiles and legacy CHECK values.
 
-The deferred RLS migration should not be applied until catalog-level RLS inspection is completed. It enables RLS and adds owner policies. That is structurally correct for the intended model, but the project already has exposed tables, and existing policy behavior must be inspected before changing it.
+## Remaining Data Work
 
-Use `docs/supabase-rls-inspection.sql` before applying this migration.
-
-Storage bucket creation is intentionally separate. See `docs/evidence-storage-plan.md`.
-
-## Gaps / Next Migrations
-
-PR 3 should not add real AI yet unless the product scope changes. Recommended next data work:
-
-- Inspect current remote RLS policies and RLS enabled status with catalog-level access.
-- Re-run the remote Supabase schema comparison against this revised migration.
-- Apply the schema foundation migration only after confirming the target project and reviewing the SQL.
-- Apply the deferred RLS migration only after `docs/supabase-rls-inspection.sql` results are reviewed.
-- Generate official Supabase types from the linked project after the migration is applied.
-- Add storage bucket policies for evidence attachments.
-- Add audit logging for evidence mutations and practitioner sharing.
-- Add stricter enum/check constraints once capture flows are finalized.
-- Add report/export tables only when report generation is implemented.
-- Decide whether `attachments` should be renamed later or kept as the stable table for `EvidenceAttachment`.
+- Obtain the pending explicit approval for the exact tested composite and target, then apply it once through the reviewed migration path. Never apply archived inputs or blindly run `db push` or a remote reset: the target has 44 historical managed migrations not reproduced by this repository.
+- Verify managed Auth, Storage HTTP behavior, deployed owner isolation and the complete capture/recovery/export workflow after application. Local PostgreSQL tests do not establish these outcomes.
+- Generate and review official Supabase types against the confirmed schema after migration; preserve application-specific types intentionally.
+- Retain practitioner sharing, broader audit/retention policy, official filing/form support, complete account portability and AI grounding as separate requirements in the [coverage inventory](requirements-coverage.md).

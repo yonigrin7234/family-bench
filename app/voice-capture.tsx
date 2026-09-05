@@ -1,4 +1,10 @@
-import { useState } from 'react';
+import { localCalendarDate } from '@/lib/utils/dateInput';
+import { useEffect, useRef, useState } from 'react';
+import * as Crypto from 'expo-crypto';
+import { discardPickedEvidence } from '@/lib/evidence/picker';
+import { getWorkspaceGeneration, useAuthStore } from '@/lib/auth/session';
+import { useCaseIntelligenceStore } from '@/lib/case-intelligence/useCaseIntelligence';
+import { getActiveCase } from '@/lib/case-intelligence/selectors';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
@@ -35,7 +41,7 @@ import {
 type FlagSeverity = 'low' | 'medium' | 'high';
 
 function toDateInput(date = new Date()) {
-  return date.toISOString().slice(0, 10);
+  return localCalendarDate(date);
 }
 
 function toTimeInput(date = new Date()) {
@@ -56,18 +62,21 @@ function Field({
   onChangeText,
   placeholder,
   multiline = false,
+  editable = true,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  editable?: boolean;
 }) {
   return (
     <View style={styles.field}>
       <FormLabel>{label}</FormLabel>
       <TextInput
         value={value}
+        editable={editable}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={fbColors.inkFaint}
@@ -82,14 +91,17 @@ function Field({
 function FlagToggle({
   value,
   onChange,
+  disabled = false,
 }: {
   value: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: value }}
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
       accessibilityLabel="Flag this transcript entry for review"
       onPress={() => onChange(!value)}
       style={({ pressed }) => [styles.flagToggle, pressed && styles.pressed]}
@@ -106,6 +118,17 @@ function FlagToggle({
 }
 
 export default function VoiceCapture() {
+  const { home, loading, hasHydrated } = useCaseIntelligenceHome();
+  if (!home.activeCase) {
+    return <CaseScreen>
+      <InfoCallout title="Case record" tone="ink">{loading || !hasHydrated ? 'Opening your case…' : 'Set up your case before recording a voice entry.'}</InfoCallout>
+      {!loading && hasHydrated ? <PillButton tone="primary" onPress={() => router.replace('/onboarding' as never)}>Set up case</PillButton> : null}
+    </CaseScreen>;
+  }
+  return <VoiceCaptureForm key={`${home.activeCase.user_id}:${home.activeCase.id}`} />;
+}
+
+function VoiceCaptureForm() {
   const createEntry = useCaptureEntry();
   const createLocalAttachment = useCreateLocalAttachment();
   const { home } = useCaseIntelligenceHome();
@@ -120,10 +143,31 @@ export default function VoiceCapture() {
   const [flagSeverity, setFlagSeverity] = useState<FlagSeverity>('low');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftEntryId, setDraftEntryId] = useState(() => Crypto.randomUUID());
+  const [attachmentId, setAttachmentId] = useState(() => Crypto.randomUUID());
+  const savedEntryRef = useRef<string | null>(null);
+  const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
+  const [recordingActive, setRecordingActive] = useState(false);
+  const audioSavedRef = useRef(false);
+  const recordingSources = useRef(new Map<string, RecordedAudioMemo>());
+  const [recorderEpoch, setRecorderEpoch] = useState(0);
+  const [hasRecordedSource, setHasRecordedSource] = useState(false);
   const hasTranscript = Boolean(transcript.trim());
   const hasAudio = Boolean(recordedAudio);
   const hasReviewedBody = Boolean(reviewedBody.trim());
-  const canAccept = (hasTranscript || hasAudio) && hasReviewedBody && isDateInput(eventDate) && !saving;
+  const canAccept = (hasTranscript || hasAudio) && hasReviewedBody && isDateInput(eventDate) && !saving && !recordingActive;
+  const locked = saving || Boolean(savedEntryId);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => {
+    mounted.current = false;
+    for (const memo of recordingSources.current.values()) void discardPickedEvidence({ kind: 'voice_memo', filename: memo.filename, localUri: memo.uri }).catch(() => { /* Global cleanup notice retains failures. */ });
+  }; }, []);
+
+  function pinVoiceContext() {
+    const generation = getWorkspaceGeneration(); const owner = home.activeCase?.user_id; const caseId = home.activeCase?.id;
+    return () => mounted.current && generation === getWorkspaceGeneration() && useAuthStore.getState().session?.user.id === owner
+      && useCaseIntelligenceStore.getState().ownerId === owner && getActiveCase(useCaseIntelligenceStore.getState().snapshot)?.id === caseId;
+  }
 
   function onTranscriptChange(next: string) {
     setTranscript(next);
@@ -137,7 +181,21 @@ export default function VoiceCapture() {
     setReviewedBody(next);
   }
 
-  function rejectDraft() {
+  async function rejectDraft() {
+    if (saving || savedEntryRef.current || recordingActive) return;
+    setSaving(true);
+    try {
+      for (const memo of recordingSources.current.values()) {
+        await discardPickedEvidence({ kind: 'voice_memo', filename: memo.filename, localUri: memo.uri });
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'The temporary recording could not be removed.');
+      setSaving(false);
+      return;
+    }
+    recordingSources.current.clear();
+    setHasRecordedSource(false);
+    setRecorderEpoch((value) => value + 1);
     setTranscript('');
     setReviewedBody('');
     setReviewedTouched(false);
@@ -146,6 +204,10 @@ export default function VoiceCapture() {
     setIsFlagged(false);
     setFlagSeverity('low');
     setError(null);
+    setDraftEntryId(Crypto.randomUUID());
+    setAttachmentId(Crypto.randomUUID());
+    audioSavedRef.current = false;
+    setSaving(false);
   }
 
   async function acceptDraft() {
@@ -156,26 +218,35 @@ export default function VoiceCapture() {
 
     setSaving(true);
     setError(null);
+    const current = pinVoiceContext();
 
     try {
-      const result = await createEntry({
-        entryType: 'journal',
-        eventDate: eventDate.trim(),
-        eventTime: eventTime.trim() || null,
-        title: title.trim() || 'Voice transcript reviewed',
-        body: reviewedBody,
-        locationName: '',
-        childMood: null,
-        isFlagged,
-        flagSeverity: isFlagged ? flagSeverity : null,
-        privateNotes: '',
-        sourceCapturedText: transcript,
-        captureSource: 'voice_placeholder',
-        forceLocalOnly: true,
-      });
-      if (recordedAudio) {
+      if (!current()) throw new Error('The account or case changed. Reopen voice capture before saving.');
+      if (!savedEntryRef.current) {
+        const result = await createEntry({
+          id: draftEntryId,
+          entryType: 'journal',
+          eventDate: eventDate.trim(),
+          eventTime: eventTime.trim() || null,
+          title: title.trim() || 'Voice transcript reviewed',
+          body: reviewedBody,
+          locationName: '',
+          childMood: null,
+          isFlagged,
+          flagSeverity: isFlagged ? flagSeverity : null,
+          privateNotes: '',
+          sourceCapturedText: transcript,
+          captureSource: 'voice',
+        });
+        if (!current()) return;
+        savedEntryRef.current = result.entry.id;
+        setSavedEntryId(result.entry.id);
+      }
+      if (recordedAudio && !audioSavedRef.current) {
+        if (!current()) return;
         await createLocalAttachment({
-          entryId: result.entry.id,
+          entryId: savedEntryRef.current,
+          attachmentId,
           kind: 'voice_memo',
           filename: recordedAudio.filename,
           mimeType: recordedAudio.mimeType,
@@ -184,13 +255,27 @@ export default function VoiceCapture() {
           localUri: recordedAudio.uri,
           localReference: recordedAudio.localReference,
           sourceLabel: 'Voice Capture local recording',
+          capturedAt: recordedAudio.capturedAt,
         });
+        if (!current()) return;
+        audioSavedRef.current = true;
       }
+      for (const memo of recordingSources.current.values()) {
+        await discardPickedEvidence({ kind: 'voice_memo', filename: memo.filename, localUri: memo.uri });
+      }
+      recordingSources.current.clear();
+      if (!current()) return;
       router.replace('/timeline' as never);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save this transcript draft.');
+      if (!mounted.current) return;
+      const message = err instanceof Error ? err.message : 'Unable to save this transcript draft.';
+      setError(savedEntryRef.current
+        ? audioSavedRef.current || !recordedAudio
+          ? `Your entry is saved. A temporary recording copy still needs cleanup. Retry to finish. ${message}`
+          : `Your entry is saved, but the original voice memo is still pending. Retry to attach it to the same entry. ${message}`
+        : message);
     } finally {
-      setSaving(false);
+      if (mounted.current) setSaving(false);
     }
   }
 
@@ -206,32 +291,35 @@ export default function VoiceCapture() {
             disabled={!canAccept}
             onPress={acceptDraft}
           >
-            {saving ? 'Saving draft' : 'Accept draft'}
+            {saving ? 'Saving entry and audio' : savedEntryId ? audioSavedRef.current || !recordedAudio ? 'Retry temporary copy cleanup' : 'Retry voice memo attachment' : 'Save reviewed entry'}
           </PillButton>
           <PillButton
             tone="ghost"
             size="md"
             full
             icon="x"
-            disabled={!(hasTranscript || hasAudio) || saving}
+            disabled={!(hasTranscript || hasAudio || hasRecordedSource) || locked || recordingActive}
             onPress={rejectDraft}
           >
             Reject draft
           </PillButton>
           {error ? <Text style={styles.footerError}>{error}</Text> : null}
+          {savedEntryId && !saving && error ? (
+            <PillButton tone="ghost" size="sm" full onPress={() => router.replace(`/entry/${savedEntryId}` as never)}>Open saved entry</PillButton>
+          ) : null}
         </View>
       }
     >
       <View style={styles.header}>
-        <PillButton tone="ghost" size="sm" icon="caret" onPress={() => router.back()}>
+        <PillButton tone="ghost" size="sm" icon="caret" disabled={saving || recordingActive || Boolean(savedEntryId)} onPress={() => router.back()}>
           Back
         </PillButton>
         <View style={styles.kickerRow}>
           <Chip tone="amber" outline={false}>
-            Placeholder
+            Original audio
           </Chip>
           <Chip tone="mute" outline={false}>
-            Local only
+            Manual transcript
           </Chip>
         </View>
         <Display size={32} style={styles.title}>
@@ -243,18 +331,24 @@ export default function VoiceCapture() {
       </View>
 
       <InfoCallout title="Case record" tone="ink">
-        {home.activeCase?.title || 'Current case'} · Audio remains local. No upload,
-        transcription, AI, or remote write is performed.
+        {home.activeCase?.title || 'Current case'} · Saved originals are encrypted on this device,
+        hashed, and queued for verified cloud backup. Maximum 25 MiB per recording. Transcripts are entered manually.
       </InfoCallout>
 
       <SoftCard p={16} style={styles.section}>
         <LocalAudioRecorder
+          key={recorderEpoch}
           title="Voice memo source"
           body="Record the source audio for this draft. The audio can be attached when you accept the reviewed entry. Manual transcript remains separate."
           saveLabel="Use recording with draft"
           savedLabel="Voice memo will attach when this draft is accepted."
+          disabled={locked}
+          onRecordingChange={setRecordingActive}
+          onRecorded={(memo) => { recordingSources.current.set(memo.uri, memo); setHasRecordedSource(true); }}
           onSave={(memo) => {
             setRecordedAudio(memo);
+            setAttachmentId(Crypto.randomUUID());
+            audioSavedRef.current = false;
           }}
         />
       </SoftCard>
@@ -270,6 +364,7 @@ export default function VoiceCapture() {
           label="Raw transcript"
           value={transcript}
           onChangeText={onTranscriptChange}
+          editable={!locked}
           placeholder="Paste or type what was said. This remains the raw source transcript."
           multiline
         />
@@ -293,26 +388,28 @@ export default function VoiceCapture() {
         </View>
         <View style={styles.twoCol}>
           <View style={styles.twoColItem}>
-            <Field label="Date" value={eventDate} onChangeText={setEventDate} placeholder="YYYY-MM-DD" />
+            <Field label="Date" value={eventDate} onChangeText={setEventDate} placeholder="YYYY-MM-DD" editable={!locked} />
           </View>
           <View style={styles.twoColItem}>
-            <Field label="Time" value={eventTime} onChangeText={setEventTime} placeholder="HH:MM" />
+            <Field label="Time" value={eventTime} onChangeText={setEventTime} placeholder="HH:MM" editable={!locked} />
           </View>
         </View>
         <Field
           label="Title"
           value={title}
           onChangeText={setTitle}
+          editable={!locked}
           placeholder="Voice transcript reviewed"
         />
         <Field
           label="Reviewed body"
           value={reviewedBody}
           onChangeText={onReviewedBodyChange}
+          editable={!locked}
           placeholder="Reviewed body will appear here after a transcript is entered."
           multiline
         />
-        <FlagToggle value={isFlagged} onChange={setIsFlagged} />
+        <FlagToggle value={isFlagged} onChange={setIsFlagged} disabled={locked} />
         {isFlagged ? (
           <View style={styles.field}>
             <FormLabel>Flag severity</FormLabel>
@@ -323,15 +420,14 @@ export default function VoiceCapture() {
                 { v: 'high', label: 'High' },
               ]}
               value={flagSeverity}
-              onChange={setFlagSeverity}
+              onChange={(severity) => { if (!locked) setFlagSeverity(severity); }}
             />
           </View>
         ) : null}
       </SoftCard>
 
       <InfoCallout title="Source separation" tone="ink">
-        Raw audio, manual transcript, reviewed body, and future AI-structured interpretation stay
-        separate. Transcription and AI interpretation are not generated in this PR.
+        Original audio, manual transcript, and reviewed body remain separate. This screen does not generate automatic transcription or AI interpretation.
       </InfoCallout>
     </CaseScreen>
   );
