@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Type scale</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.row { display: grid; grid-template-columns: 110px 1fr 140px; gap: 16px; padding: 10px 0; border-bottom: 0.5px solid var(--fb-rule-soft); align-items: baseline; }
+.row:last-child { border-bottom: none; }
+.meta { font-family: var(--fb-mono); font-size: 10.5px; color: var(--fb-ink-mute); text-align: right; }
+.label { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ink-mute); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="row">
+  <div class="label">Display</div>
+  <div class="fb-serif" style="font-size:38px; font-weight:500; letter-spacing:-0.03em; line-height:1.05;">Tell me what's happening.</div>
+  <div class="meta">38 · serif · 500 · -0.03</div>
+</div>
+
+<div class="row">
+  <div class="label">Display sans</div>
+  <div class="fb-sans fb-tight" style="font-size:32px; font-weight:600;">Your case, on one page.</div>
+  <div class="meta">32 · sans · 600</div>
+</div>
+
+<div class="row">
+  <div class="label">H1</div>
+  <div class="fb-sans" style="font-size:24px; font-weight:600; letter-spacing:-0.02em;">Next step</div>
+  <div class="meta">24 · sans · 600</div>
+</div>
+
+<div class="row">
+  <div class="label">H2</div>
+  <div class="fb-sans" style="font-size:18px; font-weight:600; letter-spacing:-0.015em;">What your evidence proves</div>
+  <div class="meta">18 · sans · 600</div>
+</div>
+
+<div class="row">
+  <div class="label">Body</div>
+  <div class="fb-sans" style="font-size:14px; line-height:1.55; color:var(--fb-ink-soft);">Your pattern is consistent but not yet willful-by-a-reasonable-doubt. Modification wants a pattern that's here.</div>
+  <div class="meta">14 · sans · 1.55</div>
+</div>
+
+<div class="row">
+  <div class="label">Caption</div>
+  <div class="fb-serif" style="font-size:15px; font-style:italic; color:var(--fb-ink-soft); line-height:1.5;">This is legal information, not advice.</div>
+  <div class="meta">15 · serif italic</div>
+</div>
+
+<div class="row">
+  <div class="label">Kicker</div>
+  <div class="fb-sans" style="font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; font-weight:600; color:var(--fb-ox);">Case Diagnostic</div>
+  <div class="meta">10.5 · 0.1em · ox</div>
+</div>
+
+<div class="row">
+  <div class="label">Figures</div>
+  <div class="fb-mono fb-tnum" style="font-size:16px; font-weight:500;">FL-24-0918 · 38 / 62 · −12 overnights</div>
+  <div class="meta">16 · mono · tnum</div>
+</div>
+
+</body>
+</html>

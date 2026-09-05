@@ -1,0 +1,1403 @@
+{
+  "columns": [
+    {
+      "type": "uuid",
+      "table": "attachments",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "attachments",
+      "column": "user_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "attachments",
+      "column": "entry_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "file_name",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "file_type",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "integer",
+      "table": "attachments",
+      "column": "file_size",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "storage_path",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "thumbnail_path",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "description",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "attachments",
+      "column": "is_receipt",
+      "default": "false",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "attachments",
+      "column": "exif_timestamp",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "numeric(10,7)",
+      "table": "attachments",
+      "column": "exif_gps_lat",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "numeric(10,7)",
+      "table": "attachments",
+      "column": "exif_gps_lng",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "exif_device_make",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "exif_device_model",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "exif_software",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "original_filename",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "file_hash",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "attachments",
+      "column": "file_hash_verified_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "attachments",
+      "column": "is_original",
+      "default": "true",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "attachments",
+      "column": "original_file_hash",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "attachments",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "cases",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "cases",
+      "column": "user_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "cases",
+      "column": "case_number",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "cases",
+      "column": "court_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "cases",
+      "column": "department",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "cases",
+      "column": "judge_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "date",
+      "table": "cases",
+      "column": "filing_date",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "cases",
+      "column": "case_type",
+      "default": "'custody'::text",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "cases",
+      "column": "status",
+      "default": "'active'::text",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "cases",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "cases",
+      "column": "updated_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "cases",
+      "column": "deleted_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "children",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "children",
+      "column": "user_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "children",
+      "column": "name",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "date",
+      "table": "children",
+      "column": "date_of_birth",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "children",
+      "column": "gender",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "children",
+      "column": "notes",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "children",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "children",
+      "column": "updated_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "court_orders",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "court_orders",
+      "column": "user_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "court_orders",
+      "column": "case_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "date",
+      "table": "court_orders",
+      "column": "order_date",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "court_orders",
+      "column": "order_title",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "court_orders",
+      "column": "order_type",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "jsonb",
+      "table": "court_orders",
+      "column": "provisions",
+      "default": "'[]'::jsonb",
+      "not_null": true
+    },
+    {
+      "type": "date",
+      "table": "court_orders",
+      "column": "filing_date",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "date",
+      "table": "court_orders",
+      "column": "effective_date",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "court_orders",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "court_orders",
+      "column": "updated_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "court_orders",
+      "column": "deleted_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "entries",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "entries",
+      "column": "user_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "entries",
+      "column": "case_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "entries",
+      "column": "child_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "entry_type",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "date",
+      "table": "entries",
+      "column": "event_date",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "time without time zone",
+      "table": "entries",
+      "column": "event_time",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "time without time zone",
+      "table": "entries",
+      "column": "event_end_time",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "custody_period",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "title",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "body",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "child_mood",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "entries",
+      "column": "is_flagged",
+      "default": "false",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "flag_severity",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "flag_category",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "location_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "numeric(10,7)",
+      "table": "entries",
+      "column": "location_lat",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "numeric(10,7)",
+      "table": "entries",
+      "column": "location_lng",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "double precision",
+      "table": "entries",
+      "column": "location_accuracy_meters",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "double precision",
+      "table": "entries",
+      "column": "location_altitude",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "location_source",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "location_address",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text[]",
+      "table": "entries",
+      "column": "people_present",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "jsonb",
+      "table": "entries",
+      "column": "metadata",
+      "default": "'{}'::jsonb",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "voice_transcript",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "integer",
+      "table": "entries",
+      "column": "voice_duration_seconds",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "entries",
+      "column": "voice_entry_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid[]",
+      "table": "entries",
+      "column": "linked_entry_ids",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "jsonb",
+      "table": "entries",
+      "column": "edit_history",
+      "default": "'[]'::jsonb",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "entries",
+      "column": "capture_timestamp",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "entries",
+      "column": "device_timestamp",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "device_timezone",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "device_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "device_model",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "device_os",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "app_version",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "capture_method",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "ip_address_hash",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "content_hash",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "metadata_hash",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "hash_algorithm",
+      "default": "'SHA-256'::text",
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "entries",
+      "column": "is_edited",
+      "default": "false",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "original_content_hash",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "entries",
+      "column": "timestamp_consistency",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "entries",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "entries",
+      "column": "updated_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "entries",
+      "column": "deleted_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "filing_packages",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "filing_packages",
+      "column": "user_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "filing_packages",
+      "column": "case_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "filing_type",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "state_code",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "county",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "court_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "jsonb",
+      "table": "filing_packages",
+      "column": "forms",
+      "default": "'[]'::jsonb",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "status",
+      "default": "'draft'::text",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "ai_draft_status",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "efiling_provider",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "filing_packages",
+      "column": "efiling_reference_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "numeric(10,2)",
+      "table": "filing_packages",
+      "column": "filing_fee_amount",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "filing_packages",
+      "column": "fee_paid",
+      "default": "false",
+      "not_null": false
+    },
+    {
+      "type": "jsonb",
+      "table": "filing_packages",
+      "column": "checklist_status",
+      "default": "'{}'::jsonb",
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "filing_packages",
+      "column": "ready_to_file",
+      "default": "false",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "filing_packages",
+      "column": "filed_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "filing_packages",
+      "column": "served_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "date",
+      "table": "filing_packages",
+      "column": "service_deadline",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "integer",
+      "table": "filing_packages",
+      "column": "total_pages",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "bigint",
+      "table": "filing_packages",
+      "column": "file_size_bytes",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "filing_packages",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "filing_packages",
+      "column": "updated_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "filing_packages",
+      "column": "deleted_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "key_dates",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "key_dates",
+      "column": "user_id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "uuid",
+      "table": "key_dates",
+      "column": "case_id",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "key_dates",
+      "column": "date_type",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "date",
+      "table": "key_dates",
+      "column": "event_date",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "time without time zone",
+      "table": "key_dates",
+      "column": "event_time",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "key_dates",
+      "column": "title",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "key_dates",
+      "column": "description",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "key_dates",
+      "column": "location",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "key_dates",
+      "column": "is_completed",
+      "default": "false",
+      "not_null": false
+    },
+    {
+      "type": "integer[]",
+      "table": "key_dates",
+      "column": "reminder_days",
+      "default": "'{7,3,1}'::integer[]",
+      "not_null": false
+    },
+    {
+      "type": "date",
+      "table": "key_dates",
+      "column": "source_filing_date",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "key_dates",
+      "column": "calculation_rule",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "key_dates",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "key_dates",
+      "column": "updated_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "key_dates",
+      "column": "deleted_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "uuid",
+      "table": "profiles",
+      "column": "id",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "full_name",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "email",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "role",
+      "default": "'parent'::text",
+      "not_null": true
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "state",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "county",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "court_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "court_department",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "case_number",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "judge_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "other_parent_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text[]",
+      "table": "profiles",
+      "column": "child_names",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "date[]",
+      "table": "profiles",
+      "column": "child_dobs",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "attorney_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "attorney_email",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "opposing_attorney_name",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "jsonb",
+      "table": "profiles",
+      "column": "custody_schedule",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "timezone",
+      "default": "'America/Los_Angeles'::text",
+      "not_null": false
+    },
+    {
+      "type": "boolean",
+      "table": "profiles",
+      "column": "notifications_enabled",
+      "default": "true",
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "case_stage",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "conflict_level",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "representation_status",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "text[]",
+      "table": "profiles",
+      "column": "immediate_needs",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "onboarding_completed_at",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "created_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "updated_at",
+      "default": "now()",
+      "not_null": false
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "deleted_at",
+      "default": null,
+      "not_null": false
+    }
+  ],
+  "constraints": [
+    {
+      "name": "attachments_entry_id_fkey",
+      "table": "attachments",
+      "definition": "FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "attachments_pkey",
+      "table": "attachments",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "attachments_user_id_fkey",
+      "table": "attachments",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "cases_case_type_check",
+      "table": "cases",
+      "definition": "CHECK ((case_type = ANY (ARRAY['custody'::text, 'dv_restraining'::text, 'support'::text, 'other'::text])))"
+    },
+    {
+      "name": "cases_pkey",
+      "table": "cases",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "cases_status_check",
+      "table": "cases",
+      "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'closed'::text, 'pending'::text])))"
+    },
+    {
+      "name": "cases_user_id_fkey",
+      "table": "cases",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "children_pkey",
+      "table": "children",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "children_user_id_fkey",
+      "table": "children",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "court_orders_case_id_fkey",
+      "table": "court_orders",
+      "definition": "FOREIGN KEY (case_id) REFERENCES cases(id)"
+    },
+    {
+      "name": "court_orders_order_type_check",
+      "table": "court_orders",
+      "definition": "CHECK ((order_type = ANY (ARRAY['custody'::text, 'support'::text, 'restraining'::text, 'other'::text])))"
+    },
+    {
+      "name": "court_orders_pkey",
+      "table": "court_orders",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "court_orders_user_id_fkey",
+      "table": "court_orders",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "entries_capture_method_check",
+      "table": "entries",
+      "definition": "CHECK ((capture_method = ANY (ARRAY['manual_text'::text, 'voice_dictation'::text, 'voice_exchange'::text, 'camera_photo'::text, 'gallery_import'::text, 'screenshot_ai'::text, 'file_upload'::text, 'integration_sync'::text, 'ofw_import'::text, 'whatsapp_import'::text, 'email_forward'::text, 'siri_shortcut'::text])))"
+    },
+    {
+      "name": "entries_case_id_fkey",
+      "table": "entries",
+      "definition": "FOREIGN KEY (case_id) REFERENCES cases(id)"
+    },
+    {
+      "name": "entries_child_id_fkey",
+      "table": "entries",
+      "definition": "FOREIGN KEY (child_id) REFERENCES children(id)"
+    },
+    {
+      "name": "entries_child_mood_check",
+      "table": "entries",
+      "definition": "CHECK ((child_mood = ANY (ARRAY['great'::text, 'good'::text, 'okay'::text, 'upset'::text, 'distressed'::text])))"
+    },
+    {
+      "name": "entries_custody_period_check",
+      "table": "entries",
+      "definition": "CHECK ((custody_period = ANY (ARRAY['my_time'::text, 'their_time'::text, 'transition'::text, 'neutral'::text])))"
+    },
+    {
+      "name": "entries_entry_type_check",
+      "table": "entries",
+      "definition": "CHECK ((entry_type = ANY (ARRAY['journal'::text, 'pickup_dropoff'::text, 'visit_denied'::text, 'expense'::text, 'medical'::text, 'child_statement'::text, 'communication'::text, 'incident'::text, 'compliance'::text, 'witness'::text])))"
+    },
+    {
+      "name": "entries_flag_category_check",
+      "table": "entries",
+      "definition": "CHECK ((flag_category = ANY (ARRAY['late'::text, 'denied_visit'::text, 'safety'::text, 'verbal'::text, 'medical'::text, 'financial'::text, 'communication'::text, 'substance'::text, 'other'::text])))"
+    },
+    {
+      "name": "entries_flag_severity_check",
+      "table": "entries",
+      "definition": "CHECK ((flag_severity = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'emergency'::text])))"
+    },
+    {
+      "name": "entries_location_source_check",
+      "table": "entries",
+      "definition": "CHECK ((location_source = ANY (ARRAY['gps'::text, 'wifi'::text, 'cell'::text, 'manual'::text, 'none'::text])))"
+    },
+    {
+      "name": "entries_pkey",
+      "table": "entries",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "entries_timestamp_consistency_check",
+      "table": "entries",
+      "definition": "CHECK ((timestamp_consistency = ANY (ARRAY['verified'::text, 'minor_drift'::text, 'suspicious'::text, 'offline_capture'::text])))"
+    },
+    {
+      "name": "entries_user_id_fkey",
+      "table": "entries",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "fk_entries_voice_entry",
+      "table": "entries",
+      "definition": "FOREIGN KEY (voice_entry_id) REFERENCES voice_entries(id)"
+    },
+    {
+      "name": "filing_packages_ai_draft_status_check",
+      "table": "filing_packages",
+      "definition": "CHECK ((ai_draft_status = ANY (ARRAY['generating'::text, 'ready'::text, 'reviewed'::text, 'edited'::text])))"
+    },
+    {
+      "name": "filing_packages_case_id_fkey",
+      "table": "filing_packages",
+      "definition": "FOREIGN KEY (case_id) REFERENCES cases(id)"
+    },
+    {
+      "name": "filing_packages_efiling_provider_check",
+      "table": "filing_packages",
+      "definition": "CHECK ((efiling_provider = ANY (ARRAY['1efile'::text, 'onelegal'::text, 'direct'::text])))"
+    },
+    {
+      "name": "filing_packages_filing_type_check",
+      "table": "filing_packages",
+      "definition": "CHECK ((filing_type = ANY (ARRAY['modification'::text, 'enforcement'::text, 'emergency'::text, 'response'::text, 'financial'::text, 'disclosure'::text, 'other'::text])))"
+    },
+    {
+      "name": "filing_packages_pkey",
+      "table": "filing_packages",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "filing_packages_status_check",
+      "table": "filing_packages",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'review'::text, 'ready_to_file'::text, 'filed'::text, 'rejected'::text])))"
+    },
+    {
+      "name": "filing_packages_user_id_fkey",
+      "table": "filing_packages",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "key_dates_case_id_fkey",
+      "table": "key_dates",
+      "definition": "FOREIGN KEY (case_id) REFERENCES cases(id)"
+    },
+    {
+      "name": "key_dates_date_type_check",
+      "table": "key_dates",
+      "definition": "CHECK ((date_type = ANY (ARRAY['hearing'::text, 'filing_deadline'::text, 'response_deadline'::text, 'mediation'::text, 'evaluation'::text, 'review'::text, 'other'::text])))"
+    },
+    {
+      "name": "key_dates_pkey",
+      "table": "key_dates",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "key_dates_user_id_fkey",
+      "table": "key_dates",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "profiles_case_stage_check",
+      "table": "profiles",
+      "definition": "CHECK ((case_stage = ANY (ARRAY['pre_filing'::text, 'just_filed'::text, 'responding'::text, 'active_litigation'::text, 'post_judgment'::text])))"
+    },
+    {
+      "name": "profiles_conflict_level_check",
+      "table": "profiles",
+      "definition": "CHECK ((conflict_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'safety'::text])))"
+    },
+    {
+      "name": "profiles_id_fkey",
+      "table": "profiles",
+      "definition": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "profiles_pkey",
+      "table": "profiles",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "profiles_representation_status_check",
+      "table": "profiles",
+      "definition": "CHECK ((representation_status = ANY (ARRAY['have_attorney'::text, 'had_attorney'::text, 'self_rep_vs_attorney'::text, 'both_self_rep'::text])))"
+    },
+    {
+      "name": "profiles_role_check",
+      "table": "profiles",
+      "definition": "CHECK ((role = ANY (ARRAY['parent'::text, 'attorney'::text, 'evaluator'::text, 'coordinator'::text])))"
+    }
+  ],
+  "definer_functions": [
+    {
+      "name": "rls_auto_enable()",
+      "definition": "CREATE OR REPLACE FUNCTION public.rls_auto_enable()\n RETURNS event_trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n  cmd record;\nBEGIN\n  FOR cmd IN\n    SELECT *\n    FROM pg_event_trigger_ddl_commands()\n    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')\n      AND object_type IN ('table','partitioned table')\n  LOOP\n     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN\n      BEGIN\n        EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);\n        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;\n      EXCEPTION\n        WHEN OTHERS THEN\n          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;\n      END;\n     ELSE\n        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;\n     END IF;\n  END LOOP;\nEND;\n$function$\n"
+    }
+  ]
+}

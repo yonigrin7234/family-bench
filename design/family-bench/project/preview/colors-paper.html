@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Colors</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 20px 24px; background: var(--fb-paper); font-family: var(--fb-sans); }
+.row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; margin-bottom: 14px; }
+.swatch { border-radius: 10px; overflow: hidden; border: 0.5px solid var(--fb-rule); }
+.chip { height: 56px; }
+.meta { padding: 6px 8px 8px; background: #FFFFFF; font-size: 10.5px; }
+.name { color: var(--fb-ink); font-weight: 600; letter-spacing: -0.01em; }
+.hex  { color: var(--fb-ink-mute); font-family: var(--fb-mono); font-size: 10px; margin-top: 1px; }
+.kicker { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+  <div class="kicker">Paper + Ink · the foundation</div>
+  <div class="row">
+    <div class="swatch"><div class="chip" style="background:#F7F6F3"></div><div class="meta"><div class="name">Paper</div><div class="hex">#F7F6F3</div></div></div>
+    <div class="swatch"><div class="chip" style="background:#EFEDE7"></div><div class="meta"><div class="name">Paper deep</div><div class="hex">#EFEDE7</div></div></div>
+    <div class="swatch"><div class="chip" style="background:#E4E1D9"></div><div class="meta"><div class="name">Paper edge</div><div class="hex">#E4E1D9</div></div></div>
+    <div class="swatch"><div class="chip" style="background:#14181F"></div><div class="meta"><div class="name">Ink</div><div class="hex">#14181F</div></div></div>
+    <div class="swatch"><div class="chip" style="background:#2B323D"></div><div class="meta"><div class="name">Ink soft</div><div class="hex">#2B323D</div></div></div>
+    <div class="swatch"><div class="chip" style="background:rgba(20,24,31,0.58)"></div><div class="meta"><div class="name">Ink mute</div><div class="hex">58% ink</div></div></div>
+    <div class="swatch"><div class="chip" style="background:rgba(20,24,31,0.34)"></div><div class="meta"><div class="name">Ink faint</div><div class="hex">34% ink</div></div></div>
+    <div class="swatch"><div class="chip" style="background:rgba(20,24,31,0.10)"></div><div class="meta"><div class="name">Rule</div><div class="hex">10% ink</div></div></div>
+  </div>
+</body>
+</html>

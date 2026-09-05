@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Chips</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.kicker { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.lbl { font-family: var(--fb-mono); font-size: 10.5px; color: var(--fb-ink-mute); width: 100px; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-family: var(--fb-sans); font-size: 11.5px; font-weight: 500;
+  letter-spacing: 0.01em; border: 0.5px solid transparent;
+}
+.chip-ox    { background: var(--fb-ox-wash); color: var(--fb-ox-deep); }
+.chip-forest{ background: var(--fb-forest-wash); color: var(--fb-forest); }
+.chip-sand  { background: var(--fb-sand-wash); color: var(--fb-sand-deep); }
+.chip-amber { background: var(--fb-amber-wash); color: var(--fb-amber); }
+.chip-ink   { background: transparent; color: var(--fb-ink); border-color: var(--fb-rule); }
+.chip-dot   { width: 6px; height: 6px; border-radius: 3px; }
+
+/* Toggle */
+.toggle { width:36px; height:22px; border-radius:11px; position:relative; }
+.toggle.on  { background: #0A84FF; }
+.toggle.off { background: #D6D3CB; }
+.knob { position:absolute; top:2px; width:18px; height:18px; background:#fff; border-radius:9px; box-shadow: 0 1.5px 3px rgba(0,0,0,0.12); }
+.on .knob  { left: 16px; }
+.off .knob { left: 2px; }
+</style>
+</head>
+<body>
+
+<div class="kicker">Chips · status + severity</div>
+
+<div class="row">
+  <div class="lbl">Severity</div>
+  <span class="chip chip-ox"><span class="chip-dot" style="background:var(--fb-ox)"></span>Attention</span>
+  <span class="chip chip-amber"><span class="chip-dot" style="background:var(--fb-amber)"></span>Caution</span>
+  <span class="chip chip-forest"><span class="chip-dot" style="background:var(--fb-forest)"></span>Verified</span>
+  <span class="chip chip-sand"><span class="chip-dot" style="background:var(--fb-sand-deep)"></span>Note</span>
+</div>
+
+<div class="row">
+  <div class="lbl">Legal status</div>
+  <span class="chip chip-forest">Signed</span>
+  <span class="chip chip-forest">Notarized</span>
+  <span class="chip chip-amber">Pending</span>
+  <span class="chip chip-ox">Opposed</span>
+  <span class="chip chip-ink">Draft</span>
+</div>
+
+<div class="row">
+  <div class="lbl">Case tags</div>
+  <span class="chip chip-ink">RFO-05</span>
+  <span class="chip chip-ink">§ 4(c)</span>
+  <span class="chip chip-ink">Pattern P-03</span>
+  <span class="chip chip-ink">CCP 367.3</span>
+</div>
+
+<div class="row" style="margin-top:20px;">
+  <div class="lbl">Toggle</div>
+  <div class="toggle on"><div class="knob"></div></div>
+  <div class="toggle off"><div class="knob"></div></div>
+  <span style="font-size:11.5px; color:var(--fb-ink-mute);">iOS-blue on / sand-gray off · 18px knob</span>
+</div>
+
+</body>
+</html>

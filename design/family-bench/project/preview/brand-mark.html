@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Brand</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.grid { display: grid; grid-template-columns: 220px 1fr; gap: 32px; align-items: center; }
+.mark { display: flex; align-items: center; gap: 12px; }
+.seal {
+  width: 56px; height: 56px; border-radius: 28px;
+  background: var(--fb-ox); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--fb-serif); font-size: 26px; font-weight: 500; font-style: italic;
+  letter-spacing: -0.02em;
+}
+.word {
+  font-family: var(--fb-serif); font-size: 34px; font-weight: 500; letter-spacing: -0.03em; line-height: 1;
+  color: var(--fb-ink);
+}
+.word span { color: var(--fb-ox); }
+.kicker { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 10px; }
+.tag   { font-family: var(--fb-serif); font-style: italic; font-size: 18px; color: var(--fb-ink-soft); letter-spacing: -0.005em; margin-top: 8px; }
+.tag-l { font-family: var(--fb-sans); font-size: 12.5px; color: var(--fb-ink-mute); line-height: 1.6; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div>
+    <div class="kicker" style="margin-bottom:16px;">Mark · seal + word</div>
+    <div class="mark">
+      <div class="seal">F</div>
+      <div class="word">Family <span>Bench</span></div>
+    </div>
+    <div class="mark" style="margin-top:24px; gap:10px;">
+      <div class="seal" style="width:36px; height:36px; border-radius:18px; font-size:17px;">F</div>
+      <div class="word" style="font-size:22px;">Family <span>Bench</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="kicker">What the mark carries</div>
+    <div class="tag"><em>"Your case, kept carefully."</em></div>
+    <div class="tag-l">
+      The seal is a soft oxblood circle with an italic serif "F" — court-official but not bureaucratic. The wordmark pairs Family (ink) with Bench (oxblood) in Instrument Serif. No separator; the color carries the emphasis.
+    </div>
+    <div class="tag-l" style="margin-top:14px;">
+      Use the full lockup on launch and marketing. Use the seal-only in-app: navigation, favicon, file-signed badges, chain-of-custody certificates. Never recolor. Never put the seal on a gradient.
+    </div>
+  </div>
+</div>
+</body>
+</html>

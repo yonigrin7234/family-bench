@@ -1,59 +1,70 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
+// global.css is required for NativeWind class compilation.
+
+import '../global.css';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/components/useColorScheme';
-
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
-
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+import { Stack } from 'expo-router';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from '@expo-google-fonts/inter';
+import {
+  InstrumentSerif_400Regular,
+  InstrumentSerif_400Regular_Italic,
+} from '@expo-google-fonts/instrument-serif';
+import {
+  JetBrainsMono_400Regular,
+  JetBrainsMono_500Medium,
+  JetBrainsMono_600SemiBold,
+} from '@expo-google-fonts/jetbrains-mono';
+import { ActivityIndicator, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { fbColors } from '@/components/ui/fb';
+import { hasVerifiedSession, initializeAuth, useAuthStore } from '@/lib/auth/session';
+import { initializeCaseWorkspace, useCaseIntelligenceStore } from '@/lib/case-intelligence/useCaseIntelligence';
+import { getActiveCase } from '@/lib/case-intelligence/selectors';
+import { initializeTemporarySourceCleanup } from '@/lib/evidence/sourceCleanup';
+import { TemporarySourceCleanupNotice } from '@/components/case-intelligence/TemporarySourceCleanupNotice';
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
+  const { session, initialized, recovery } = useAuthStore();
+  const activeCaseId = useCaseIntelligenceStore((state) => getActiveCase(state.snapshot)?.id ?? 'none');
+  useEffect(() => {
+    void initializeTemporarySourceCleanup();
+    const stopWorkspace = initializeCaseWorkspace();
+    const stopAuth = initializeAuth();
+    return () => { stopAuth(); stopWorkspace(); };
+  }, []);
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter: Inter_400Regular,
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
+    'Instrument Serif': InstrumentSerif_400Regular,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_500Medium,
+    JetBrainsMono_600SemiBold,
+    'JetBrains Mono': JetBrainsMono_400Regular,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
-
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
+  if (!fontsLoaded || !initialized) {
+    return <SafeAreaProvider><View style={{ flex: 1, backgroundColor: fbColors.paper }}><TemporarySourceCleanupNotice /><View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator accessibilityLabel="Opening Family Bench" /></View></View></SafeAreaProvider>;
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+    <SafeAreaProvider>
+      <TemporarySourceCleanupNotice />
+      <Stack key={`${session?.user.id ?? 'signed-out'}:${activeCaseId}`} screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={!hasVerifiedSession(session) || recovery}>
+          <Stack.Screen name="auth" />
+        </Stack.Protected>
+        <Stack.Protected guard={hasVerifiedSession(session) && !recovery}>
+          {['index', 'welcome', 'onboarding', 'cases', 'more', 'trust-center', 'briefcase', 'forms', 'import', 'capture', 'entry/[id]', 'voice-capture', 'timeline', 'evidence', 'case-map', 'reports', 'calculator', 'export-prep', 'advisor', 'filings', 'patterns', 'practitioners', 'safety', 'settings'].map((name) => <Stack.Screen key={name} name={name} />)}
+        </Stack.Protected>
       </Stack>
-    </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

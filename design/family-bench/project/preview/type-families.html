@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Type families</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.fam { display: grid; grid-template-columns: 120px 1fr 130px; gap: 16px; padding: 16px 0; border-bottom: 0.5px solid var(--fb-rule); align-items: baseline; }
+.fam:last-child { border-bottom: none; }
+.label { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ink-mute); font-weight: 600; }
+.meta  { font-family: var(--fb-mono); font-size: 10.5px; color: var(--fb-ink-mute); text-align: right; }
+</style>
+</head>
+<body>
+
+<div class="fam">
+  <div class="label">Sans · Inter</div>
+  <div class="fb-sans" style="font-size:32px; font-weight:600; letter-spacing:-0.025em;">The workhorse. You read this.</div>
+  <div class="meta">400 · 500 · 600 · 700</div>
+</div>
+
+<div class="fam">
+  <div class="label">Serif · Instrument</div>
+  <div class="fb-serif" style="font-size:34px; font-weight:500; letter-spacing:-0.02em; line-height:1.1;">The voice, used sparingly.</div>
+  <div class="meta">400 · 400 italic · 500</div>
+</div>
+
+<div class="fam">
+  <div class="label">Mono · JetBrains</div>
+  <div class="fb-mono" style="font-size:24px; font-weight:500;">FL-24-0918 · 50 / 50 · 38 / 62</div>
+  <div class="meta">400 · 500 · 600</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,121 @@
+/* Family Bench — Design tokens as CSS variables
+ * Modern court aesthetic · cream paper, near-black ink, oxblood accent, forest success.
+ * Type: Inter (sans, primary), Instrument Serif (display/italic captions), JetBrains Mono (figures).
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* — Paper (surfaces) — */
+  --fb-paper:       #F7F6F3;  /* base: neutral warm off-white */
+  --fb-paper-deep:  #EFEDE7;  /* recessed panels, card wells */
+  --fb-paper-edge:  #E4E1D9;  /* harder hairline on light fields */
+
+  /* — Ink (text) — */
+  --fb-ink:         #14181F;  /* primary text, near-black */
+  --fb-ink-soft:    #2B323D;  /* secondary text */
+  --fb-ink-mute:    rgba(20,24,31,0.58);
+  --fb-ink-faint:   rgba(20,24,31,0.34);
+
+  /* — Rules (dividers) — */
+  --fb-rule:        rgba(20,24,31,0.10);
+  --fb-rule-soft:   rgba(20,24,31,0.06);
+
+  /* — Oxblood (primary accent · alerts · attention) — */
+  --fb-ox:          #B44028;
+  --fb-ox-deep:     #842E1C;
+  --fb-ox-wash:     #F4E3DE;
+
+  /* — Forest (success · verified · completed) — */
+  --fb-forest:      #2F5A3A;
+  --fb-forest-wash: #DEE8DD;
+
+  /* — Sand (secondary accent · sub-headings) — */
+  --fb-sand:        #C9B892;
+  --fb-sand-deep:   #8A7647;
+  --fb-sand-wash:   #F0EADA;
+
+  /* — Amber (caution · pending · warm warning) — */
+  --fb-amber:       #A76A14;
+  --fb-amber-wash:  #F3E6CE;
+
+  /* — Urgent-mode colors (DV/safety system — used sparingly) — */
+  --fb-urgent-bg:   #0A0B0F;
+  --fb-urgent-fg:   #FFFFFF;
+  --fb-urgent-red:  #E5484D;
+
+  /* — Type families — */
+  --fb-serif: "Instrument Serif", "Source Serif 4", Georgia, serif;
+  --fb-sans:  "Inter", ui-sans-serif, system-ui, sans-serif;
+  --fb-mono:  "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* — Type scale (mobile) — */
+  --fb-display:      38px;  /* serif, -0.03em, 1.05 */
+  --fb-display-sm:   28px;
+  --fb-h1:           24px;
+  --fb-h2:           18px;
+  --fb-body:         14px;
+  --fb-small:        12px;
+  --fb-micro:        10.5px; /* all-caps labels, 0.1em tracking */
+
+  /* — Type scale (desktop) — */
+  --fb-display-dt:   44px;
+  --fb-h1-dt:        32px;
+  --fb-h2-dt:        22px;
+
+  /* — Radii — */
+  --fb-r-sm:  8px;
+  --fb-r-md:  12px;
+  --fb-r-lg:  14px;  /* card default */
+  --fb-r-xl:  18px;  /* hero cards */
+  --fb-r-pill: 999px;
+
+  /* — Spacing (4pt grid) — */
+  --fb-1:  4px;
+  --fb-2:  8px;
+  --fb-3:  12px;
+  --fb-4:  16px;
+  --fb-5:  20px;
+  --fb-6:  24px;
+  --fb-8:  32px;
+  --fb-10: 40px;
+
+  /* — Elevation (minimal — this is a paper system) — */
+  --fb-shadow-1: 0 1px 2px rgba(20,24,31,0.04);
+  --fb-shadow-2: 0 4px 14px rgba(20,24,31,0.06), 0 1px 2px rgba(20,24,31,0.04);
+
+  /* — Motion — */
+  --fb-ease:       cubic-bezier(0.2, 0.8, 0.2, 1);
+  --fb-dur-fast:   150ms;
+  --fb-dur:        220ms;
+}
+
+/* — Semantic helpers — */
+.fb-serif { font-family: var(--fb-serif); font-feature-settings: "lnum"; letter-spacing: -0.005em; }
+.fb-sans  { font-family: var(--fb-sans);  font-feature-settings: "ss01", "cv11"; }
+.fb-mono  { font-family: var(--fb-mono);  font-feature-settings: "tnum", "zero"; }
+.fb-tight { letter-spacing: -0.025em; }
+.fb-tnum  { font-variant-numeric: tabular-nums; }
+.fb-smallcaps { font-variant: all-small-caps; letter-spacing: 0.11em; }
+
+h1, .fb-h1 { font-family: var(--fb-sans); font-weight: 600; font-size: var(--fb-h1); letter-spacing: -0.02em; color: var(--fb-ink); }
+h2, .fb-h2 { font-family: var(--fb-sans); font-weight: 600; font-size: var(--fb-h2); letter-spacing: -0.015em; color: var(--fb-ink); }
+p,  .fb-p  { font-family: var(--fb-sans); font-size: var(--fb-body); line-height: 1.55; color: var(--fb-ink-soft); }
+
+.fb-display     { font-family: var(--fb-serif); font-weight: 500; font-size: var(--fb-display); letter-spacing: -0.03em; line-height: 1.05; color: var(--fb-ink); }
+.fb-display-sans{ font-family: var(--fb-sans);  font-weight: 600; font-size: var(--fb-display); letter-spacing: -0.03em; line-height: 1.05; color: var(--fb-ink); }
+.fb-caption     { font-family: var(--fb-serif); font-style: italic; font-size: 15px; line-height: 1.5; color: var(--fb-ink-soft); }
+.fb-kicker      { font-family: var(--fb-sans); font-weight: 600; font-size: var(--fb-micro); letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); }
+
+/* — Base card — */
+.fb-card {
+  background: #FFFFFF;
+  border: 0.5px solid var(--fb-rule);
+  border-radius: var(--fb-r-lg);
+  padding: 16px 18px;
+}
+.fb-card-deep {
+  background: var(--fb-paper-deep);
+  border-radius: var(--fb-r-lg);
+  padding: 20px 22px;
+}

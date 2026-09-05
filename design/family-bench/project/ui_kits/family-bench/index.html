@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · UI Kit</title>
+<meta name="viewport" content="width=1360, initial-scale=1"/>
+<link rel="stylesheet" href="../../colors_and_type.css"/>
+<style>
+  html, body { margin: 0; padding: 0; background: var(--fb-paper); }
+  body { font-family: var(--fb-sans); color: var(--fb-ink); }
+  .page { max-width: 1280px; margin: 0 auto; padding: 48px 40px 80px; }
+
+  .hero {
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center;
+    padding-bottom: 48px; border-bottom: 0.5px solid var(--fb-rule);
+  }
+  .kicker { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 16px; }
+  .display { font-family: var(--fb-serif); font-weight: 500; font-size: 60px; letter-spacing: -0.035em; line-height: 1.08; margin: 0 0 20px; color: var(--fb-ink); }
+  .display em { font-style: italic; color: var(--fb-ink-soft); }
+  .lede { font-family: var(--fb-sans); font-size: 17px; line-height: 1.55; color: var(--fb-ink-soft); max-width: 460px; margin: 0 0 24px; }
+  .disclaimer { font-family: var(--fb-serif); font-style: italic; font-size: 14px; color: var(--fb-ink-mute); }
+
+  .mark { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
+  .seal { width: 52px; height: 52px; border-radius: 26px; background: var(--fb-ox); color: #fff; display: flex; align-items: center; justify-content: center; font-family: var(--fb-serif); font-size: 25px; font-style: italic; letter-spacing: -0.02em; font-weight: 500; }
+  .word { font-family: var(--fb-serif); font-size: 32px; font-weight: 500; letter-spacing: -0.03em; line-height: 1; }
+  .word span { color: var(--fb-ox); }
+
+  .case-card {
+    background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 18px;
+    padding: 28px 32px;
+  }
+  .case-caption { font-family: var(--fb-serif); font-style: italic; font-size: 28px; letter-spacing: -0.015em; color: var(--fb-ink); margin-bottom: 6px; }
+  .case-meta { font-family: var(--fb-mono); font-size: 11.5px; color: var(--fb-ink-mute); display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; padding-top: 18px; border-top: 0.5px solid var(--fb-rule-soft); }
+  .cell .lbl { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ink-mute); font-weight: 600; margin-bottom: 4px; }
+  .cell .val { font-size: 15px; font-weight: 500; letter-spacing: -0.005em; color: var(--fb-ink); }
+  .cell .sub { font-family: var(--fb-mono); font-size: 11px; color: var(--fb-ink-mute); margin-top: 3px; }
+  .hearing-val { color: var(--fb-ox-deep); font-weight: 600; }
+
+  /* Sections */
+  .section { padding: 64px 0 0; }
+  .section-kick { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 12px; }
+  .section-title { font-family: var(--fb-sans); font-weight: 600; font-size: 36px; letter-spacing: -0.025em; margin: 0 0 12px; line-height: 1.08; }
+  .section-lede { font-family: var(--fb-sans); font-size: 15px; line-height: 1.55; color: var(--fb-ink-soft); max-width: 620px; margin: 0 0 32px; }
+
+  /* Principles */
+  .pillars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .pillar { background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 14px; padding: 20px 22px; }
+  .pillar .n { font-family: var(--fb-serif); font-style: italic; font-size: 34px; color: var(--fb-ox); letter-spacing: -0.02em; line-height: 1; margin-bottom: 10px; }
+  .pillar h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .pillar p { font-size: 12.5px; line-height: 1.5; color: var(--fb-ink-soft); margin: 0; }
+
+  /* Screen tour */
+  .screens { display: grid; grid-template-columns: 1fr 1.6fr; gap: 28px; }
+  .mobile-col, .desktop-col { display: flex; flex-direction: column; gap: 14px; }
+  .frame-lbl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ink-mute); font-weight: 600; }
+  .phone-frame {
+    width: 100%; aspect-ratio: 402 / 874; background: var(--fb-paper);
+    border-radius: 44px; border: 0.5px solid var(--fb-rule);
+    box-shadow: 0 4px 14px rgba(20,24,31,0.06), 0 1px 2px rgba(20,24,31,0.04);
+    position: relative; overflow: hidden; padding: 48px 22px 90px;
+    box-sizing: border-box;
+  }
+  .notch { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 100px; height: 26px; background: #0A0B0F; border-radius: 14px; }
+  .screen-title { font-family: var(--fb-serif); font-size: 26px; font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; margin: 16px 0 8px; }
+  .screen-lede { font-family: var(--fb-sans); font-size: 11.5px; color: var(--fb-ink-soft); line-height: 1.5; margin-bottom: 16px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+  .chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 500; border: 0.5px solid var(--fb-rule); background: #fff; color: var(--fb-ink); }
+  .chip.ox { background: var(--fb-ox-wash); color: var(--fb-ox-deep); border-color: transparent; }
+  .chip.for { background: var(--fb-forest-wash); color: var(--fb-forest); border-color: transparent; }
+
+  .mobile-card { background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .mini-k { font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ink-mute); font-weight: 600; margin-bottom: 4px; }
+  .mini-t { font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; margin-bottom: 2px; }
+  .mini-b { font-size: 11px; color: var(--fb-ink-mute); line-height: 1.4; }
+
+  .primary-pill { display: inline-flex; padding: 10px 16px; border-radius: 999px; background: var(--fb-ink); color: var(--fb-paper); font-size: 12.5px; font-weight: 500; margin-top: 8px; }
+
+  .browser {
+    background: #FFFFFF; border-radius: 14px; border: 0.5px solid var(--fb-rule); overflow: hidden;
+    box-shadow: 0 4px 14px rgba(20,24,31,0.06), 0 1px 2px rgba(20,24,31,0.04);
+  }
+  .bar { background: var(--fb-paper-deep); padding: 10px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 0.5px solid var(--fb-rule); }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 11px; height: 11px; border-radius: 6px; background: #D6D3CB; }
+  .dot.r { background: #E5484D; } .dot.y { background: #E4A53A; } .dot.g { background: #2F5A3A; }
+  .url { flex: 1; background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 999px; padding: 4px 12px; font-family: var(--fb-mono); font-size: 11px; color: var(--fb-ink-mute); text-align: center; }
+  .app { display: grid; grid-template-columns: 220px 1fr; min-height: 520px; }
+  .sidebar { background: var(--fb-paper-deep); padding: 20px 16px; border-right: 0.5px solid var(--fb-rule); }
+  .side-mark { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+  .side-seal { width: 26px; height: 26px; border-radius: 13px; background: var(--fb-ox); color: #fff; display: flex; align-items: center; justify-content: center; font-family: var(--fb-serif); font-size: 14px; font-style: italic; }
+  .side-word { font-family: var(--fb-serif); font-size: 16px; letter-spacing: -0.02em; font-weight: 500; }
+  .side-word span { color: var(--fb-ox); }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-item { padding: 7px 10px; border-radius: 8px; font-size: 12px; color: var(--fb-ink-soft); display: flex; align-items: center; justify-content: space-between; }
+  .nav-item.on { background: #FFFFFF; color: var(--fb-ink); font-weight: 600; }
+  .nav-badge { font-family: var(--fb-mono); font-size: 10px; color: var(--fb-ox); }
+  .main { padding: 28px 32px; }
+  .main-kicker { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 8px; }
+  .main-title { font-family: var(--fb-sans); font-weight: 600; font-size: 28px; letter-spacing: -0.025em; margin: 0 0 10px; }
+  .main-lede { font-family: var(--fb-serif); font-style: italic; font-size: 16px; color: var(--fb-ink-soft); margin: 0 0 22px; line-height: 1.5; max-width: 560px; }
+  .next-card { background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .nc-t { font-weight: 600; font-size: 14px; letter-spacing: -0.005em; }
+  .nc-b { font-size: 12px; color: var(--fb-ink-mute); margin-top: 3px; }
+  .btn-sm { padding: 8px 14px; border-radius: 999px; background: var(--fb-ink); color: var(--fb-paper); font-size: 12px; font-weight: 500; }
+  .rowgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .tile { background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 12px; padding: 14px 16px; }
+  .tile-k { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ink-mute); font-weight: 600; margin-bottom: 6px; }
+  .tile-v { font-family: var(--fb-mono); font-size: 19px; font-weight: 500; letter-spacing: -0.01em; }
+  .tile-s { font-size: 11px; color: var(--fb-ink-mute); margin-top: 3px; }
+  .delta { color: var(--fb-ox); }
+
+  /* Footer */
+  .foot { padding-top: 60px; margin-top: 48px; border-top: 0.5px solid var(--fb-rule); font-size: 12.5px; color: var(--fb-ink-mute); line-height: 1.6; }
+  .foot a { color: var(--fb-ox-deep); text-decoration: underline; text-underline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HERO -->
+  <div class="mark">
+    <div class="seal">F</div>
+    <div class="word">Family <span>Bench</span></div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <div class="kicker">UI Kit · v1</div>
+      <h1 class="display">Your case, <em>kept carefully.</em></h1>
+      <p class="lede">Family Bench turns the lived experience of a pro-se custody case — missed handoffs, hard conversations, long nights — into court-ready evidence, filings, and strategy. This kit is the working system behind it: tokens, primitives, and the screens that prove them.</p>
+      <div class="disclaimer">This is legal information, not advice.</div>
+    </div>
+    <div class="case-card">
+      <div class="kicker" style="margin-bottom:8px;">Case spine · in every screen</div>
+      <div class="case-caption">In re: Marriage of Chen</div>
+      <div class="case-meta">
+        <span>FL-24-0918</span><span>·</span><span>Alameda Superior · Dept. 24</span><span>·</span><span>Hon. M. Alvarado</span>
+      </div>
+      <div class="grid4">
+        <div class="cell">
+          <div class="lbl">Next hearing</div>
+          <div class="val hearing-val">May 5, 2026</div>
+          <div class="sub">14 days · RFO custody mod</div>
+        </div>
+        <div class="cell">
+          <div class="lbl">Custody split</div>
+          <div class="val">50 / 50 ordered</div>
+          <div class="sub">38 / 62 actual · −12 OE/90d</div>
+        </div>
+        <div class="cell">
+          <div class="lbl">Child</div>
+          <div class="val">Leonie Chen, 7</div>
+          <div class="sub">Lincoln Elementary</div>
+        </div>
+        <div class="cell">
+          <div class="lbl">Opposing party</div>
+          <div class="val">David Chen (pro per)</div>
+          <div class="sub">Last filing: Feb 14</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINCIPLES -->
+  <div class="section">
+    <div class="section-kick">Design principles</div>
+    <h2 class="section-title">Four commitments the system enforces.</h2>
+    <p class="section-lede">Every component, color choice, and piece of copy ladders up to these. When we break one, we replace it with something just as deliberate — never by accident.</p>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="n">01</div>
+        <h3>Modern court</h3>
+        <p>Official enough to hold up in front of a judge. Soft enough to survive daily use at 11 pm. Near-black ink, 0.5px hairlines, almost no shadow.</p>
+      </div>
+      <div class="pillar">
+        <div class="n">02</div>
+        <h3>Sans is the workhorse</h3>
+        <p>Inter carries the interface. Serif italic is a guest — used for emotional moments and legal formality. Never both at once.</p>
+      </div>
+      <div class="pillar">
+        <div class="n">03</div>
+        <h3>Honest about what's hard</h3>
+        <p>The voice is a calm advisor, not a hype-bot. If something is slow or unlikely to work, the app says so. No false reassurance, no "you've got this."</p>
+      </div>
+      <div class="pillar">
+        <div class="n">04</div>
+        <h3>One step, not a dashboard</h3>
+        <p>Home shows the single most important next action. Everything else is a tap away. The app reduces decisions; it doesn't spray them.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN TOUR -->
+  <div class="section">
+    <div class="section-kick">The kit in use</div>
+    <h2 class="section-title">Mobile captures. Desktop commands.</h2>
+    <p class="section-lede">The mobile app is the capture surface — one-handed, pocket-size, crisis-ready. The desktop web is the war room — case map, evidence lenses, filing wizard. Same tokens, different densities.</p>
+
+    <div class="screens">
+      <!-- MOBILE COL -->
+      <div class="mobile-col">
+        <div class="frame-lbl">Mobile · 402 × 874</div>
+        <div class="phone-frame">
+          <div class="notch"></div>
+          <div class="kicker" style="color:var(--fb-ox); font-size:9px;">Today · 11:42 PM</div>
+          <div class="screen-title">Tonight was rough.</div>
+          <div class="screen-lede">You don't need to be polished. Just tell me what happened.</div>
+          <div class="chip-row">
+            <span class="chip ox">● Leonie</span>
+            <span class="chip">Exchange</span>
+            <span class="chip">Fri 5:00 PM</span>
+          </div>
+          <div class="mobile-card">
+            <div class="mini-k">Scheduled</div>
+            <div class="mini-t">Friday 5:00 PM pickup</div>
+            <div class="mini-b">David's week per June 2024 order §6</div>
+          </div>
+          <div class="mobile-card">
+            <div class="mini-k">Actual</div>
+            <div class="mini-t">Did not arrive</div>
+            <div class="mini-b">Leonie waited 45 min · called at 5:47</div>
+          </div>
+          <div class="primary-pill">Add witness · Attach photo →</div>
+        </div>
+      </div>
+
+      <!-- DESKTOP COL -->
+      <div class="desktop-col">
+        <div class="frame-lbl">Desktop · 1360 × 874</div>
+        <div class="browser">
+          <div class="bar">
+            <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+            <div class="url">familybench.app/case/FL-24-0918</div>
+            <div style="width:48px;"></div>
+          </div>
+          <div class="app">
+            <div class="sidebar">
+              <div class="side-mark">
+                <div class="side-seal">F</div>
+                <div class="side-word">Family <span>Bench</span></div>
+              </div>
+              <div class="nav">
+                <div class="nav-item on">Home</div>
+                <div class="nav-item">Case Map</div>
+                <div class="nav-item">Evidence <span class="nav-badge">148</span></div>
+                <div class="nav-item">Patterns <span class="nav-badge">3</span></div>
+                <div class="nav-item">Filings <span class="nav-badge">RFO-05</span></div>
+                <div class="nav-item">Advisor</div>
+                <div class="nav-item">Conversations</div>
+                <div class="nav-item">Documents</div>
+                <div class="nav-item" style="margin-top:16px; color:var(--fb-ink-mute);">Settings</div>
+                <div class="nav-item" style="color:var(--fb-ink-mute);">Safety</div>
+              </div>
+            </div>
+            <div class="main">
+              <div class="main-kicker">Good evening, Sarah · 14 days to hearing</div>
+              <h3 class="main-title">Your next step</h3>
+              <p class="main-lede">Your pattern is consistent but not yet willful-by-a-reasonable-doubt. Modification wants a pattern that's here. Let's finish your RFO declaration — you're 68% there.</p>
+              <div class="next-card">
+                <div>
+                  <div class="nc-t">Finish RFO-05 declaration</div>
+                  <div class="nc-b">12 paragraphs drafted · 2 need a witness citation</div>
+                </div>
+                <div class="btn-sm">Continue →</div>
+              </div>
+              <div class="next-card">
+                <div>
+                  <div class="nc-t">Review pattern P-03: Friday exchanges</div>
+                  <div class="nc-b">7 missed in 90 days · proposed framing ready</div>
+                </div>
+                <div class="btn-sm">Open →</div>
+              </div>
+              <div class="rowgrid">
+                <div class="tile">
+                  <div class="tile-k">Evidence</div>
+                  <div class="tile-v">148 entries</div>
+                  <div class="tile-s">132 verified · <span class="delta">16 unsigned</span></div>
+                </div>
+                <div class="tile">
+                  <div class="tile-k">Custody actual</div>
+                  <div class="tile-v">38 / 62</div>
+                  <div class="tile-s delta">−12 overnights / 90 d vs. ordered</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOT -->
+  <div class="foot">
+    Full screen tour lives in <a href="../../Family Bench.html">Family Bench.html</a> — Diagnostic, Home, Voice capture, Guided event flow, Evidence lenses, Pattern detection, Filing wizard, Advisor chat, Conversations, Case Map, Document Intake, Integrations, and DV Safety. Read the root <a href="../../README.md">README</a> for voice, palette, iconography, and the block pattern. Tokens are in <a href="../../colors_and_type.css">colors_and_type.css</a>.
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Buttons</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.kicker { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.lbl { font-family: var(--fb-mono); font-size: 10.5px; color: var(--fb-ink-mute); width: 80px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px;
+  font-family: var(--fb-sans); font-size: 13.5px; font-weight: 500;
+  border-radius: 999px; cursor: pointer; border: 0.5px solid transparent;
+  letter-spacing: -0.005em;
+}
+.btn-sm { padding: 8px 12px; font-size: 12.5px; }
+.btn-lg { padding: 14px 20px; font-size: 14.5px; }
+
+.primary { background: var(--fb-ink); color: var(--fb-paper); }
+.soft    { background: var(--fb-ox-wash); color: var(--fb-ox-deep); }
+.ghost   { background: transparent; color: var(--fb-ink); border-color: var(--fb-rule); }
+.destructive { background: var(--fb-ox); color: #FFFFFF; }
+.verified    { background: var(--fb-forest-wash); color: var(--fb-forest); }
+</style>
+</head>
+<body>
+<div class="kicker">Pill buttons · 999 radius · 5 tones</div>
+
+<div class="row">
+  <div class="lbl">Primary</div>
+  <button class="btn primary btn-sm">Add evidence</button>
+  <button class="btn primary">Add evidence</button>
+  <button class="btn primary btn-lg">Add evidence →</button>
+</div>
+
+<div class="row">
+  <div class="lbl">Soft</div>
+  <button class="btn soft btn-sm">File motion</button>
+  <button class="btn soft">File motion</button>
+  <button class="btn soft btn-lg">File motion →</button>
+</div>
+
+<div class="row">
+  <div class="lbl">Ghost</div>
+  <button class="btn ghost btn-sm">Cancel</button>
+  <button class="btn ghost">Cancel</button>
+  <button class="btn ghost btn-lg">Cancel</button>
+</div>
+
+<div class="row">
+  <div class="lbl">Verified</div>
+  <button class="btn verified btn-sm">✓ Signed</button>
+  <button class="btn verified">✓ Notarized</button>
+</div>
+
+<div class="row">
+  <div class="lbl">Destructive</div>
+  <button class="btn destructive btn-sm">End session</button>
+  <button class="btn destructive">Revoke access</button>
+</div>
+</body>
+</html>

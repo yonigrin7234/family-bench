@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Urgent mode</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 0; background: var(--fb-paper); font-family: var(--fb-sans); }
+.wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.panel { padding: 24px 28px; min-height: 200px; }
+.light { background: var(--fb-paper); color: var(--fb-ink); }
+.dark  { background: #0A0B0F; color: #FFFFFF; }
+.kicker { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; margin-bottom: 10px; }
+.title  { font-family: var(--fb-serif); font-size: 28px; font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; margin-bottom: 10px; }
+.body   { font-size: 12.5px; line-height: 1.55; opacity: 0.7; }
+.dot    { width: 10px; height: 10px; border-radius: 5px; background: #E5484D; display: inline-block; margin-right: 8px; vertical-align: middle; }
+.hex-row { display: flex; gap: 8px; margin-top: 16px; font-family: var(--fb-mono); font-size: 10.5px; opacity: 0.55; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel light">
+    <div class="kicker" style="color:var(--fb-ox)">Everyday · default</div>
+    <div class="title">Modern court.</div>
+    <div class="body">Warm off-white paper, near-black ink, precise 0.5px hairlines. Almost no shadow. This is where the app lives 99% of the time.</div>
+    <div class="hex-row"><span>paper #F7F6F3</span><span>ink #14181F</span></div>
+  </div>
+  <div class="panel dark">
+    <div class="kicker" style="color:#E5484D"><span class="dot"></span>DV / safety mode</div>
+    <div class="title" style="font-family:var(--fb-serif);">I'm with you.</div>
+    <div class="body">High-contrast near-black with alert red only when the user triggers protected mode. A different visual contract: urgent, protective, undeniable. Never used for regular flow.</div>
+    <div class="hex-row"><span>bg #0A0B0F</span><span>red #E5484D</span><span>fg #FFFFFF</span></div>
+  </div>
+</div>
+</body>
+</html>

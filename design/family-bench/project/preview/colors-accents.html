@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Accent colors</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 20px 24px; background: var(--fb-paper); font-family: var(--fb-sans); }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.col { }
+.chip { height: 46px; border-radius: 10px 10px 0 0; }
+.chip-wash { height: 20px; border-radius: 0 0 10px 10px; }
+.meta { padding: 8px 10px; background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-top: none; border-bottom: none; font-size: 11px; }
+.name { color: var(--fb-ink); font-weight: 600; }
+.hex  { color: var(--fb-ink-mute); font-family: var(--fb-mono); font-size: 10.5px; margin-top: 2px; }
+.use  { color: var(--fb-ink-mute); font-size: 10.5px; margin-top: 4px; line-height: 1.4; }
+.kicker { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 8px; }
+.deep-bar { height: 4px; }
+</style>
+</head>
+<body>
+  <div class="kicker">Accents · each with base + wash</div>
+  <div class="grid">
+    <div class="col">
+      <div class="chip" style="background:#B44028"></div>
+      <div class="deep-bar" style="background:#842E1C"></div>
+      <div class="meta">
+        <div class="name">Oxblood</div><div class="hex">#B44028 · #842E1C deep</div>
+        <div class="use">Seals · CTAs · kickers · attention</div>
+      </div>
+      <div class="chip-wash" style="background:#F4E3DE"></div>
+    </div>
+    <div class="col">
+      <div class="chip" style="background:#2F5A3A"></div>
+      <div class="deep-bar" style="background:#1F3D27"></div>
+      <div class="meta">
+        <div class="name">Forest</div><div class="hex">#2F5A3A</div>
+        <div class="use">Verified · signed · completed</div>
+      </div>
+      <div class="chip-wash" style="background:#DEE8DD"></div>
+    </div>
+    <div class="col">
+      <div class="chip" style="background:#C9B892"></div>
+      <div class="deep-bar" style="background:#8A7647"></div>
+      <div class="meta">
+        <div class="name">Sand</div><div class="hex">#C9B892 · #8A7647 deep</div>
+        <div class="use">Quiet accent · chip fills · dividers</div>
+      </div>
+      <div class="chip-wash" style="background:#F0EADA"></div>
+    </div>
+    <div class="col">
+      <div class="chip" style="background:#A76A14"></div>
+      <div class="deep-bar" style="background:#7A4D0D"></div>
+      <div class="meta">
+        <div class="name">Amber</div><div class="hex">#A76A14</div>
+        <div class="use">Caution · pending · warm warning</div>
+      </div>
+      <div class="chip-wash" style="background:#F3E6CE"></div>
+    </div>
+  </div>
+</body>
+</html>

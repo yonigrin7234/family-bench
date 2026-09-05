@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Design</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap"/>
+<style>
+  html,body{margin:0;padding:0;background:#ECEAE3;font-family:"Inter",system-ui,sans-serif;color:#14181F}
+  *{box-sizing:border-box}
+  .tweaks{position:fixed;top:12px;right:12px;z-index:1000;background:#FFFFFF;border:0.5px solid rgba(20,24,31,0.12);padding:14px 16px;font-family:"Inter",system-ui,sans-serif;font-size:12px;color:#14181F;box-shadow:0 8px 28px rgba(20,24,31,0.10);min-width:220px;display:none}
+  .tweaks.on{display:block}
+  .tweaks h4{margin:0 0 10px;font-family:"Inter",system-ui,sans-serif;font-weight:600;font-size:13px;letter-spacing:-0.02em;text-transform:uppercase}
+  .tweaks label{display:block;margin:10px 0 4px;font-size:10px;color:rgba(20,24,31,0.58);font-variant:all-small-caps;letter-spacing:0.14em;font-weight:600}
+  .tweaks select{width:100%;font-family:"JetBrains Mono",monospace;font-size:11px;background:#F7F6F3;border:0.5px solid rgba(20,24,31,0.10);padding:6px 8px;color:#14181F}
+  .tweaks .row{display:flex;gap:4px;margin-top:2px}
+  .tweaks .row button{flex:1;font-family:"JetBrains Mono",monospace;font-size:9.5px;padding:6px 4px;background:#F7F6F3;border:0.5px solid rgba(20,24,31,0.10);color:#14181F;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
+  .tweaks .row button.on{background:#14181F;color:#F7F6F3;border-color:#14181F}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="tweaks" id="tweaks">
+  <h4>Tweaks</h4>
+  <label>Palette</label>
+  <div class="row" id="palette-row">
+    <button data-p="paper" class="on">PAPER</button>
+    <button data-p="ivory">IVORY</button>
+    <button data-p="night">NIGHT</button>
+  </div>
+  <label>Accent</label>
+  <div class="row" id="accent-row">
+    <button data-a="ox" class="on">OXBLOOD</button>
+    <button data-a="forest">FOREST</button>
+    <button data-a="sand">SAND</button>
+  </div>
+  <label>Case state</label>
+  <select id="state">
+    <option value="prehearing">Pre-hearing (14 d out)</option>
+    <option value="quiet">Quiet period</option>
+    <option value="crisis">High conflict</option>
+  </select>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="tokens.js"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="browser-window.jsx"></script>
+<script type="text/babel" src="primitives.jsx"></script>
+<script type="text/babel" src="softkit.jsx"></script>
+<script type="text/babel" src="mobile-screens.jsx"></script>
+<script type="text/babel" src="desktop-screens.jsx"></script>
+<script type="text/babel" src="home-v2.jsx"></script>
+<script type="text/babel" src="voice-v2.jsx"></script>
+<script type="text/babel" src="capture-flow.jsx"></script>
+<script type="text/babel" src="filing-wizard.jsx"></script>
+<script type="text/babel" src="v2-surfaces.jsx"></script>
+<script type="text/babel" src="diagnostic.jsx"></script>
+<script type="text/babel" src="case-map.jsx"></script>
+<script type="text/babel" src="safety.jsx"></script>
+<script type="text/babel" src="integrations.jsx"></script>
+<script type="text/babel" src="conversations.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "palette": "paper",
+  "accent": "ox",
+  "state": "crisis"
+}/*EDITMODE-END*/;
+
+// Apply tweaks — swap a few tokens live
+function applyTweaks(t) {
+  const FB = window.FB;
+  // palette
+  if (t.palette === 'ivory')      { FB.paper = '#FAF8F2'; FB.paperDeep = '#F1EEE3'; }
+  else if (t.palette === 'night') { FB.paper = '#12161C'; FB.paperDeep = '#1A1F27'; }
+  else                            { FB.paper = '#F7F6F3'; FB.paperDeep = '#EFEDE7'; }
+  // accent
+  if (t.accent === 'forest')    { FB.ox = '#2F5A3A'; FB.oxDeep = '#1F3D27'; FB.oxWash = '#DEE8DD'; }
+  else if (t.accent === 'sand') { FB.ox = '#8A7647'; FB.oxDeep = '#5F5131'; FB.oxWash = '#F0EADA'; }
+  else                          { FB.ox = '#B44028'; FB.oxDeep = '#842E1C'; FB.oxWash = '#F4E3DE'; }
+}
+
+function App() {
+  const [tw, setTw] = React.useState(TWEAK_DEFAULTS);
+  const [panel, setPanel] = React.useState(false);
+  applyTweaks(tw);
+
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode') setPanel(true);
+      if (e.data.type === '__deactivate_edit_mode') setPanel(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  React.useEffect(() => {
+    document.getElementById('tweaks').classList.toggle('on', panel);
+  }, [panel]);
+
+  React.useEffect(() => {
+    const setTk = (k, v) => {
+      const next = { ...tw, [k]: v };
+      setTw(next);
+      window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+    };
+    const bind = (sel, attr, key) => {
+      document.querySelectorAll(sel + ' button').forEach(b => {
+        b.onclick = () => {
+          document.querySelectorAll(sel + ' button').forEach(x => x.classList.remove('on'));
+          b.classList.add('on');
+          setTk(key, b.dataset[attr]);
+        };
+        if (b.dataset[attr] === tw[key]) b.classList.add('on'); else b.classList.remove('on');
+      });
+    };
+    bind('#palette-row', 'p', 'palette');
+    bind('#accent-row', 'a', 'accent');
+    const s = document.getElementById('state');
+    s.value = tw.state;
+    s.onchange = () => setTk('state', s.value);
+  }, [tw]);
+
+  return (
+    <DesignCanvas>
+      <DCSection id="hero" title="Family Bench" subtitle="Self-represented parents in family court · mobile + desktop · editorial legal direction">
+        <DCArtboard id="hero-mobile" label="A · Daily home with hero next-step" width={402} height={874}>
+          <MobileHomeV2/>
+        </DCArtboard>
+        <DCArtboard id="hero-desktop" label="B · Filing Builder · TurboTax-style wizard" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/filings/RFO-05/step-3" width={1360} height={874} tabs={[{title:'RFO-05 · Custody Modification'},{title:'Alameda Court Portal'}]}>
+            <DesktopFilingWizard/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="hero-wizard" label="C · Guided capture · step 1 of 6" width={402} height={874}>
+          <CapWho/>
+        </DCArtboard>
+        <DCArtboard id="hero-pattern" label="D · Pattern detection · chronic lateness" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/evidence/patterns/P-03" width={1360} height={874} tabs={[{title:'Pattern P-03 · Chronic late exchanges'}]}>
+            <DesktopPatternDetail/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="hero-diagnose" label="E · Diagnostic · 3 legal paths" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/diagnose/results" width={1360} height={874} tabs={[{title:'Case Diagnostic'}]}>
+            <DesktopDiagnosticResults/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="hero-safety" label="F · Panic mode" width={402} height={874}>
+          <PanicModeMobile/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="advisor" title="Advisor · grounded, numbered options" subtitle="Calm tone, big 'why this matters', inline evidence drill-down, citation-first.">
+        <DCArtboard id="advisor-mobile" label="Mobile · contempt question" width={402} height={874}>
+          <MobileAdvisorV2/>
+        </DCArtboard>
+        <DCArtboard id="advisor-desktop" label="Desktop · with case rail" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/advisor" width={1360} height={874} tabs={[{title:'Advisor · In re: Chen'}]}>
+            <DesktopAdvisorV2/>
+          </ChromeWindow>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="evidence" title="Evidence · one chronology, lensed" subtitle="Left rail of lenses · integration health · grouped feed with pattern tags.">
+        <DCArtboard id="evidence-desktop" label="Desktop · feed" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/evidence" width={1360} height={874} tabs={[{title:'Evidence · In re: Chen'}]}>
+            <DesktopEvidenceV2/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="pattern-desktop" label="Pattern P-03 · chronic late exchanges" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/evidence/patterns/P-03" width={1360} height={874} tabs={[{title:'Pattern · Chronic late exchanges'}]}>
+            <DesktopPatternDetail/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="pattern-mobile" label="Mobile · pattern detail" width={402} height={874}>
+          <MobilePatternDetail/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="diagnose" title="Case Diagnostic · 'which motion should I file?'" subtitle="Branching intake → 2-3 legal options, each with statute, burden, evidence mapping, and gaps.">
+        <DCArtboard id="diag-desktop" label="Desktop · 3 options compared, recommended path" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/diagnose/results" width={1360} height={874} tabs={[{title:'Case Diagnostic · 3 paths'}]}>
+            <DesktopDiagnosticResults/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="diag-opener" label="Mobile · opener" width={402} height={874}><DiagOpenerMobile/></DCArtboard>
+        <DCArtboard id="diag-q1" label="Mobile · Q1 situation" width={402} height={874}><DiagQ1Mobile/></DCArtboard>
+        <DCArtboard id="diag-q3" label="Mobile · Q3 what outcome" width={402} height={874}><DiagQ3Mobile/></DCArtboard>
+        <DCArtboard id="diag-results-mobile" label="Mobile · results · 3 options" width={402} height={874}><DiagResultsMobile/></DCArtboard>
+      </DCSection>
+
+      <DCSection id="casemap" title="Case Map + Document Intake · catch Bench up" subtitle="Upload every order, motion, opposing filing. OCR extracts provisions, deadlines. Timeline of your case.">
+        <DCArtboard id="casemap-desktop" label="Desktop · visual case timeline" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/case-map" width={1360} height={874} tabs={[{title:'Case Map · In re: Chen'}]}>
+            <DesktopCaseMap/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="casemap-upload" label="Desktop · intake · parsing a custody evaluation" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/case-map/intake" width={1360} height={874} tabs={[{title:'Uploading · Custody Evaluation'}]}>
+            <DesktopIntakeUpload/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="casemap-mobile" label="Mobile · add a document" width={402} height={874}><IntakeMobile/></DCArtboard>
+      </DCSection>
+
+      <DCSection id="safety" title="DV Safety layer · protect the person using the app" subtitle="Panic mode · stealth · emergency resources · evidence preservation. Different visual system: urgent, protective, honest.">
+        <DCArtboard id="safety-panic" label="Panic mode · active · mobile" width={402} height={874}><PanicModeMobile/></DCArtboard>
+        <DCArtboard id="safety-stealth" label="Stealth + decoy settings · mobile" width={402} height={874}><StealthSettingsMobile/></DCArtboard>
+        <DCArtboard id="safety-resources" label="Emergency resources · local · mobile" width={402} height={874}><EmergencyResourcesMobile/></DCArtboard>
+        <DCArtboard id="safety-evidence" label="Evidence preservation mode · desktop" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/settings/safety/preservation" width={1360} height={874} tabs={[{title:'Evidence Preservation · Sealed'}]}>
+            <EvidencePreservationDesktop/>
+          </ChromeWindow>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="connectors" title="Integrations & Connectors · real logos, scoped access" subtitle="Court portals, co-parenting apps, calendar, evidence sources, storage. Every connector is opt-in with granular scopes and a revokable audit log.">
+        <DCArtboard id="conn-desktop" label="Desktop · full connector settings" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/settings/connectors" width={1360} height={874} tabs={[{title:'Connectors'}]}>
+            <DesktopConnectors/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="conn-mobile" label="Mobile · connector menu (matches Claude pattern)" width={402} height={874}><ConnectorsMobile/></DCArtboard>
+      </DCSection>
+
+      <DCSection id="convos" title="Conversations · Advisor thread history" subtitle="Dozens of threads over a months-long case. Grouped by time, filterable, pinnable. Each thread can produce filings and carries its own context.">
+        <DCArtboard id="convos-desktop" label="Desktop · sidebar list + open thread" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/advisor" width={1360} height={874} tabs={[{title:'Advisor · 12 conversations'}]}>
+            <DesktopConversations/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="convos-mobile" label="Mobile · conversation list" width={402} height={874}><ConvosMobile/></DCArtboard>
+      </DCSection>
+
+      <DCSection id="home" title="Home · daily check-in" subtitle="One hero next-step over a dashboard of dials. What to do today, not everything we know.">
+        <DCArtboard id="home-mobile" label="Mobile · daily check-in" width={402} height={874}>
+          <MobileHomeV2/>
+        </DCArtboard>
+        <DCArtboard id="home-desktop" label="Desktop · case command center" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/home" width={1360} height={874} tabs={[{title:'Family Bench · In re: Chen'}]}>
+            <DesktopHomeV2/>
+          </ChromeWindow>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="capture-voice" title="Voice capture · urgent, one-tap logging" subtitle="For the 11 PM moment. Tap record, say what happened, entries auto-generated and sealed. Works alongside the guided flow below.">
+        <DCArtboard id="voice-record" label="Voice recording · live" width={402} height={874}>
+          <VoiceRecordV2/>
+        </DCArtboard>
+        <DCArtboard id="voice-reveal" label="Structured reveal · 2 linked entries" width={402} height={874}>
+          <VoiceRevealV2/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="capture-guided" title="Guided capture · step-by-step interview" subtitle="For the next-morning reflection. One question per screen, 'why we ask' callouts, live review.">
+        <DCArtboard id="cap-1" label="1 · Who was involved" width={402} height={874}><CapWho/></DCArtboard>
+        <DCArtboard id="cap-2" label="2 · Scheduled vs. actual time" width={402} height={874}><CapTimes/></DCArtboard>
+        <DCArtboard id="cap-3" label="3 · Child's mood" width={402} height={874}><CapMood/></DCArtboard>
+        <DCArtboard id="cap-4" label="4 · Location + witnesses" width={402} height={874}><CapWhereWho/></DCArtboard>
+        <DCArtboard id="cap-5" label="5 · Attach evidence" width={402} height={874}><CapAttach/></DCArtboard>
+        <DCArtboard id="cap-6" label="6 · Review & seal" width={402} height={874}><CapReview/></DCArtboard>
+        <DCArtboard id="cap-detail" label="After save · journal entry detail" width={402} height={874}><MobileJournalDetail/></DCArtboard>
+      </DCSection>
+
+      <DCSection id="filing" title="Filing builder · TurboTax wizard" subtitle="Step rail · center stage · live 'why this matters' panel with grounded draft preview.">
+        <DCArtboard id="filing-desktop" label="Desktop · step 3 of 7 · pick supporting incidents" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/filings/RFO-05/step-3" width={1360} height={874} tabs={[{title:'RFO-05 · Custody Modification'}]}>
+            <DesktopFilingWizard/>
+          </ChromeWindow>
+        </DCArtboard>
+        <DCArtboard id="filing-mobile" label="Mobile · same step" width={402} height={874}>
+          <MobileFilingWizard/>
+        </DCArtboard>
+        <DCArtboard id="certificate" label="Chain of custody certificate · PDF page" width={900} height={874}>
+          <DesktopCertificate/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="calculator" title="Custody calculator · actual vs. ordered" subtitle="Visual proof of the pattern. Exportable to the filing as an exhibit.">
+        <DCArtboard id="calc-desktop" label="Desktop · custody split calculator" width={1360} height={874}>
+          <ChromeWindow url="familybench.app/calculator" width={1360} height={874} tabs={[{title:'Custody Calculator · Chen'}]}>
+            <DesktopCalculator/>
+          </ChromeWindow>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="evidence-mobile" title="Evidence · mobile feed" subtitle="Every entry in your pocket. Filterable, searchable, forensically sealed.">
+        <DCArtboard id="ev-mobile" label="Mobile · evidence feed" width={402} height={874}>
+          <MobileEvidence/>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

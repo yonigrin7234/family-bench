@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Family Bench · Block pattern</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body { margin: 0; padding: 24px 28px; background: var(--fb-paper); font-family: var(--fb-sans); color: var(--fb-ink); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.panel { background: #FFFFFF; border: 0.5px solid var(--fb-rule); border-radius: 14px; padding: 24px; }
+.kicker { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fb-ox); font-weight: 600; margin-bottom: 10px; }
+.title { font-family: var(--fb-sans); font-weight: 600; font-size: 24px; letter-spacing: -0.02em; margin-bottom: 8px; line-height: 1.15; }
+.body { font-size: 13.5px; color: var(--fb-ink-soft); line-height: 1.55; }
+.em { font-family: var(--fb-serif); font-style: italic; }
+.row { display: flex; gap: 8px; margin-top: 14px; }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; font-size:12.5px; font-weight:500; cursor:pointer; border: 0.5px solid transparent; }
+.primary { background: var(--fb-ink); color: var(--fb-paper); }
+.ghost   { background: transparent; color: var(--fb-ink); border-color: var(--fb-rule); }
+.anatomy { font-size: 10.5px; color: var(--fb-ink-mute); font-family: var(--fb-mono); margin-top: 8px; }
+.arrow { color: var(--fb-ox); }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="panel">
+    <div class="kicker">Case Diagnostic</div>
+    <div class="title">Tell me what's happening.</div>
+    <div class="body"><span class="em">I'll walk you through a few questions, then show you the two or three paths the law actually gives you.</span></div>
+    <div class="row">
+      <button class="btn primary">Start →</button>
+      <button class="btn ghost">Skip for now</button>
+    </div>
+  </div>
+  <div class="panel" style="background:var(--fb-paper-deep); border:none;">
+    <div class="anatomy"><span class="arrow">▸</span> KICKER &nbsp; <span style="opacity:.4">oxblood · 10.5px · 0.1em tracking · uppercase</span></div>
+    <div class="anatomy"><span class="arrow">▸</span> TITLE &nbsp; <span style="opacity:.4">sans 600 · 24px · -0.02em · ink</span></div>
+    <div class="anatomy"><span class="arrow">▸</span> BODY &nbsp; <span style="opacity:.4">sans 400 · 13.5px · 1.55 · ink-soft</span></div>
+    <div class="anatomy"><span class="arrow">▸</span> EMOTIONAL &nbsp; <span style="opacity:.4">serif italic · same size · replaces body</span></div>
+    <div class="anatomy"><span class="arrow">▸</span> ACTIONS &nbsp; <span style="opacity:.4">primary pill + ghost pill · 999 radius</span></div>
+    <div style="margin-top:14px; font-size:12px; color:var(--fb-ink-soft); line-height:1.5;">
+      The <strong>kicker → title → body → actions</strong> block is the canonical composition pattern. Every card, modal header, and section intro uses it. Consistency here is what makes the app feel like one system instead of twelve stitched screens.
+    </div>
+  </div>
+</div>
+</body>
+</html>

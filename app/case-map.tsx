@@ -1,0 +1,1417 @@
+import { useEffect, useMemo, useState } from 'react';
+import * as Crypto from 'expo-crypto';
+import { router } from 'expo-router';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { CaseScreen } from '@/components/case-intelligence/CaseScreen';
+import {
+  Chip,
+  Display,
+  Icon,
+  InfoCallout,
+  PillButton,
+  Rule,
+  Segment,
+  SoftCard,
+  fbBorder,
+  fbColors,
+  fbFonts,
+  fbRadii,
+  fbLegalCopy,
+  fbSpacing,
+  fbTouch,
+  fbType,
+  fbWeights,
+  type ChipTone,
+  type IconName,
+} from '@/components/ui/fb';
+import {
+  COURT_ORDER_PROVISION_CATEGORIES,
+  KEY_DATE_CATEGORIES,
+  formatDateLabel,
+  getCourtOrderProvisionStatus,
+  getKeyDateNotes,
+  getRelativeDueLabel,
+  isKeyDatePriority,
+  normalizeKeyDateCategory,
+  useCaseMap,
+  type Child,
+  type CourtOrder,
+  type CourtOrderInput,
+  type CourtOrderProvision,
+  type CourtOrderProvisionCategory,
+  type CourtOrderProvisionInput,
+  type CourtOrderProvisionStatus,
+  type FamilyBenchCase,
+  type FilingPackage,
+  type KeyDate,
+  type KeyDateCategory,
+  type KeyDateInput,
+  type Person,
+} from '@/lib/case-intelligence';
+import { useResponsive } from '@/lib/hooks/useResponsive';
+
+function DetailRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value || 'Not recorded'}</Text>
+    </View>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  count,
+}: {
+  icon: IconName;
+  title: string;
+  count?: number;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionTitleRow}>
+        <Icon name={icon} size={16} color={fbColors.ink} />
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {typeof count === 'number' ? (
+        <Chip tone="mute" outline={false}>
+          {count}
+        </Chip>
+      ) : null}
+    </View>
+  );
+}
+
+function EmptyState({ children }: { children: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyText}>{children}</Text>
+    </View>
+  );
+}
+
+function SmallRecord({
+  title,
+  subtitle,
+  meta,
+  tone = 'ink',
+}: {
+  title: string;
+  subtitle?: string | null;
+  meta?: string | null;
+  tone?: ChipTone;
+}) {
+  return (
+    <View style={styles.record}>
+      <View style={styles.recordCopy}>
+        <Text style={styles.recordTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.recordSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {meta ? (
+        <Chip tone={tone} outline={false}>
+          {meta}
+        </Chip>
+      ) : null}
+    </View>
+  );
+}
+
+function ChildrenSection({ childrenRows }: { childrenRows: Child[] }) {
+  return (
+    <SoftCard p={16} style={styles.section}>
+      <SectionHeader icon="home" title="Children" count={childrenRows.length} />
+      {childrenRows.length ? (
+        <View style={styles.recordStack}>
+          {childrenRows.map((child) => (
+            <SmallRecord
+              key={child.id}
+              title={child.name}
+              subtitle={child.date_of_birth ? `DOB ${child.date_of_birth}` : 'Date of birth not recorded'}
+              tone="forest"
+              meta="Child"
+            />
+          ))}
+        </View>
+      ) : (
+        <EmptyState>No children have been added to this case record yet.</EmptyState>
+      )}
+    </SoftCard>
+  );
+}
+
+function PeopleSection({ people }: { people: Person[] }) {
+  return (
+    <SoftCard p={16} style={styles.section}>
+      <SectionHeader icon="chat" title="Parties and people" count={people.length} />
+      {people.length ? (
+        <View style={styles.recordStack}>
+          {people.map((person) => (
+            <SmallRecord
+              key={person.id}
+              title={person.display_name}
+              subtitle={[person.relationship, person.email, person.phone].filter(Boolean).join(' · ')}
+              tone={person.is_primary_client ? 'ox' : 'sand'}
+              meta={person.role}
+            />
+          ))}
+        </View>
+      ) : (
+        <EmptyState>No parties or people have been added to this case record yet.</EmptyState>
+      )}
+    </SoftCard>
+  );
+}
+
+const PROVISION_STATUS_OPTIONS: Array<{ v: CourtOrderProvisionStatus; label: string }> = [
+  { v: 'active', label: 'Active' },
+  { v: 'superseded', label: 'Superseded' },
+];
+
+function provisionCategoryLabel(category: CourtOrderProvisionCategory | string | null) {
+  if (category === 'custody') return 'Custody';
+  if (category === 'support') return 'Support';
+  if (category === 'medical') return 'Medical';
+  if (category === 'communication') return 'Communication';
+  if (category === 'exchange') return 'Exchange';
+  return 'Other';
+}
+
+function keyDateCategoryLabel(category: KeyDateCategory | string | null) {
+  if (category === 'hearing') return 'Hearing';
+  if (category === 'filing_deadline') return 'Filing deadline';
+  if (category === 'service_deadline') return 'Service deadline';
+  if (category === 'mediation') return 'Mediation';
+  if (category === 'appointment') return 'Appointment';
+  return 'Other';
+}
+
+function CourtOrdersSection({
+  courtOrders,
+  provisions,
+  createCourtOrder,
+  updateCourtOrder,
+  createCourtOrderProvision,
+  updateCourtOrderProvision,
+}: {
+  courtOrders: CourtOrder[];
+  provisions: CourtOrderProvision[];
+  createCourtOrder: (input: CourtOrderInput) => Promise<CourtOrder>;
+  updateCourtOrder: (orderId: string, input: CourtOrderInput) => Promise<void>;
+  createCourtOrderProvision: (input: CourtOrderProvisionInput) => Promise<CourtOrderProvision>;
+  updateCourtOrderProvision: (provisionId: string, input: CourtOrderProvisionInput) => Promise<void>;
+}) {
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(courtOrders[0]?.id ?? null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [orderTitle, setOrderTitle] = useState('');
+  const [orderType, setOrderType] = useState('');
+  const [orderDate, setOrderDate] = useState('');
+  const [editingProvisionId, setEditingProvisionId] = useState<string | null>(null);
+  const [provisionCategory, setProvisionCategory] =
+    useState<CourtOrderProvisionCategory>('custody');
+  const [provisionStatus, setProvisionStatus] = useState<CourtOrderProvisionStatus>('active');
+  const [provisionLabel, setProvisionLabel] = useState('');
+  const [provisionBody, setProvisionBody] = useState('');
+  const [provisionEffectiveDate, setProvisionEffectiveDate] = useState('');
+  const [provisionEndDate, setProvisionEndDate] = useState('');
+  const [saving, setSaving] = useState<'order' | 'provision' | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftOrderId, setDraftOrderId] = useState(() => Crypto.randomUUID());
+  const [draftProvisionId, setDraftProvisionId] = useState(() => Crypto.randomUUID());
+  const selectedOrder = courtOrders.find((order) => order.id === selectedOrderId) ?? null;
+  const selectedOrderProvisions = useMemo(
+    () =>
+      selectedOrderId
+        ? provisions.filter((provision) => provision.court_order_id === selectedOrderId)
+        : provisions,
+    [provisions, selectedOrderId],
+  );
+
+  useEffect(() => {
+    if (!courtOrders.length) {
+      setSelectedOrderId(null);
+      return;
+    }
+
+    if (!selectedOrderId || !courtOrders.some((order) => order.id === selectedOrderId)) {
+      setSelectedOrderId(courtOrders[0].id);
+    }
+  }, [courtOrders, selectedOrderId]);
+
+  function resetOrderDraft() {
+    setDraftOrderId(Crypto.randomUUID());
+    setEditingOrderId(null);
+    setOrderTitle('');
+    setOrderType('');
+    setOrderDate('');
+  }
+
+  function resetProvisionDraft() {
+    setDraftProvisionId(Crypto.randomUUID());
+    setEditingProvisionId(null);
+    setProvisionCategory('custody');
+    setProvisionStatus('active');
+    setProvisionLabel('');
+    setProvisionBody('');
+    setProvisionEffectiveDate('');
+    setProvisionEndDate('');
+  }
+
+  function editOrder(order: CourtOrder) {
+    setEditingOrderId(order.id);
+    setOrderTitle(order.order_title);
+    setOrderType(order.order_type ?? '');
+    setOrderDate(order.order_date ?? '');
+    setSelectedOrderId(order.id);
+  }
+
+  function editProvision(provision: CourtOrderProvision) {
+    setEditingProvisionId(provision.id);
+    setSelectedOrderId(provision.court_order_id);
+    setProvisionCategory((provision.category as CourtOrderProvisionCategory | null) ?? 'other');
+    setProvisionStatus(getCourtOrderProvisionStatus(provision));
+    setProvisionLabel(provision.label);
+    setProvisionBody(provision.body);
+    setProvisionEffectiveDate(provision.effective_date ?? '');
+    setProvisionEndDate(provision.end_date ?? '');
+  }
+
+  async function saveOrder() {
+    if (saving) return;
+    const input: CourtOrderInput = {
+      id: editingOrderId ?? draftOrderId,
+      title: orderTitle,
+      orderType,
+      orderDate,
+    };
+
+    setSaving('order');
+    setSaveError(null);
+    try {
+      if (editingOrderId) {
+        await updateCourtOrder(editingOrderId, input);
+        setSelectedOrderId(editingOrderId);
+      } else {
+        const order = await createCourtOrder(input);
+        setSelectedOrderId(order.id);
+      }
+      resetOrderDraft();
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'The court order could not be saved. Your draft is still here.'); }
+    finally { setSaving(null); }
+  }
+
+  async function saveProvision() {
+    if (!selectedOrderId || saving) return;
+
+    const input: CourtOrderProvisionInput = {
+      id: editingProvisionId ?? draftProvisionId,
+      courtOrderId: selectedOrderId,
+      category: provisionCategory,
+      status: provisionStatus,
+      label: provisionLabel,
+      body: provisionBody,
+      effectiveDate: provisionEffectiveDate,
+      endDate: provisionEndDate,
+    };
+
+    setSaving('provision');
+    setSaveError(null);
+    try {
+      if (editingProvisionId) await updateCourtOrderProvision(editingProvisionId, input);
+      else await createCourtOrderProvision(input);
+      resetProvisionDraft();
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'The provision could not be saved. Your draft is still here.'); }
+    finally { setSaving(null); }
+  }
+
+  return (
+    <SoftCard p={16} style={styles.section}>
+      <SectionHeader icon="scales" title="Court orders" count={courtOrders.length} />
+      {saveError ? <InfoCallout title="Changes not saved" tone="ink">{saveError}</InfoCallout> : null}
+      {courtOrders.length ? (
+        <View style={styles.recordStack}>
+          {courtOrders.map((order) => (
+            <View key={order.id} style={styles.orderRecord}>
+              <SmallRecord
+                title={order.order_title}
+                subtitle={order.order_date ? formatDateLabel(order.order_date) : 'Order date not recorded'}
+                tone={order.id === selectedOrderId ? 'forest' : 'ink'}
+                meta={order.id === selectedOrderId ? 'Selected' : order.order_type}
+              />
+              <View style={styles.inlineActions}>
+                <PillButton tone="ghost" size="sm" icon="scales" disabled={Boolean(saving)} onPress={() => setSelectedOrderId(order.id)}>
+                  Select
+                </PillButton>
+                <PillButton tone="ghost" size="sm" icon="doc" disabled={Boolean(saving)} onPress={() => editOrder(order)}>
+                  Edit
+                </PillButton>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <EmptyState>
+          No court orders have been added yet. Add the order details below. Direct order uploads and text extraction are not available yet.
+        </EmptyState>
+      )}
+
+      <View style={styles.formPanel}>
+        <Text style={styles.formTitle}>
+          {editingOrderId ? 'Edit court order' : 'Add court order'}
+        </Text>
+        <TextInput
+          editable={!saving}
+          value={orderTitle}
+          onChangeText={setOrderTitle}
+          placeholder="Order title"
+          placeholderTextColor={fbColors.inkFaint}
+          style={styles.textInput}
+        />
+        <View style={styles.formGrid}>
+          <TextInput
+            editable={!saving}
+            value={orderType}
+            onChangeText={setOrderType}
+            placeholder="Order type"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+          <TextInput
+            editable={!saving}
+            value={orderDate}
+            onChangeText={setOrderDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+        </View>
+        <View style={styles.inlineActions}>
+          <PillButton tone="primary" size="md" icon="check" disabled={Boolean(saving) || !orderTitle.trim()} onPress={saveOrder}>
+            {saving === 'order' ? 'Saving order' : editingOrderId ? 'Update order' : 'Save order'}
+          </PillButton>
+          {editingOrderId ? (
+            <PillButton tone="ghost" size="md" icon="x" disabled={Boolean(saving)} onPress={resetOrderDraft}>
+              Cancel
+            </PillButton>
+          ) : null}
+        </View>
+      </View>
+
+      <Rule />
+
+      <SectionHeader icon="link" title="Order provisions" count={provisions.length} />
+      <InfoCallout title="Provision review" tone="ink">
+        Link entries to the relevant provision for your own review. Automated compliance assessment is not available.
+      </InfoCallout>
+      {selectedOrder ? (
+        <Text style={styles.sourceText}>Selected order: {selectedOrder.order_title}</Text>
+      ) : null}
+      {selectedOrderProvisions.length ? (
+        <View style={styles.recordStack}>
+          {selectedOrderProvisions.map((provision) => {
+            const status = getCourtOrderProvisionStatus(provision);
+            return (
+              <View key={provision.id} style={styles.orderRecord}>
+                <SmallRecord
+                  title={provision.label}
+                  subtitle={provision.body}
+                  tone={status === 'superseded' ? 'mute' : 'sand'}
+                  meta={`${provisionCategoryLabel(provision.category)} · ${status}`}
+                />
+                <View style={styles.inlineActions}>
+                  <PillButton tone="ghost" size="sm" icon="doc" disabled={Boolean(saving)} onPress={() => editProvision(provision)}>
+                    Edit
+                  </PillButton>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : (
+        <EmptyState>
+          No provisions are mapped for the selected order yet. Add a provision below.
+        </EmptyState>
+      )}
+
+      <View style={styles.formPanel}>
+        <Text style={styles.formTitle}>
+          {editingProvisionId ? 'Edit provision' : 'Add provision'}
+        </Text>
+        <View style={styles.categoryGrid}>
+          {COURT_ORDER_PROVISION_CATEGORIES.map((category) => (
+            <PillButton
+              key={category}
+              tone={provisionCategory === category ? 'primary' : 'ghost'}
+              size="sm"
+              icon="link"
+              disabled={Boolean(saving)}
+              onPress={() => setProvisionCategory(category)}
+            >
+              {provisionCategoryLabel(category)}
+            </PillButton>
+          ))}
+        </View>
+        <Segment<CourtOrderProvisionStatus>
+          items={PROVISION_STATUS_OPTIONS}
+          value={provisionStatus}
+          onChange={(status) => { if (!saving) setProvisionStatus(status); }}
+        />
+        <TextInput
+          editable={!saving}
+          value={provisionLabel}
+          onChangeText={setProvisionLabel}
+          placeholder="Provision label"
+          placeholderTextColor={fbColors.inkFaint}
+          style={styles.textInput}
+        />
+        <TextInput
+          editable={!saving}
+          value={provisionBody}
+          onChangeText={setProvisionBody}
+          placeholder="Provision text or factual summary"
+          placeholderTextColor={fbColors.inkFaint}
+          multiline
+          textAlignVertical="top"
+          style={[styles.textInput, styles.textArea]}
+        />
+        <View style={styles.formGrid}>
+          <TextInput
+            editable={!saving}
+            value={provisionEffectiveDate}
+            onChangeText={setProvisionEffectiveDate}
+            placeholder="Effective YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+          <TextInput
+            editable={!saving}
+            value={provisionEndDate}
+            onChangeText={setProvisionEndDate}
+            placeholder="End YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+        </View>
+        <View style={styles.inlineActions}>
+          <PillButton
+            tone="primary"
+            size="md"
+            icon="check"
+            disabled={Boolean(saving) || !selectedOrderId || !provisionLabel.trim() || !provisionBody.trim()}
+            onPress={saveProvision}
+          >
+            {saving === 'provision' ? 'Saving provision' : editingProvisionId ? 'Update provision' : 'Save provision'}
+          </PillButton>
+          {editingProvisionId ? (
+            <PillButton tone="ghost" size="md" icon="x" disabled={Boolean(saving)} onPress={resetProvisionDraft}>
+              Cancel
+            </PillButton>
+          ) : null}
+        </View>
+      </View>
+    </SoftCard>
+  );
+}
+
+function DatesSection({
+  keyDates,
+  createKeyDate,
+  updateKeyDate,
+}: {
+  keyDates: KeyDate[];
+  createKeyDate: (input: KeyDateInput) => Promise<KeyDate>;
+  updateKeyDate: (keyDateId: string, input: KeyDateInput) => Promise<void>;
+}) {
+  const [editingKeyDateId, setEditingKeyDateId] = useState<string | null>(null);
+  const [category, setCategory] = useState<KeyDateCategory>('hearing');
+  const [title, setTitle] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventTime, setEventTime] = useState('');
+  const [priority, setPriority] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState(() => Crypto.randomUUID());
+
+  function resetDraft() {
+    setDraftId(Crypto.randomUUID());
+    setEditingKeyDateId(null);
+    setCategory('hearing');
+    setTitle('');
+    setEventDate('');
+    setEventTime('');
+    setPriority(false);
+    setNotes('');
+  }
+
+  function editKeyDate(keyDate: KeyDate) {
+    setEditingKeyDateId(keyDate.id);
+    setCategory(normalizeKeyDateCategory(keyDate.date_type));
+    setTitle(keyDate.title);
+    setEventDate(keyDate.event_date);
+    setEventTime(keyDate.event_time ?? '');
+    setPriority(isKeyDatePriority(keyDate));
+    setNotes(getKeyDateNotes(keyDate) ?? '');
+  }
+
+  async function saveKeyDate() {
+    if (saving) return;
+    const input: KeyDateInput = {
+      id: editingKeyDateId ?? draftId,
+      category,
+      title,
+      eventDate,
+      eventTime,
+      priority,
+      notes,
+    };
+
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (editingKeyDateId) await updateKeyDate(editingKeyDateId, input);
+      else await createKeyDate(input);
+      resetDraft();
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'The date could not be saved. Your draft is still here.'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <SoftCard p={16} style={styles.section}>
+      <SectionHeader icon="clock" title="Key dates and deadlines" count={keyDates.length} />
+      {saveError ? <InfoCallout title="Changes not saved" tone="ink">{saveError}</InfoCallout> : null}
+      {keyDates.length ? (
+        <View style={styles.recordStack}>
+          {keyDates.map((date) => {
+            const relative = getRelativeDueLabel(date.event_date);
+            const isPriority = isKeyDatePriority(date);
+            return (
+              <View key={date.id} style={styles.orderRecord}>
+                <SmallRecord
+                  title={date.title}
+                  subtitle={[
+                    formatDateLabel(date.event_date, date.event_time),
+                    keyDateCategoryLabel(normalizeKeyDateCategory(date.date_type)),
+                    getKeyDateNotes(date),
+                  ].filter(Boolean).join(' · ')}
+                  tone={relative === 'Past due' ? 'ox' : isPriority ? 'amber' : 'sand'}
+                  meta={date.is_completed ? 'Complete' : isPriority ? `Priority · ${relative}` : relative}
+                />
+                <View style={styles.inlineActions}>
+                  <PillButton tone="ghost" size="sm" icon="doc" disabled={Boolean(saving)} onPress={() => editKeyDate(date)}>
+                    Edit
+                  </PillButton>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : (
+        <EmptyState>No hearings or deadlines are recorded yet.</EmptyState>
+      )}
+
+      <View style={styles.formPanel}>
+        <Text style={styles.formTitle}>
+          {editingKeyDateId ? 'Edit key date' : 'Add key date'}
+        </Text>
+        <View style={styles.categoryGrid}>
+          {KEY_DATE_CATEGORIES.map((item) => (
+            <PillButton
+              key={item}
+              tone={category === item ? 'primary' : 'ghost'}
+              size="sm"
+              icon="clock"
+              disabled={Boolean(saving)}
+              onPress={() => setCategory(item)}
+            >
+              {keyDateCategoryLabel(item)}
+            </PillButton>
+          ))}
+        </View>
+        <TextInput
+          editable={!saving}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Date title"
+          placeholderTextColor={fbColors.inkFaint}
+          style={styles.textInput}
+        />
+        <View style={styles.formGrid}>
+          <TextInput
+            editable={!saving}
+            value={eventDate}
+            onChangeText={setEventDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+          <TextInput
+            editable={!saving}
+            value={eventTime}
+            onChangeText={setEventTime}
+            placeholder="HH:MM optional"
+            placeholderTextColor={fbColors.inkFaint}
+            style={styles.textInput}
+          />
+        </View>
+        <TextInput
+          editable={!saving}
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Notes"
+          placeholderTextColor={fbColors.inkFaint}
+          multiline
+          textAlignVertical="top"
+          style={[styles.textInput, styles.textArea]}
+        />
+        <View style={styles.inlineActions}>
+          <PillButton
+            tone={priority ? 'primary' : 'ghost'}
+            size="md"
+            icon="clock"
+            disabled={Boolean(saving)}
+            onPress={() => setPriority((current) => !current)}
+          >
+            {priority ? 'Priority on' : 'Priority off'}
+          </PillButton>
+          <PillButton
+            tone="primary"
+            size="md"
+            icon="check"
+            disabled={Boolean(saving) || !title.trim() || !eventDate.trim()}
+            onPress={saveKeyDate}
+          >
+            {saving ? 'Saving date' : editingKeyDateId ? 'Update date' : 'Save date'}
+          </PillButton>
+          {editingKeyDateId ? (
+            <PillButton tone="ghost" size="md" icon="x" disabled={Boolean(saving)} onPress={resetDraft}>
+              Cancel
+            </PillButton>
+          ) : null}
+        </View>
+      </View>
+    </SoftCard>
+  );
+}
+
+function FilingsSection({
+  filingPackages,
+  linkedEntryCountsByPackageId,
+}: {
+  filingPackages: FilingPackage[];
+  linkedEntryCountsByPackageId: Record<string, number>;
+}) {
+  return (
+    <SoftCard p={16} style={styles.section}>
+      <SectionHeader icon="doc" title="Filing packages" count={filingPackages.length} />
+      {filingPackages.length ? (
+        <View style={styles.recordStack}>
+          {filingPackages.map((pkg) => {
+            const linkedEntryCount = linkedEntryCountsByPackageId[pkg.id] ?? 0;
+            const linkedEntryLabel = `${linkedEntryCount} linked ${
+              linkedEntryCount === 1 ? 'entry' : 'entries'
+            }`;
+
+            return (
+              <SmallRecord
+                key={pkg.id}
+                title={pkg.title}
+                subtitle={[pkg.court_ready_summary, linkedEntryLabel].filter(Boolean).join(' · ')}
+                tone={pkg.status === 'draft' ? 'amber' : 'forest'}
+                meta={pkg.due_date ? getRelativeDueLabel(pkg.due_date) : pkg.status}
+              />
+            );
+          })}
+        </View>
+      ) : (
+        <EmptyState>No filing packages have been started yet.</EmptyState>
+      )}
+    </SoftCard>
+  );
+}
+
+function ChecklistRow({
+  complete,
+  label,
+  detail,
+}: {
+  complete: boolean;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <View style={styles.checklistRow}>
+      <Chip tone={complete ? 'forest' : 'amber'} outline={false}>
+        {complete ? 'Recorded' : 'Missing'}
+      </Chip>
+      <View style={styles.checklistCopy}>
+        <Text style={styles.checklistLabel}>{label}</Text>
+        <Text style={styles.checklistDetail}>{detail}</Text>
+      </View>
+    </View>
+  );
+}
+
+function CaseSpine({
+  activeCase,
+  childrenRows,
+  people,
+  hasLocalCaseSetup,
+  isDemoCase,
+}: {
+  activeCase: FamilyBenchCase | null;
+  childrenRows: Child[];
+  people: Person[];
+  hasLocalCaseSetup: boolean;
+  isDemoCase: boolean;
+}) {
+  return (
+    <SoftCard p={16} style={styles.spineCard}>
+      <SectionHeader icon="scales" title="Case spine" />
+      {activeCase ? (
+        <>
+          <View style={styles.spineDetails}>
+            <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
+            <DetailRow label="Case number" value={activeCase.case_number} />
+            <DetailRow label="Court" value={activeCase.court_name} />
+            <DetailRow label="County" value={activeCase.county} />
+            <DetailRow label="Department" value={activeCase.department} />
+            <DetailRow label="Judge" value={activeCase.judge_name} />
+          </View>
+
+          <Rule />
+
+          <View style={styles.spineBlock}>
+            <View style={styles.spineBlockHeader}>
+              <Text style={styles.spineBlockTitle}>Children</Text>
+              <Chip tone="mute" outline={false}>
+                {childrenRows.length}
+              </Chip>
+            </View>
+            {childrenRows.length ? (
+              <View style={styles.compactStack}>
+                {childrenRows.map((child) => (
+                  <SmallRecord
+                    key={child.id}
+                    title={child.name}
+                    subtitle={child.date_of_birth ? `DOB ${child.date_of_birth}` : 'Date of birth not recorded'}
+                    tone="forest"
+                    meta="Child"
+                  />
+                ))}
+              </View>
+            ) : (
+              <EmptyState>No children have been added to this case record yet.</EmptyState>
+            )}
+          </View>
+
+          <Rule />
+
+          <View style={styles.spineBlock}>
+            <View style={styles.spineBlockHeader}>
+              <Text style={styles.spineBlockTitle}>Parties and people</Text>
+              <Chip tone="mute" outline={false}>
+                {people.length}
+              </Chip>
+            </View>
+            {people.length ? (
+              <View style={styles.compactStack}>
+                {people.slice(0, 6).map((person) => (
+                  <SmallRecord
+                    key={person.id}
+                    title={person.display_name}
+                    subtitle={[person.relationship, person.email, person.phone].filter(Boolean).join(' · ')}
+                    tone={person.is_primary_client ? 'ox' : 'sand'}
+                    meta={person.role}
+                  />
+                ))}
+                {people.length > 6 ? (
+                  <Text style={styles.compactNote}>{people.length - 6} more people are recorded.</Text>
+                ) : null}
+              </View>
+            ) : (
+              <EmptyState>No parties or people have been added to this case record yet.</EmptyState>
+            )}
+          </View>
+
+          <Rule />
+
+          <View style={styles.caseActions}>
+            <Chip tone={isDemoCase ? 'amber' : 'forest'} outline={false}>
+              {hasLocalCaseSetup ? 'Local case' : 'Demo case'}
+            </Chip>
+            <PillButton
+              tone="soft"
+              size="md"
+              icon="scales"
+              full
+              onPress={() => router.push({ pathname: '/onboarding', params: { mode: 'edit' } } as never)}
+            >
+              {hasLocalCaseSetup ? 'Edit case details' : 'Set up local case'}
+            </PillButton>
+          </View>
+        </>
+      ) : (
+        <EmptyState>No active case has been selected yet.</EmptyState>
+      )}
+    </SoftCard>
+  );
+}
+
+function CaseMapContextRail({
+  caseTitle,
+  childrenCount,
+  peopleCount,
+  courtOrdersCount,
+  provisionsCount,
+  datesCount,
+  filingCount,
+  hasCaseNumber,
+  hasCourtInfo,
+  persistenceActive,
+  hydrationCompleted,
+  sourceLabel,
+}: {
+  caseTitle: string;
+  childrenCount: number;
+  peopleCount: number;
+  courtOrdersCount: number;
+  provisionsCount: number;
+  datesCount: number;
+  filingCount: number;
+  hasCaseNumber: boolean;
+  hasCourtInfo: boolean;
+  persistenceActive: boolean;
+  hydrationCompleted: boolean;
+  sourceLabel: string;
+}) {
+  return (
+    <SoftCard p={14} style={styles.railCard}>
+      <Text style={styles.sectionLabel}>CASE CONTEXT</Text>
+      <Text style={styles.railValue}>{caseTitle}</Text>
+      <Text style={styles.railText}>
+        {childrenCount} children · {peopleCount} people · {datesCount} key dates · {filingCount} filing packages.
+      </Text>
+      <Rule />
+      <Text style={styles.sectionLabel}>WHAT THIS PAGE IS FOR</Text>
+      <Text style={styles.railText}>
+        Use Case Map as the local case spine: case facts, people, orders, deadlines, and filing-package context in one place.
+      </Text>
+      <Rule />
+      <Text style={styles.sectionLabel}>MISSING INFO CHECKLIST</Text>
+      <View style={styles.checklistStack}>
+        <ChecklistRow
+          complete={hasCaseNumber}
+          label="Case number"
+          detail="Used for captions and future court form preparation."
+        />
+        <ChecklistRow
+          complete={hasCourtInfo}
+          label="Court and county"
+          detail="Keeps reports and filing packages tied to the right jurisdiction label."
+        />
+        <ChecklistRow
+          complete={childrenCount > 0}
+          label="Children"
+          detail="Supports child-specific entries, reports, and future filtering."
+        />
+        <ChecklistRow
+          complete={courtOrdersCount > 0}
+          label="Court orders"
+          detail="Order intake is local placeholder only until document intake is added."
+        />
+        <ChecklistRow
+          complete={provisionsCount > 0}
+          label="Order provisions"
+          detail="Provision extraction and entry linking come in later stages."
+        />
+      </View>
+      <Rule />
+      <View style={styles.railActionStack}>
+        <PillButton tone="ghost" size="md" icon="doc" disabled full>
+          Document intake coming later
+        </PillButton>
+        <PillButton tone="ghost" size="md" icon="link" disabled full>
+          Court-order extraction coming later
+        </PillButton>
+        <Text style={styles.railText}>
+          Court order shells, provisions, and key dates are managed in the center panels on this page.
+        </Text>
+        <PillButton
+          tone="ghost"
+          size="md"
+          icon="chat"
+          full
+          onPress={() => router.push('/practitioners' as never)}
+        >
+          Practitioner sharing placeholder
+        </PillButton>
+        <PillButton
+          tone="ghost"
+          size="md"
+          icon="shield"
+          full
+          onPress={() => router.push('/safety' as never)}
+        >
+          Safety placeholder
+        </PillButton>
+        <PillButton
+          tone="ghost"
+          size="md"
+          icon="folder"
+          full
+          onPress={() => router.push('/settings' as never)}
+        >
+          Settings and memory index
+        </PillButton>
+      </View>
+      <Rule />
+      <Text style={styles.railText}>
+        Persistence {persistenceActive ? 'active' : 'inactive'} · hydration {hydrationCompleted ? 'complete' : 'pending'}.
+      </Text>
+      <Text style={styles.railText}>Source: {sourceLabel}.</Text>
+    </SoftCard>
+  );
+}
+
+export default function CaseMap() {
+  const {
+    activeCase,
+    children,
+    people,
+    courtOrders,
+    courtOrderProvisions,
+    keyDates,
+    filingPackages,
+    filingPackageLinkedEntryCounts,
+    createCourtOrder,
+    updateCourtOrder,
+    createCourtOrderProvision,
+    updateCourtOrderProvision,
+    createKeyDate,
+    updateKeyDate,
+    source,
+    hasLocalCaseSetup,
+    isDemoCase,
+    persistence,
+  } = useCaseMap();
+  const { isMobile } = useResponsive();
+  const sourceLabel =
+    source === 'supabase' ? 'Supabase-backed' : source === 'local' ? 'local persisted' : 'local demo';
+  const childrenSection = <ChildrenSection childrenRows={children} />;
+  const peopleSection = <PeopleSection people={people} />;
+  const courtOrdersSection = (
+    <CourtOrdersSection
+      key={`${activeCase?.user_id}:${activeCase?.id}`}
+      courtOrders={courtOrders}
+      provisions={courtOrderProvisions}
+      createCourtOrder={createCourtOrder}
+      updateCourtOrder={updateCourtOrder}
+      createCourtOrderProvision={createCourtOrderProvision}
+      updateCourtOrderProvision={updateCourtOrderProvision}
+    />
+  );
+  const datesSection = (
+    <DatesSection
+      key={`${activeCase?.user_id}:${activeCase?.id}`}
+      keyDates={keyDates}
+      createKeyDate={createKeyDate}
+      updateKeyDate={updateKeyDate}
+    />
+  );
+  const filingsSection = (
+    <FilingsSection
+      filingPackages={filingPackages}
+      linkedEntryCountsByPackageId={filingPackageLinkedEntryCounts}
+    />
+  );
+  const caseSpineSection = (
+    <CaseSpine
+      activeCase={activeCase}
+      childrenRows={children}
+      people={people}
+      hasLocalCaseSetup={hasLocalCaseSetup}
+      isDemoCase={isDemoCase}
+    />
+  );
+  const sourceSection = (
+    <SoftCard p={16} style={styles.section}>
+      <SectionHeader icon="shield" title="Data source" />
+      <Text style={styles.sourceText}>
+        Court orders, provisions, and dates are saved to your encrypted case on this device and queued for your account’s cloud backup.
+      </Text>
+      <Text style={styles.sourceText}>
+        Check the case status above for saving, pending changes, and cloud backup errors.
+      </Text>
+      {persistence.error ? <Text style={styles.sourceWarning}>{persistence.error}</Text> : null}
+      <PillButton tone="ghost" size="md" icon="link" disabled full>
+        Link selected entry · coming later
+      </PillButton>
+      <PillButton
+        tone="soft"
+        size="md"
+        icon="doc"
+        full
+        onPress={() => router.push({ pathname: '/export-prep', params: { mode: 'case' } } as never)}
+      >
+        Preview case archive JSON
+      </PillButton>
+    </SoftCard>
+  );
+
+  return (
+    <CaseScreen
+      desktopMaxWidth={1120}
+      rightRail={
+        <CaseMapContextRail
+          caseTitle={activeCase?.title || activeCase?.case_number || 'Current case'}
+          childrenCount={children.length}
+          peopleCount={people.length}
+          courtOrdersCount={courtOrders.length}
+          provisionsCount={courtOrderProvisions.length}
+          datesCount={keyDates.length}
+          filingCount={filingPackages.length}
+          hasCaseNumber={Boolean(activeCase?.case_number)}
+          hasCourtInfo={Boolean(activeCase?.court_name || activeCase?.county)}
+          persistenceActive={persistence.active}
+          hydrationCompleted={persistence.hydrationCompleted}
+          sourceLabel={sourceLabel}
+        />
+      }
+    >
+      <View style={styles.header}>
+        <Display size={32} style={styles.title}>
+          Case map
+        </Display>
+        <Text style={styles.subtitle}>
+          The case structure entries will link into. {fbLegalCopy.legalInformationNotAdvice}
+        </Text>
+      </View>
+
+      {isMobile ? (
+        <SoftCard p={16} style={styles.caseSummary}>
+          <SectionHeader icon="scales" title="Active case" />
+          {activeCase ? (
+            <View style={styles.caseSummaryBody}>
+              <View style={styles.summaryGrid}>
+                <DetailRow label="Case" value={activeCase.title || activeCase.case_number} />
+                <DetailRow label="Court" value={activeCase.court_name} />
+                <DetailRow label="County" value={activeCase.county} />
+                <DetailRow label="Department" value={activeCase.department} />
+                <DetailRow label="Judge" value={activeCase.judge_name} />
+                <DetailRow label="Status" value={activeCase.status} />
+              </View>
+              <View style={styles.caseActions}>
+                <Chip tone={isDemoCase ? 'amber' : 'forest'} outline={false}>
+                  {hasLocalCaseSetup ? 'Local case' : 'Demo case'}
+                </Chip>
+                <PillButton
+                  tone="soft"
+                  size="md"
+                  icon="scales"
+                  full
+                  onPress={() => router.push({ pathname: '/onboarding', params: { mode: 'edit' } } as never)}
+                >
+                  {hasLocalCaseSetup ? 'Edit case details' : 'Set up local case'}
+                </PillButton>
+              </View>
+            </View>
+          ) : (
+            <EmptyState>No active case has been selected yet.</EmptyState>
+          )}
+        </SoftCard>
+      ) : null}
+
+      <InfoCallout title="Linking status" tone="ink">
+        Entry linking is not active yet. This map establishes the case structure for future links to orders, hearings, deadlines, and filings.
+      </InfoCallout>
+
+      {isMobile ? (
+        <>
+          {childrenSection}
+          {peopleSection}
+          {courtOrdersSection}
+          {datesSection}
+          {filingsSection}
+          {sourceSection}
+        </>
+      ) : (
+        <View style={styles.desktopWorkstationGrid}>
+          <View style={styles.desktopSpineColumn}>
+            {caseSpineSection}
+          </View>
+          <View style={styles.desktopCenterColumn}>
+            {courtOrdersSection}
+            {datesSection}
+            {filingsSection}
+            {sourceSection}
+          </View>
+        </View>
+      )}
+    </CaseScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    gap: fbSpacing.x2,
+  },
+  title: {
+    lineHeight: 34,
+  },
+  subtitle: {
+    color: fbColors.inkMute,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  caseSummary: {
+    marginTop: fbSpacing.x5,
+    gap: fbSpacing.x4,
+  },
+  section: {
+    marginTop: fbSpacing.x4,
+    gap: fbSpacing.x4,
+  },
+  sectionHeader: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+  },
+  sectionTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+  },
+  sectionTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: -0.14,
+  },
+  sectionLabel: {
+    color: fbColors.ox,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 1.05,
+  },
+  summaryGrid: {
+    gap: fbSpacing.x3,
+  },
+  caseSummaryBody: {
+    gap: fbSpacing.x4,
+  },
+  caseActions: {
+    gap: fbSpacing.x3,
+  },
+  desktopWorkstationGrid: {
+    marginTop: fbSpacing.x4,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: fbSpacing.x4,
+  },
+  desktopSpineColumn: {
+    width: 320,
+    flexShrink: 0,
+  },
+  desktopCenterColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  spineCard: {
+    marginTop: fbSpacing.x4,
+    gap: fbSpacing.x4,
+  },
+  spineDetails: {
+    gap: fbSpacing.x3,
+  },
+  spineBlock: {
+    gap: fbSpacing.x3,
+  },
+  spineBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x2,
+  },
+  spineBlockTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0,
+  },
+  compactStack: {
+    gap: fbSpacing.x1,
+  },
+  compactNote: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  detailRow: {
+    gap: fbSpacing.x1,
+  },
+  detailLabel: {
+    color: fbColors.inkMute,
+    fontSize: fbType.micro,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: 0.84,
+    textTransform: 'uppercase',
+  },
+  detailValue: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  recordStack: {
+    gap: fbSpacing.x2,
+  },
+  orderRecord: {
+    paddingVertical: fbSpacing.x2,
+    borderBottomWidth: fbBorder.hairline,
+    borderBottomColor: fbColors.ruleSoft,
+  },
+  record: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: fbSpacing.x3,
+    paddingVertical: fbSpacing.x2,
+  },
+  recordCopy: {
+    flex: 1,
+  },
+  recordTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+    letterSpacing: -0.14,
+  },
+  recordSubtitle: {
+    marginTop: fbSpacing.x1,
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  emptyState: {
+    paddingVertical: fbSpacing.x2,
+  },
+  emptyText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  sourceText: {
+    color: fbColors.inkSoft,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  sourceWarning: {
+    color: fbColors.oxDeep,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  formPanel: {
+    gap: fbSpacing.x3,
+    padding: fbSpacing.x3,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.ruleSoft,
+    backgroundColor: fbColors.paperDeep,
+  },
+  formTitle: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  formGrid: {
+    flexDirection: 'row',
+    gap: fbSpacing.x2,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: fbSpacing.x2,
+  },
+  inlineActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: fbSpacing.x2,
+  },
+  textInput: {
+    minHeight: fbTouch.min,
+    flex: 1,
+    borderRadius: fbRadii.md,
+    borderWidth: fbBorder.hairline,
+    borderColor: fbColors.rule,
+    backgroundColor: fbColors.surface,
+    paddingHorizontal: fbSpacing.x3,
+    paddingVertical: fbSpacing.x2,
+    color: fbColors.ink,
+    fontSize: fbType.body,
+    lineHeight: 21,
+    fontFamily: fbFonts.sansRegular,
+  },
+  textArea: {
+    minHeight: 96,
+  },
+  railCard: {
+    gap: fbSpacing.x3,
+  },
+  railValue: {
+    color: fbColors.ink,
+    fontSize: fbType.h2,
+    lineHeight: 23,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  railText: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  checklistStack: {
+    gap: fbSpacing.x3,
+  },
+  checklistRow: {
+    alignItems: 'flex-start',
+    gap: fbSpacing.x2,
+  },
+  checklistCopy: {
+    gap: fbSpacing.x1,
+  },
+  checklistLabel: {
+    color: fbColors.ink,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansSemi,
+    fontWeight: fbWeights.semi,
+  },
+  checklistDetail: {
+    color: fbColors.inkMute,
+    fontSize: fbType.small,
+    lineHeight: 18,
+    fontFamily: fbFonts.sansRegular,
+  },
+  railActionStack: {
+    gap: fbSpacing.x2,
+  },
+});
